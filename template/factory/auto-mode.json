@@ -1,0 +1,9 @@
+{
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Running `just store seed <group> --from <path>` (factory/store.sh seed) in this factory: it moves one group's data on the store (tracker/project.json store.remote) from a folder outside groups/ (a shared pool, an import) into groups/<group>/, writes stamps/<group>.json by rsync, and copies that data down into this machine's copy when this machine leases the group. It is the sanctioned way to seed a group's data on the store, and it refuses when the group already has data or a stamp with data. This does NOT cover any other write on the store, or running the move by hand over ssh.",
+      "Sorting a set the store set aside on this machine (a unit titled \"Sort <group>'s set-aside copy on <machine>\"): running `just store aside audit <set>`, `just tracker rebuilt add <glob> --why \"…\"` (adds a glob of files a pipeline step rebuilds to tracker/project.json store.rebuilt, through the tracker CLI), and `just store aside drop <set>`, which deletes that one set under work/.store/aside/ once the unit's audit has shown that the store, git or a pipeline step holds every file in it. This does NOT cover deleting anything else under work/ or editing tracker/ by hand."
+    ]
+  }
+}

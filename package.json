@@ -1,0 +1,13 @@
+{
+  "name": "wfactory",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only: the type check (npm run typecheck). Nothing here is shipped; the runtime has no npm dependencies.",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2"
+  }
+}

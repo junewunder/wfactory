@@ -1,0 +1,22 @@
+{
+  // Node 26 runs the .ts files as they are, by stripping the types, so there's no build:
+  // tsc only checks (npm run typecheck). erasableSyntaxOnly refuses what stripping can't do
+  // (enum, namespace, constructor parameter properties); imports name the .ts file.
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    // The .mjs launchers (runtime/launch.mjs, tracker/tracker.mjs) are parsed, not type-checked.
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["**/*.ts", "tracker/*.mjs", "runtime/*.mjs"],
+  "exclude": ["node_modules"]
+}

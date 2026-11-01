@@ -1,0 +1,26 @@
+#!/usr/bin/perl
+# flock(1) for the suites on a machine without it (macOS), the part of it they use:
+#   flock [-n] [-o] [-w <secs>] <file> [<command>…]   lock <file> (made if missing), then run <command>
+#   flock [-n] [-w <secs>] <fd>                       lock the open file on descriptor <fd>
+# -n: fail (exit 1) at once if someone else has it; -w: after <secs>. Without -o the command
+# inherits the lock; with -o this process keeps it while the command runs. test/lib/tools.ts puts
+# this folder on PATH, after the system's own, where there's no flock.
+use strict; use warnings; use Fcntl ":flock"; use Time::HiRes "alarm";
+my ($nb, $own, $wait) = (0, 0, undef);
+while (@ARGV && $ARGV[0] =~ /^-/) {
+  my $o = shift;
+  if ($o eq "-n") { $nb = 1 } elsif ($o eq "-o") { $own = 1 } elsif ($o eq "-w") { $wait = shift }
+  elsif ($o eq "--") { last } else { die "flock: unknown option $o\n" }
+}
+my $t = shift // die "usage: flock [-n] [-o] [-w secs] <file|fd> [command…]\n";
+# (Perl closes descriptors above $^F when it runs a command: the lock goes with it unless -o.)
+$^F = 255 unless $own;
+my $f;
+if ($t =~ /^\d+$/ && !@ARGV) { open($f, ">&=", $t) or die "flock: $t: $!\n" }
+else { open($f, ">>", $t) or die "flock: $t: $!\n" }
+if ($nb) { flock($f, LOCK_EX | LOCK_NB) or exit 1 }
+elsif (defined $wait) { local $SIG{ALRM} = sub { exit 1 }; alarm($wait); flock($f, LOCK_EX) or exit 1; alarm(0) }
+else { flock($f, LOCK_EX) or exit 1 }
+exit 0 unless @ARGV;
+if ($own) { system(@ARGV); exit($? == -1 ? 127 : $? & 127 ? 128 + ($? & 127) : $? >> 8) }
+exec { $ARGV[0] } @ARGV or die "flock: $ARGV[0]: $!\n";

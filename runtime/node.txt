@@ -1,0 +1,9 @@
+# The Node every stub runs: scripts/deploy.sh downloads this version's build for the machine
+# (Linux or macOS) from nodejs.org and checks it against its SHA-256 here. To move to a new
+# version, copy the linux-x64, linux-arm64 and darwin-arm64 .tar.gz lines from
+# https://nodejs.org/dist/v<version>/SHASUMS256.txt, after checking that file's signature
+# (SHASUMS256.txt.asc) against the keys in github.com/nodejs/release-keys.
+version 26.12.0
+linux-x64 d9f88af72ad34f7ddf8e67289829f1698f54b6254f7d4f54b7453117ff1a3d2c
+linux-arm64 ec53c915c3fdd8786c5685abd25ae3fe9fba0692307f9811d7caaadea1bcaf03
+darwin-arm64 2a154d4a5458930e0a2d6a1ecf64eddf5a2b3e1c13636b609c2ecb042e8c4553

@@ -1,0 +1,16 @@
+set dotenv-load
+
+import 'factory/factory.just'
+
+# The oracle: everything that must pass before a unit counts as done (with `rebuildable`).
+# Lanes on one laptop share work/: a part of the check that looks there (or at an editor's project
+# folders) skips the groups in $FACTORY_BUSY_GROUPS, whose outputs there aren't on main yet
+# (another unit here in progress, interrupted, or waiting to land).
+# The loop sets it; when unset (a session, by hand), `factory/tracker busy` prints them:
+#   busy="${FACTORY_BUSY_GROUPS-$(factory/tracker busy)}"
+check:
+    @echo "TODO: wire the oracle (tests, typecheck, golden diff, regression gate)" >&2; exit 1
+
+# Files on disk with no source or copy in git: how many, and which (exit 1 if any).
+rebuildable:
+    @echo "TODO: list written files that aren't in git, and derived ones no command rebuilds" >&2; exit 1

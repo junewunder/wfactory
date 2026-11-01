@@ -1,0 +1,3 @@
+# Gitignored, but searchable by Claude's tools (ripgrep reads this file).
+!rehearsals/
+!private/

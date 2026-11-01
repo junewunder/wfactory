@@ -1,0 +1,9 @@
+#!/usr/bin/perl
+# setsid(1) for the suites on a machine without it (macOS): setsid <command…> runs the command in
+# a session of its own (forking first when this process leads its group, which setsid(2) refuses).
+# test/lib/tools.ts puts this folder on PATH where there's no setsid.
+use strict; use warnings; use POSIX ();
+@ARGV or die "usage: setsid <command…>\n";
+if (getpgrp() == $$) { my $p = fork() // die "setsid: fork: $!\n"; exit 0 if $p; }
+POSIX::setsid() or die "setsid: $!\n";
+exec { $ARGV[0] } @ARGV or die "setsid: $ARGV[0]: $!\n";

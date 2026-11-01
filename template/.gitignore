@@ -1,0 +1,10 @@
+# loop transcripts and costs, scratch
+/runs/
+/.scratch/
+# work/ as a folder or a lane clone's link to one (no trailing slash: 'work/' misses a link)
+/work
+
+.env
+node_modules/
+.venv/
+__pycache__/
