@@ -243,6 +243,9 @@ export interface Project {
     // The check before a unit lands: {group} is its group (or its data group), "timeout" minutes.
     land?: { cmd: string; timeout?: number };
   };
+  // Files of words a tracker write must not add, the first that exists; ~ and $VAR expand, and a
+  // path with an unset variable is skipped. For a public origin (store.ts privateWordAdded).
+  private_words?: string[];
   // Check units (checks.ts): which units are checks (selectors, default tag:check), and a hook,
   // {unit} and {group} filled, that says whether a check has what it needs to be judged.
   checks?: { units?: string | string[]; ready?: string; ready_timeout?: number };

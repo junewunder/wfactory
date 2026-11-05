@@ -27,6 +27,9 @@ seconds. Without an origin (or with FACTORY_STATE=local) tracker/ in this
 checkout is the state, as before. A fetch or push that gets no answer
 gives up after FACTORY_GIT_TIMEOUT seconds (default 180; ssh itself gives up
 on a dead connection in about a minute) and counts as origin unreachable.
+On a public origin, "private_words" in project.json names files of words a
+write must not add (the first that exists; ~ and $VAR expand). A write that
+adds one is refused, and with no such file on the machine every write is.
 
 Commands take .tracker/lock while they read or write. One that waits over
 FACTORY_LOCK_WAIT seconds (default 30) for another command to let it go

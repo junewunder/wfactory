@@ -148,6 +148,12 @@ which copy wins by comparing contents (`rsync -rnci`, a diff of the files),
 never by file times: an upload, a publish or a copy rewrites times without
 changing a byte.
 
+Tracker writes reach origin at once, with no check first. If the factory's
+origin is public, set `"private_words"` in `tracker/project.json` to the files
+of words a write must not add (the first that exists; `~` and `$VAR` expand; a
+list kept outside git, since it names what it hides). A write adding one is
+refused, and a machine with no list can't write at all.
+
 ## "Continue": one unit
 
 Before the opening's gate is passed, "continue" works the next issue in the

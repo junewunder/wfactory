@@ -344,6 +344,28 @@ function buffered<R>(fn: () => R) {
   finally { console.log = ol; console.error = oe; }
 }
 
+// The first private word (project.json private_words: the first of those files that exists, one
+// word a line, # for comments, matched ignoring case) in what this write adds. Tracker writes
+// reach origin at once, with no check between, so on a public repo this is the only one in time.
+// None of the files there: refused too, since nothing could be checked.
+function privateWordAdded(files: string[] | undefined): string | null {
+  if (!files?.length) return null;
+  const expand = (f: string) => {
+    let unset = false;
+    const out = f.replace(/^~(?=\/)/, () => ctx.env.HOME ?? "~").replace(/\$(\w+)/g, (_, v) => {
+      if (!ctx.env[v]) unset = true;
+      return ctx.env[v] ?? "";
+    });
+    return unset ? null : out;
+  };
+  const list = files.map(expand).find((f) => f && fs.existsSync(f));
+  if (!list) die(`no list of private words on this machine (project.json private_words: ${files.join(", ")}), so this write can't be checked; nothing was recorded. Copy the list here first.`);
+  const words = fs.readFileSync(list!, "utf8").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#")).map((w) => w.toLowerCase());
+  const added = git(["-C", ctx.SDIR, "diff", "--cached", "-U0", "--no-ext-diff"]).stdout.split("\n")
+    .filter((l) => l.startsWith("+") && !l.startsWith("+++")).join("\n").toLowerCase();
+  return words.find((w) => added.includes(w)) ?? null;
+}
+
 const REFUSED = /rejected|fetch first|non-fast-forward|cannot lock ref|failed to update ref|stale info/;
 // Read, change, write: the whole thing under the lock. With shared state, the
 // write is committed and pushed to origin's main; if someone pushed first, it's
@@ -368,6 +390,12 @@ export const mutate = <R>(fn: (T: State) => R, { strict = false } = {}): R => wi
           if (p.status && REFUSED.test(p.stderr || "") && attempt < 8) continue;
         }
         b.flush(); return b.r;
+      }
+      let hit: string | null;
+      try { hit = privateWordAdded(T.project.private_words); } catch (e) { git(["-C", SDIR, "reset", "-q", "--hard", "HEAD"]); throw e; }
+      if (hit) {
+        git(["-C", SDIR, "reset", "-q", "--hard", "HEAD"]);
+        die(`this write has a private word in it ("${hit}"), and tracker writes are published at once; nothing was recorded. Say it another way and run it again.`);
       }
       const what = T.logs.map((l) => l.text);
       const msg = `tracker: ${what[0] || ctx.cmd}${what.length > 1 ? ` (and ${what.length - 1} more)` : ""}`;
