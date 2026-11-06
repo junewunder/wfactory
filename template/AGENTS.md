@@ -34,7 +34,12 @@
   is first, the ID after in parentheses: "String escapes in the lexer (lexer/string-escapes)".
   Blockers read "X can't start until Y, because Z". In tracker text, refer to
   units as `{unit:<id>}` so they show as titles.
-- **Never weaken the oracle to finish a unit.** See `docs/factory.md`.
+- **Never weaken the oracle to finish a unit.** See `docs/factory.md`. A
+  check's exception for one of the owner's departures from the reference
+  is the one change of this kind a unit makes: it cites their decision.
+- **A difference from the reference is a bug** unless
+  `docs/departures.md` says otherwise. Read that page before changing how
+  the result behaves or looks. Only the owner decides a departure.
 - **Work lives in git, or is rebuilt from it.** Anything written (code, specs,
   data tuned by hand) is committed; anything derived has a command that
   rebuilds it, hand fixes included. A unit isn't done while its work lives

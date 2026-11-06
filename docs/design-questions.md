@@ -5,8 +5,8 @@ after the opening.
 
 At the end of the opening, before the first units, settle these. **They are
 yours to settle, not a list for the owner to approve.** The owner made
-their calls during the opening (the goal's two lines, gates, how the scope
-grows, machines: [opening.md](opening.md), "The owner's design calls");
+their calls during the opening (the goal's two lines, which differences
+from the reference are bugs, gates, how the scope grows, machines: [opening.md](opening.md), "The owner's design calls");
 the rest are mechanics that the trial units, the skill's rules and the
 repo's own lessons answer. Write each answer into `docs/factory.md`, then
 send the owner one short message saying how the factory is set up, the
@@ -29,6 +29,14 @@ that calls a model.
    stand-in passes units that fail on the real thing. If the oracle is noisy
    (LLM judges, sampling), decide now how to resample, or the noise reads as
    regressions.
+   **Against a reference,** the oracle counts every difference as a bug
+   unless `docs/departures.md` says otherwise. It checks the floor
+   exactly and the taste layer against the reference with the owner's
+   departures applied. Each exception it takes cites the owner's decision,
+   and it fails once that decision no longer stands
+   ([opening.md](opening.md), "The reference, and which differences are
+   bugs"). The kind and the two layers are the owner's call; how the check
+   reads the page is yours.
    **Build and test the oracle before any units** ([opening.md](opening.md), step 4).
 3. **Independent check.** *mechanical* (the check passing is enough) or
    *independent* (a context that didn't do the work verifies it). Use

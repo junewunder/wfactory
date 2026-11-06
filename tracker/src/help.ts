@@ -46,6 +46,7 @@ For agents:
   claim <id>                            claim a unit you were told to work
   queue [-n N] [--json]                 what each machine's lanes take next, and why
   show <id> [--full|--why-all] [--json] a unit, group, question or decision
+                                        (--json on a decision: who made it, and whether it still stands)
   find <words> [--open] [-n N]          units by words in their title or detail, best first
   status [<group> | --all]              counts; a few lines at any scale
   questions [--all]                     what's waiting on the owner
@@ -68,7 +69,7 @@ For agents:
       (re-asked as another, or moot); no decision is recorded
   pass <gate> [--note "…"] [--force]    the owner says a gate is fine
   decide --title "…" --why "…" --scope <selector> … [--replaces d/<slug>] [--by owner] [--until T | --for-run] [--park]
-  decisions [words…] [--for <id>] [--all]
+  decisions [words…] [--for <id>] [--all] [--json]   (--json for a check: who made each, and whether it stands)
   prune [--propose] [--json] | --apply <d> … | --keep <d> <kind> | --due | --apply-unasked | --restore <d> | --checked-in
                                         decisions to take off the cards: proposed, applied once approved
   ci [<group>] [--json] [--since T]     each group's CI: passed, stale, due, running, broken, off;
@@ -229,7 +230,9 @@ earlier attempts come right after what done means.
 A card names the decisions that apply by title, this unit's own first, and some of those for
 every unit; --full adds who made this unit's own, when, and why, and lists every decision for
 every unit (by title: \`just decisions <words>\` gives one's why); --why-all gives those whys too.
---json (a unit): its status, notes and the decisions that apply, as JSON.`,
+--json (a unit): its status, notes and the decisions that apply, as JSON.
+--json (a decision): who made it (by, and the question or thread it came through), and whether
+it still stands (in_force; ended says how it ended), for a project's checks.`,
   find: `find <words> [--open] [-n N]
 Units whose ID, title or detail has these words, best match first (title and ID count most), with
 their status. --open: leave out done and dropped units. -n: how many (default 20).
@@ -320,8 +323,9 @@ decisions (default 40) and more than it did at the last check-in. A lane's own d
 without asking (--apply-unasked, which lists them for the report); --restore puts a lapsed or
 retired one back. --checked-in records that the owner was offered the check-in, so the next
 is offered "checkin_days" days on, or when a card grows.`,
-  decisions: `decisions [words…] [--for <id>] [--all]
-Search decisions, or list the ones that apply to a unit.`,
+  decisions: `decisions [words…] [--for <id>] [--all] [--json]
+Search decisions, or list the ones that apply to a unit.
+--json: every one selected, each as \`show d/<slug> --json\` gives it, for a check that reads many.`,
   log: `log [--since 8h|2026-10-09] [--group G] [-n N]
 What happened, in plain words.`,
   init: `init [--title "…"]

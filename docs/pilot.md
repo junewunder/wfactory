@@ -25,10 +25,13 @@ two things, before the factory widens:
 The review also asks the owner about the goal's two lines
 ([opening.md](opening.md)): with a step's worth of real cases to look at,
 are they still satisfied where the satisfied line says, and is the far
-line still where they want this to head? The owner learns what they want
+line still where they want this to head? And which of the differences
+from the reference they'd keep: any candidate departures still waiting on
+them (units tagged `taste`), shown over the step's cases. The owner learns what they want
 as the factory learns what's possible, so expect the lines to move, and
 write each move into `docs/factory.md`'s Goal, with its done criterion,
-before the next step's units are filed.
+and each departure into `docs/departures.md`, before the next step's units
+are filed.
 
 The review also looks ahead: what will the next step's cases need that
 nobody has found out yet (a format no case has used, a tool nobody has

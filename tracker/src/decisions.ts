@@ -3,7 +3,7 @@
 // merged into another). Only one in force reaches a card; `decisions --all` lists them all.
 // And the pruning pass: what it proposes to lapse, retire or narrow (`prune --propose`).
 import { die, overlap, words } from "./text.ts";
-import { matches, name, stems } from "./names.ts";
+import { expand, matches, name, stems } from "./names.ts";
 import { derive, SETTLED } from "./status.ts";
 import { readLog } from "./store.ts";
 import { ended, inForce, type Ended } from "./in-force.ts";
@@ -28,6 +28,15 @@ export function endedText(T: State, e: Ended) {
   if (e.kind === "superseded") return `superseded by ${other(e.by)}`;
   if (e.kind === "merged") return `merged into ${other(e.by)}`;
   return `retired: the code holds it (${e.where})`;
+}
+
+// A decision as JSON, for a project's checks: who made it (and through which question or
+// thread), and whether it still stands. An oracle's exception that cites the owner's departure
+// from the reference reads this, and fails once the decision is replaced, retired or lapsed.
+export function decisionJson(T: State, d: Decision) {
+  const e = ended(T, d);
+  return { id: d.id, title: expand(T, d.title), why: d.why ? expand(T, d.why) : "", by: d.by, at: d.at,
+    question: d.question ?? null, via: d.via ?? null, scope: d.scope || [], in_force: !e, ended: e ? { ...e, text: endedText(T, e) } : null };
 }
 
 // --for-run: the run's stop time. A loop session has it (FACTORY_DEADLINE, epoch seconds); outside

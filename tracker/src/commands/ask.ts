@@ -5,7 +5,7 @@ import { die, keySlug, list, now, overlap, parseArgs, plural, slugify, str, strs
 import { checkText, findD, findQ, isOpen, matches, name, resolve, selected } from "../names.ts";
 import { canWait, decisionText, effectOn, EFFECTS, hasEffects, waitingOn } from "../cards.ts";
 import { derive, SETTLED } from "../status.ts";
-import { decisionParks, freedText, inForce, parseUntil, runEnd, when } from "../decisions.ts";
+import { decisionJson, decisionParks, freedText, inForce, parseUntil, runEnd, when } from "../decisions.ts";
 import { postponedBy } from "../postpone.ts";
 import { C } from "./registry.ts";
 import type { Decision, Option, Question, Unit } from "../types.ts";
@@ -79,7 +79,11 @@ C.ask = (a) => {
     T.dirty.add("questions");
     for (const u of selected(T, blocks)) if (u.record?.state === "claimed" && u.record.by === ctx.TAG) { u.record = { state: "blocked", on: id, by: ctx.TAG, at: now() }; touch(T, u); }
     log(T, "ask", null, `asked the owner: ${title}`, { more: { q: id } });
-    console.log(`asked: ${name(q)}\nIt blocks ${plural(selected(T, blocks).length, "unit")}. The loop moves on to other work; stop this unit here.`);
+    // A question that leaves the asking session's own unit out of what it blocks (a candidate
+    // departure from the reference, filed with a unit of its own) doesn't stop that unit.
+    const held = [...T.byId.values()].find((u) => u.record?.state === "claimed" && u.record.by === ctx.TAG);
+    const next = mine || !held ? "The loop moves on to other work; stop this unit here." : `${name(held)} isn't one of them: carry on with it.`;
+    console.log(`asked: ${name(q)}\nIt blocks ${plural(selected(T, blocks).length, "unit")}. ${next}`);
     return 0;
   });
 };
@@ -247,6 +251,8 @@ C.decisions = (a) => {
   if (o.for) { const u = resolve(T, String(o.for)); ds = ds.filter((d) => (d.scope || []).some((s) => matches(T, s, u))); }
   const q = o._.join(" ");
   if (q) ds = ds.map((d) => [d, overlap(q, `${d.title} ${d.why} ${d.question ? T.questions.find((x) => x.id === d.question)?.title || "" : ""}`)] as const).filter(([, s]) => s > 0).sort((x, y) => y[1] - x[1]).map(([d]) => d);
+  // --json: every one selected (in recording order, or best match first with words), for a check.
+  if (o.json) { console.log(JSON.stringify(ds.map((d) => decisionJson(T, d)))); return 0; }
   if (!ds.length) { console.log(q ? `No decision matches "${q}".` : "No decisions yet."); return 0; }
   // With words, ds is best match first: print the best 40. Without, it's in recording order: the newest 40, newest first.
   for (const d of q ? ds.slice(0, 40) : ds.slice(-40).reverse()) console.log("- " + decisionText(T, d, !!q || !!o.for));

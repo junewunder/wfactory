@@ -31,6 +31,9 @@ overseer and the owner read the queue's state from the file.
    - **the goal, as two lines** (below): how far it could go, and where
      they'd be satisfied. Add the first few things the owner will do when
      they pick the result up;
+   - **the reference, and which differences from it are bugs** (below):
+     what the oracle will compare against, and whether the owner wants it
+     matched everywhere;
    - what exists already: their own earlier work, tools, data. Check that
      each input they name is where they say it is. Anything else you come
      across that looks like earlier work (an old project, exports, an
@@ -72,6 +75,50 @@ overseer and the owner read the queue's state from the file.
    week to fix: would you mind it?). An answer about real output beats
    any answer about an imagined one. Write each change to the two lines
    into the Goal with what showed it.
+
+   **The reference, and which differences are bugs.** Many factories
+   have a reference: the program, game or dataset the oracle compares
+   against. A check against it counts every difference as a bug, and an
+   agent with nothing else written down copies it, so unless the owner
+   says otherwise the factory rebuilds the reference. That's right only
+   when every difference really is a bug: a migration, a conversion to
+   another language, a build that must match byte for byte. More often
+   the owner wants the reference with departures, most of which they
+   can't name until they've used the result. Sometimes the reference is
+   only raw material, to mine and not to match. Ask which of the three it
+   is, with your guess. Don't say "port": to someone who plays games, a
+   port is the same game on another machine, differences expected; to an
+   agent it means the same behaviour. Say "every difference is a bug". If
+   the owner picks that and the project isn't a migration, say back that
+   most owners find differences they want once there's something to use,
+   and name where people usually depart for this kind of project (the
+   controls, the feel, the defaults, how it looks).
+
+   For the reference with departures, propose two layers for them to
+   correct:
+   - **the floor:** what must match exactly, because everything else
+     stands on it (a CPU's behaviour, frame data, a file format). Match it
+     first: work here is rarely thrown away;
+   - **the taste layer:** where the reference is a starting point, not the
+     spec (the controls, the feel, the defaults, how it looks). The
+     reference's version is one option here. Units build the one that
+     costs least to make and to change (often the target's own
+     behaviour), and each choice goes to the owner as a candidate
+     departure, decided over real output.
+
+   Don't build the reference's exact version of the taste layer before
+   the owner asks for it. A factory that copies the whole reference first
+   and departs later deletes much of what it built when the departures
+   come, and a faithful copy the owner might want someday can be built
+   then, as a goal of its own. If the owner still wants everything matched
+   first, that's their call: make the departing a later phase they start
+   (a gate), and say first what it costs.
+
+   Write the kind, the two layers and the default into
+   `docs/departures.md`, and each departure the owner makes as a line
+   there that cites their decision. At the probe and the trials, ask over
+   the same output which differences they'd keep: each one kept is a
+   departure. The oracle reads the page (step 4).
 2. **Prior work, first, and every kind of it.** A research issue before
    anything is built. It's done when what it has to fill in, below, is
    filled in, not after some length of time. Look for each kind, in a
@@ -139,7 +186,15 @@ overseer and the owner read the queue's state from the file.
      target.** A check against your own formulas, your own interpreter or a
      patched copy of the target grades its own homework. Anything a model
      decides (matching, routing, "is this relevant") gets a bench another
-     context writes and labels before the code exists, frozen once written;
+     context writes and labels before the code exists, frozen once written.
+     Against a reference with departures, every exception the oracle takes
+     from it (a row it accepts, a golden it skips, a tolerance it widens)
+     cites the owner's decision on `docs/departures.md`, and the check
+     fails when that decision no longer stands or was never the owner's
+     (`just decisions --all --json` says both, for every decision at
+     once). A difference the owner chose is then expected, and no lane
+     "fixes" it back. Adding such an exception applies the owner's call;
+     it isn't weakening the oracle, which stays the owner's question;
    - the owner's way of looking at the output: a viewer, a play script, a
      page;
    - the first recipe that makes one unit without hand work;
@@ -151,14 +206,16 @@ overseer and the owner read the queue's state from the file.
    has judged a trial unit; there's a pile of like units and a recipe for
    them; the unit's size is measured; the owner can look at the output
    themselves; the machine's limits are set; the goal's two lines have
-   been asked again over trial output; and the owner has made their
+   been asked again over trial output; the reference's kind and its two
+   layers are written down; and the owner has made their
    design calls (below). Go through them with the owner, and they pass the
    gate. Then read [design-questions.md](design-questions.md), all of it,
    and settle the rest of the design, which is yours to do.
 
 **The owner's design calls happen here, not after the gate.** Of the
 design questions, only a few are the owner's: the goal's two lines (with
-done and kill, question 4), where they want to look (gates, question 5),
+done and kill, question 4), which differences from the reference are bugs
+(the kind and its two layers, question 2), where they want to look (gates, question 5),
 how the scope grows (question 12), and machines or lanes the profile
 doesn't settle (question 9). Ask them in the brief or as the trials answer
 them, so that passing the gate means the factory is ready to start, and
