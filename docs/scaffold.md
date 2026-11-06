@@ -17,6 +17,7 @@ the justfile and fills in what's missing. What it lays down:
 |---|---|
 | `AGENTS.md` (+ `CLAUDE.md` = `@AGENTS.md`) | Where things go, ground rules, the memory rules. Lean on purpose. |
 | `docs/factory.md` | The spec: goal, unit, oracle, done/kill, gates, **the loop procedure**, resources. Rules only, each a line with a pointer; how a tool works goes in `docs/tools/<tool>.md`. `lint` caps it at 4,000 words and 1,000-character lines. |
+| `docs/departures.md` | The reference the oracle compares against: whether every difference from it is a bug, what must match (the floor), where it's only a starting point (the taste layer), and each departure the owner has made, citing their decision. Filled in the opening's brief. |
 | `docs/machines.md` | The machines (from the profile): lanes per machine (a table the scripts read), accounts, what each can do. The only place machine facts live. |
 | `docs/tools.md` | What's installed for images, video and audio, and the project's way to do each job (`just view-image` to look at an image). Lane sessions read it before reaching for a tool. Fill it from what's on the machines. |
 | `tracker/` | State as JSON, changed only by the tracker CLI: groups of units, questions for the owner, decisions, a log. See SKILL.md, "The tracker". A new one holds only the opening's gate. |

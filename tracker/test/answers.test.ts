@@ -162,6 +162,21 @@ describe("answer --via, decide --by owner, decisions --for", () => {
     hasnt(ok(["decisions"]), "Decided unit is shiny (");
   });
   test("--all includes them", () => { has(ok(["decisions", "--all"]), "[replaced by Decided unit is matte (d/decided-unit-is-matte)]"); });
+  // A project's check reads these to hold an oracle's exceptions to the owner's standing calls.
+  type Shown = { by: string; in_force: boolean; ended: { kind: string; by?: string; text: string } | null };
+  const shown = (id: string): Shown => JSON.parse(ok(["show", id, "--json"]));
+  test("show --json on a decision: the owner's, still standing", () => {
+    const d = shown("d/decided-unit-stays-square");
+    assert.deepEqual([d.by, d.in_force, d.ended], ["owner", true, null]);
+  });
+  test("show --json on a replaced decision says what replaced it", () => {
+    const d = shown("d/decided-unit-is-shiny");
+    assert.deepEqual([d.in_force, d.ended?.kind, d.ended?.by], [false, "replaced", "d/decided-unit-is-matte"]);
+  });
+  test("and an agent's decision is the session's", () => { assert.equal(shown("d/decided-unit-is-matte").by, "worker1"); });
+  test("show --json on a decision that doesn't exist fails", () => {
+    has(t(["show", "d/no-such-call", "--json"], {}, { merged: true }).stdout, "no decision d/no-such-call");
+  });
   test("and with --for too", () => {
     const out = ok(["decisions", "--all", "--for", "dv/a"]);
     has(out, "[replaced by Decided unit is matte (d/decided-unit-is-matte)]");

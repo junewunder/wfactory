@@ -26,7 +26,7 @@ describe("init.sh in a new folder", () => {
     const s = cmd(path.join(F, "factory/tracker"), ["state", "opening/ready"], { cwd: F, env: w.env });
     assert.equal(s.stdout.trim(), "you");
   });
-  for (const f of ["AGENTS.md", "CLAUDE.md", "justfile", "docs/factory.md", "docs/machines.md", "docs/tools.md", "memory/MEMORY.md", "factory/factory.just", "factory/skill", "factory/tracker", "factory/loop.sh", "tracker/project.json"]) {
+  for (const f of ["AGENTS.md", "CLAUDE.md", "justfile", "docs/factory.md", "docs/departures.md", "docs/machines.md", "docs/tools.md", "memory/MEMORY.md", "factory/factory.just", "factory/skill", "factory/tracker", "factory/loop.sh", "tracker/project.json"]) {
     test(`makes ${f}`, () => { assert.ok(fs.existsSync(path.join(F, f))); });
   }
   test("keeps the stubs executable", () => { assert.ok(isX(path.join(F, "factory/loop.sh")) && isX(path.join(F, "factory/tracker"))); });

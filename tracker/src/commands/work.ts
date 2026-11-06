@@ -14,6 +14,7 @@ import { derive, groupOrderLine, idleWhy, LABEL, lcLateWhy, pick, scopeGroups, s
 import { C } from "./registry.ts";
 import { ciWaitText, hasReadyHook, notReady, runReady } from "../checks.ts";
 import type { State, Status, Unit, UnitRecord } from "../types.ts";
+import { ended, endedText } from "../decisions.ts";
 
 C.next = (a) => {
   const o = parseArgs(a);
@@ -160,6 +161,16 @@ C.show = (a) => {
   a = o._;
   const T = load();
   const ref = a[0] || str(o.full) || str(o["why-all"]) || die("usage: show <id> [--full | --why-all] [--json]");
+  // --json on a decision: who made it and whether it still stands, for a project's checks (an
+  // oracle's exception that cites the owner's departure from the reference fails once that
+  // decision is replaced, retired or lapsed, or if it was never the owner's).
+  if (o.json && ref.startsWith("d/")) {
+    const x = findD(T, ref) || die(`no decision ${ref}`);
+    const e = ended(T, x);
+    console.log(JSON.stringify({ id: x.id, title: expand(T, x.title), why: x.why ? expand(T, x.why) : "", by: x.by, at: x.at,
+      scope: x.scope || [], in_force: !e, ended: e ? { ...e, text: endedText(T, e) } : null }));
+    return 0;
+  }
   // --json: one unit's status, notes and the decisions that apply, for scripts (the loop's inbox
   // hook asks this every few minutes while a session works the unit).
   if (o.json) {

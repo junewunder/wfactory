@@ -16,6 +16,8 @@ up the rest when its unit needs a rule.
 **The far line:** <fill: the loftiest version the owner can imagine this making. The direction, not the finish.>
 **The satisfied line:** <fill: the least result the owner would use and be glad of. This is "done", and the oracle's bar. Both lines are provisional: each change goes here with the output that showed it.>
 
+**The reference:** <fill: what the oracle compares against, and whether every difference from it is a bug. Its floor, its taste layer and the owner's departures are in `docs/departures.md`.>
+
 **Worth the tokens because:** <fill: the payoff that justifies the run, in a line.>
 
 ## The opening
@@ -49,6 +51,10 @@ holds, the evidence replaces that.
 - **The goal's two lines** (Goal, above) were asked again with trial
   output in front of the owner: <fill: needs … (the queue
   item that makes it hold); then what they saw, and what changed>
+- **Which differences are bugs:** the reference's kind, its floor and its
+  taste layer are in `docs/departures.md`, and the owner has seen trial
+  output that differs from it: <fill: needs … (the queue item that makes
+  it hold); then the kind, and the departures made so far>
 - **The owner's design calls** are made: where they want to look (the
   gates, in Done and stopping), how the scope grows (The ramp), and lanes
   or machines the profile doesn't settle: <fill: needs … (the queue item
@@ -98,6 +104,15 @@ before anything is marked `done`.
 - **The oracle checks the real target,** not a convenient stand-in. If the
   result ships somewhere (a device, stock software, a printed page), the check
   runs there or against something proven equivalent.
+- **Departures from the reference:** a difference from the reference is a
+  bug unless `docs/departures.md` lists it. Each exception a check takes
+  for one cites the owner's decision, and fails once that decision no
+  longer stands or isn't the owner's (`just show d/<slug> --json`: `by`,
+  `in_force`). <fill: how the checks read the page and their exceptions,
+  or "every difference is a bug">
+  A check that fails on a listed departure is missing its exception: add
+  it, citing the decision (that applies the owner's call; it doesn't
+  weaken the oracle), and never change the work back to the reference.
 
 **Independent check:** <fill: one of the two>
 - *mechanical*: `just check` passing is enough; the worker records the unit done.
@@ -204,7 +219,12 @@ them, following the overseer's guide (`just oversee-guide`).
    branch.) An interrupted unit means a session
    stopped mid-unit: the card says where its work is (its branch, which the
    loop checks out, or what it left uncommitted). Keep what's good, finish it.
-3. **Do** the unit, within the rules in `AGENTS.md`.
+3. **Do** the unit, within the rules in `AGENTS.md`. Where it touches the
+   taste layer (`docs/departures.md`), follow the departures and the calls
+   kept there. A choice with no line there takes the page's default and
+   goes to the owner as a candidate departure, filed as that page says,
+   without holding up this unit. Never make a departure, or an exception
+   in a check, without the owner's decision.
 4. **Check.** Run `just check`. If the unit's check is independent, get it now
    (verifier subagent), or `just review <id> --evidence "…"` and leave it for
    a later session.

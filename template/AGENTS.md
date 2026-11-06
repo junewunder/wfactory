@@ -35,6 +35,9 @@
   Blockers read "X can't start until Y, because Z". In tracker text, refer to
   units as `{unit:<id>}` so they show as titles.
 - **Never weaken the oracle to finish a unit.** See `docs/factory.md`.
+- **A difference from the reference is a bug** unless
+  `docs/departures.md` lists it as the owner's call. Read that page before
+  changing how the result behaves or looks; only the owner adds to it.
 - **Work lives in git, or is rebuilt from it.** Anything written (code, specs,
   data tuned by hand) is committed; anything derived has a command that
   rebuilds it, hand fixes included. A unit isn't done while its work lives

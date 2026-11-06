@@ -46,6 +46,7 @@ For agents:
   claim <id>                            claim a unit you were told to work
   queue [-n N] [--json]                 what each machine's lanes take next, and why
   show <id> [--full|--why-all] [--json] a unit, group, question or decision
+                                        (--json on a decision: who made it, and whether it still stands)
   find <words> [--open] [-n N]          units by words in their title or detail, best first
   status [<group> | --all]              counts; a few lines at any scale
   questions [--all]                     what's waiting on the owner

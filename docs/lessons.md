@@ -630,3 +630,44 @@ it's set up. The goal is asked as two lines: the furthest it could go,
 and where they'd be satisfied. The satisfied line is asked again over
 real output at the probe, the trials and every ramp review. Once the
 owner says start, the agent stops only at gates and real questions.
+
+### 34. The reference was the oracle, and the owner wanted something else (the mod factory and the recompiler factory)
+
+**What happened.** The mod factory's oracle compared each character
+against the source game, and on day two the owner set a standing rule:
+whenever there's a choice, do what the source game did, as exactly as
+possible, even where it reads oddly in the target game; adapting to the
+target is a later phase the owner starts. Sessions built the source's
+rules into every character, and the checks held them there. As the owner
+played the result, they kept the target game's own rule in one place
+after another. A week in, a page appeared to map which rules followed
+which game, and a month in it held 34 kept from the
+target against 15 kept from the source. Fifteen of those calls came on
+one day, along with commits that took out source behaviour built to
+match, such as the source's slow ledge options past a percent, 461 lines
+across 30 files. Only then did the checks learn the calls: the frame
+audit's exceptions had to cite an owner's decision, and a test failed
+when the page cited one that no longer stood. The recompiler factory
+went the same way on a smaller scale. Its far line was "plays as the
+reference emulator does", and later the owner split the builds in two:
+unmodded builds match the emulator byte for byte, and modded builds are
+plain programs that keep none of its state.
+
+**What it cost.** Weeks of sessions matching rules the owner ended up
+not wanting, then the work of taking them out, and checks that until the end
+counted every one of the owner's departures as a bug for a lane to fix
+back.
+
+**The rule.** The opening asks how the result relates to its
+reference: every difference is a bug, the reference with departures, or
+raw material. It never says "port", which means differences expected to
+some owners and identical to an agent. For the reference with
+departures, the floor (what everything stands on) is matched first and
+exactly. The taste layer (feel, controls, defaults, looks) gets the
+version that costs least to build and change, and each choice goes to
+the owner as a candidate departure over real output, filed without
+holding up the unit that found it. `docs/departures.md` holds the kind,
+the layers and each departure the owner makes, citing their decision;
+every exception a check takes cites one, and fails once it no longer
+stands. Matching everything first is the owner's call, as a phase they
+start, after hearing what it costs.

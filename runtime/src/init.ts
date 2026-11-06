@@ -11,8 +11,8 @@ export const HELP = `init.sh — lay down the factory layer in a new or existing
 
 Needs a complete profile (scripts/profile.sh: who the owner is, the
 machines). Copies the skill's template: AGENTS.md, CLAUDE.md,
-docs/factory.md, docs/machines.md (its table from the profile's Machines),
-docs/tools.md, memory/MEMORY.md, a justfile importing factory/factory.just, and factory/
+docs/factory.md, docs/departures.md, docs/machines.md (its table from the
+profile's Machines), docs/tools.md, memory/MEMORY.md, a justfile importing factory/factory.just, and factory/
 (stubs that run the skill's deployed loop code: factory/skill says which
 copy). Then makes a tracker/ with the shared tracker CLI, holding only the gate
 that ends the opening (opening/ready: no lanes until the owner passes it). Never
@@ -55,6 +55,8 @@ const AGENTS_SECTION = `
   \`just next --claim\`, \`just done\`, \`just ask\`, \`just lint\` (\`just tracker --help\`).
 - Talk to the owner in titles, never bare IDs: what a unit is first, the ID after in
   parentheses.
+- A difference from the reference is a bug unless \`docs/departures.md\` lists it as
+  the owner's call. Read that page before changing how the result behaves or looks.
 `;
 
 const read = (f: string) => { try { return fs.readFileSync(f, "utf8"); } catch { return null; } };
