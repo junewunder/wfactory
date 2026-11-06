@@ -91,10 +91,10 @@ for another unit, `just log`). Don't guess IDs.
    at least two options that each say what they change, a default, and
    `--blocks` for what waits on it; mark an option that puts it off ("not
    yet") with `--parks <key>`. Refer to units as `{unit:<id>}`, never by
-   a bare ID. The unit then waits; this iteration ends there, and the loop goes
-   on to other work. (A question that blocks only a unit you filed for it,
-   not yours, as a candidate departure from the reference does, leaves your
-   unit going: `ask` says so, and you carry on.) Don't guess at a decision the docs reserve for the owner.
+   a bare ID. Unless the question blocks only a unit you filed for it, not
+   yours (as a candidate departure from the reference does: `ask` then says
+   to carry on), the unit then waits; this iteration ends there, and the
+   loop goes on to other work. Don't guess at a decision the docs reserve for the owner.
 6. Then stop. Your final message is three lines at most: the unit (title, ID
    in parentheses), its new status, and anything the next iteration must know
    that isn't already recorded. (If it isn't recorded, record it first.)

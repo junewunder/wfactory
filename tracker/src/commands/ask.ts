@@ -251,7 +251,7 @@ C.decisions = (a) => {
   if (o.for) { const u = resolve(T, String(o.for)); ds = ds.filter((d) => (d.scope || []).some((s) => matches(T, s, u))); }
   const q = o._.join(" ");
   if (q) ds = ds.map((d) => [d, overlap(q, `${d.title} ${d.why} ${d.question ? T.questions.find((x) => x.id === d.question)?.title || "" : ""}`)] as const).filter(([, s]) => s > 0).sort((x, y) => y[1] - x[1]).map(([d]) => d);
-  // --json: every one selected, in recording order, for a check that reads many at once.
+  // --json: every one selected (in recording order, or best match first with words), for a check.
   if (o.json) { console.log(JSON.stringify(ds.map((d) => decisionJson(T, d)))); return 0; }
   if (!ds.length) { console.log(q ? `No decision matches "${q}".` : "No decisions yet."); return 0; }
   // With words, ds is best match first: print the best 40. Without, it's in recording order: the newest 40, newest first.
