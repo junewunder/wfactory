@@ -1,6 +1,6 @@
 # Contributing to wfactory
 
-Visibility: public (github.com/junewunder/wfactory). Standing OK to push as needed: no need to ask before each push.
+Visibility: public (github.com/junewunder/wfactory). The maintainer's own agents have a standing OK to push here as needed; anyone else's follow their own rules.
 
 This repo is a Claude Code skill. `SKILL.md` is what an agent follows inside
 a factory (setting one up is four steps, each in its own file:

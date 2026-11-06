@@ -2,8 +2,8 @@
 
 What the oracle compares against, which of its behaviour this project
 keeps, and where it differs on purpose. Every difference from the
-reference is a bug unless this page says otherwise. Only the owner adds a
-departure; each line here cites their decision (`d/<slug>`), and the
+reference is a bug unless this page says otherwise. Only the owner decides
+a departure; each line here cites their decision (`d/<slug>`), and the
 decision itself, with its why, is in the tracker (`just decisions
 <words>`).
 
@@ -38,16 +38,22 @@ the reference's exact version built to match, unless the owner asks for
 that.>
 
 **A choice with no line here** is a candidate departure. The unit takes
-the default above and carries on, and files the choice for the owner: a
-unit for it in the `taste` group (`just tracker add-unit taste/<slug>
---title "…"`, with the group added once by `just tracker add-group taste
---title "Calls on the taste layer"`), and a question that blocks only that
-unit (`just ask … --blocks taste/<slug>`), never the unit that found it.
-The question's options are the reference's version and the default (and
-any other worth building), each saying what it changes, and its context
-says where to see the difference in real output. When the owner answers,
-`taste/<slug>` is the work of applying the call to every case it covers,
-and of writing its line below.
+the default above and carries on, and files the choice for the owner,
+first checking `just find <words> --open` in case it's filed already:
+- a unit for applying the call, where `docs/factory.md` puts shared work,
+  since a call covers every case alike: `just tracker add-unit
+  <group>/<slug> --title "…" --detail "…" --tags taste --needs <your
+  unit>`. The detail says what the choice is and where it shows; `--needs`
+  keeps it from being offered before its question is asked, and lands it
+  on top of the default your unit builds;
+- a question that blocks only that unit, never yours: `just ask …
+  --blocks <group>/<slug> --scope <group>/<slug>`. Its options are the
+  reference's version and the default (and any other worth building),
+  each saying what it changes, and its context says where to see the
+  difference in real output. `ask` then tells you to carry on.
+
+When the owner answers, that unit applies their call to every case it
+covers and writes its line below, citing the decision.
 
 ## Departures
 

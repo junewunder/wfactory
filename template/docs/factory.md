@@ -16,7 +16,7 @@ up the rest when its unit needs a rule.
 **The far line:** <fill: the loftiest version the owner can imagine this making. The direction, not the finish.>
 **The satisfied line:** <fill: the least result the owner would use and be glad of. This is "done", and the oracle's bar. Both lines are provisional: each change goes here with the output that showed it.>
 
-**The reference:** <fill: what the oracle compares against, and whether every difference from it is a bug. Its floor, its taste layer and the owner's departures are in `docs/departures.md`.>
+**The reference:** what the oracle compares against, which differences from it are bugs, and the owner's departures: `docs/departures.md`.
 
 **Worth the tokens because:** <fill: the payoff that justifies the run, in a line.>
 
@@ -54,7 +54,7 @@ holds, the evidence replaces that.
 - **Which differences are bugs:** the reference's kind, its floor and its
   taste layer are in `docs/departures.md`, and the owner has seen trial
   output that differs from it: <fill: needs … (the queue item that makes
-  it hold); then the kind, and the departures made so far>
+  it hold); then the output they saw>
 - **The owner's design calls** are made: where they want to look (the
   gates, in Done and stopping), how the scope grows (The ramp), and lanes
   or machines the profile doesn't settle: <fill: needs … (the queue item
@@ -107,9 +107,10 @@ before anything is marked `done`.
 - **Departures from the reference:** a difference from the reference is a
   bug unless `docs/departures.md` lists it. Each exception a check takes
   for one cites the owner's decision, and fails once that decision no
-  longer stands or isn't the owner's (`just show d/<slug> --json`: `by`,
-  `in_force`). <fill: how the checks read the page and their exceptions,
-  or "every difference is a bug">
+  longer stands or isn't the owner's (`just decisions --all --json`, or
+  `just show d/<slug> --json` for one: `by`, `in_force`). <fill: how the
+  checks read the page and their exceptions, or "every difference is a
+  bug">
   A check that fails on a listed departure is missing its exception: add
   it, citing the decision (that applies the owner's call; it doesn't
   weaken the oracle), and never change the work back to the reference.

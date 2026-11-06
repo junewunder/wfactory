@@ -26,8 +26,8 @@ The review also asks the owner about the goal's two lines
 ([opening.md](opening.md)): with a step's worth of real cases to look at,
 are they still satisfied where the satisfied line says, and is the far
 line still where they want this to head? And which of the differences
-from the reference they'd keep: the candidate departures waiting in the
-`taste` group, shown over the step's cases. The owner learns what they want
+from the reference they'd keep: any candidate departures still waiting on
+them (units tagged `taste`), shown over the step's cases. The owner learns what they want
 as the factory learns what's possible, so expect the lines to move, and
 write each move into `docs/factory.md`'s Goal, with its done criterion,
 and each departure into `docs/departures.md`, before the next step's units

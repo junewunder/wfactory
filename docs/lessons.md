@@ -644,7 +644,8 @@ after another. A week in, a page appeared to map which rules followed
 which game, and a month in it held 34 kept from the
 target against 15 kept from the source. Fifteen of those calls came on
 one day, along with commits that took out source behaviour built to
-match, such as the source's slow ledge options past a percent, 461 lines
+match, such as the source's slower ledge options for a badly hurt fighter, 461
+lines
 across 30 files. Only then did the checks learn the calls: the frame
 audit's exceptions had to cite an owner's decision, and a test failed
 when the page cited one that no longer stood. The recompiler factory
@@ -669,5 +670,7 @@ the owner as a candidate departure over real output, filed without
 holding up the unit that found it. `docs/departures.md` holds the kind,
 the layers and each departure the owner makes, citing their decision;
 every exception a check takes cites one, and fails once it no longer
-stands. Matching everything first is the owner's call, as a phase they
+stands. Such an exception applies the owner's call, so lesson 4
+(never weaken the check to go green) still holds: a lane never makes one
+without the owner's decision. Matching everything first is the owner's call, as a phase they
 start, after hearing what it costs.

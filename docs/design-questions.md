@@ -5,8 +5,8 @@ after the opening.
 
 At the end of the opening, before the first units, settle these. **They are
 yours to settle, not a list for the owner to approve.** The owner made
-their calls during the opening (the goal's two lines, gates, how the scope
-grows, machines: [opening.md](opening.md), "The owner's design calls");
+their calls during the opening (the goal's two lines, which differences
+from the reference are bugs, gates, how the scope grows, machines: [opening.md](opening.md), "The owner's design calls");
 the rest are mechanics that the trial units, the skill's rules and the
 repo's own lessons answer. Write each answer into `docs/factory.md`, then
 send the owner one short message saying how the factory is set up, the

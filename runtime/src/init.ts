@@ -55,8 +55,8 @@ const AGENTS_SECTION = `
   \`just next --claim\`, \`just done\`, \`just ask\`, \`just lint\` (\`just tracker --help\`).
 - Talk to the owner in titles, never bare IDs: what a unit is first, the ID after in
   parentheses.
-- A difference from the reference is a bug unless \`docs/departures.md\` lists it as
-  the owner's call. Read that page before changing how the result behaves or looks.
+- A difference from the reference is a bug unless \`docs/departures.md\` says otherwise.
+  Read that page before changing how the result behaves or looks.
 `;
 
 const read = (f: string) => { try { return fs.readFileSync(f, "utf8"); } catch { return null; } };

@@ -76,7 +76,7 @@ overseer and the owner read the queue's state from the file.
    any answer about an imagined one. Write each change to the two lines
    into the Goal with what showed it.
 
-   **The reference, and which differences are bugs.** Most factories
+   **The reference, and which differences are bugs.** Many factories
    have a reference: the program, game or dataset the oracle compares
    against. A check against it counts every difference as a bug, and an
    agent with nothing else written down copies it, so unless the owner
@@ -191,8 +191,10 @@ overseer and the owner read the queue's state from the file.
      from it (a row it accepts, a golden it skips, a tolerance it widens)
      cites the owner's decision on `docs/departures.md`, and the check
      fails when that decision no longer stands or was never the owner's
-     (`just show d/<slug> --json` says both). A difference the owner chose
-     is then expected, and no lane "fixes" it back;
+     (`just decisions --all --json` says both, for every decision at
+     once). A difference the owner chose is then expected, and no lane
+     "fixes" it back. Adding such an exception applies the owner's call;
+     it isn't weakening the oracle, which stays the owner's question;
    - the owner's way of looking at the output: a viewer, a play script, a
      page;
    - the first recipe that makes one unit without hand work;

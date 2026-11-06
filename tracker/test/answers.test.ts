@@ -95,6 +95,28 @@ describe("an answer's option says what it drops or releases, and answer does exa
   });
 });
 
+describe("ask: a question that leaves the asker's own unit out of what it blocks", () => {
+  // A candidate departure from the reference: a unit of its own, which needs the one that found
+  // it, and a question that blocks only that, so the finding unit goes on.
+  let out = "";
+  test("tells the session to carry on with its unit", () => {
+    setup(["add-group", "cd", "--title", "Candidates"]);
+    setup(["add-unit", "cd/work", "--title", "Build the dash"]);
+    ok(["claim", "cd/work"]);
+    setup(["add-unit", "cd/turn", "--title", "Turnaround: the owner's call", "--needs", "cd/work", "--tags", "taste"]);
+    out = ok(["ask", "--title", "Keep the reference's slow turnaround?", "--context", "x", "--option", "ref | The reference's | built to match",
+      "--option", "def | The default | nothing more", "--default", "def", "--blocks", "cd/turn", "--scope", "cd/turn"]);
+    has(out, "Build the dash (cd/work) isn't one of them: carry on with it.");
+  });
+  test("and its unit stays claimed", () => { assert.equal(state("cd/work"), "doing"); });
+  test("while the candidate waits on the owner", () => { assert.equal(state("cd/turn"), "you"); });
+  test("a question that blocks the asker's unit still says to stop", () => {
+    has(ok(["ask", "--title", "Which dash speed for the work unit?", "--context", "x", "--option", "a | Fast | x", "--option", "b | Slow | y",
+      "--default", "a", "--blocks", "cd/work"]), "stop this unit here");
+  });
+  after(() => { for (const u of ["cd/work", "cd/turn"]) setup(["drop", u, "--why", "test"]); });
+});
+
 describe("lanes-stopped: the last lane's record, for an overseer that can't reach the machine", () => {
   test("lanes-stopped logs that the machine tidied", () => {
     ok(["lanes-stopped"]);
@@ -173,9 +195,32 @@ describe("answer --via, decide --by owner, decisions --for", () => {
     const d = shown("d/decided-unit-is-shiny");
     assert.deepEqual([d.in_force, d.ended?.kind, d.ended?.by], [false, "replaced", "d/decided-unit-is-matte"]);
   });
+  test("and says it in words", () => { assert.equal(shown("d/decided-unit-is-shiny").ended?.text, "replaced by Decided unit is matte (d/decided-unit-is-matte)"); });
   test("and an agent's decision is the session's", () => { assert.equal(shown("d/decided-unit-is-matte").by, "worker1"); });
+  test("an answer's decision names its question and thread", () => {
+    const id = decisions().find((d: { question?: string }) => d.question === "q/dv-green").id;
+    const d = JSON.parse(ok(["show", id, "--json"]));
+    assert.deepEqual([d.by, d.question, d.via], ["owner", "q/dv-green", "thread-42"]);
+  });
+  test("a lapsed decision isn't in force", () => {
+    const j = f.json("tracker/decisions.json");
+    j.decisions.push({ id: "d/dv-lapsed", title: "Decided unit is round for now", why: "a while", by: "owner", at: "2026-01-01T00:00:00Z", scope: ["dv/a"], until: "2026-01-02T00:00:00Z" });
+    f.write("tracker/decisions.json", JSON.stringify(j, null, 2) + "\n");
+    const d = shown("d/dv-lapsed");
+    assert.deepEqual([d.in_force, d.ended?.kind], [false, "lapsed"]);
+  });
   test("show --json on a decision that doesn't exist fails", () => {
-    has(t(["show", "d/no-such-call", "--json"], {}, { merged: true }).stdout, "no decision d/no-such-call");
+    const r = t(["show", "d/no-such-call", "--json"], {}, { merged: true });
+    assert.notEqual(r.code, 0);
+    has(r.stdout, "no decision d/no-such-call");
+  });
+  test("decisions --all --json lists every one, ended ones included", () => {
+    const all: (Shown & { id: string })[] = JSON.parse(ok(["decisions", "--all", "--json"]));
+    assert.deepEqual(["d/decided-unit-stays-square", "d/decided-unit-is-shiny", "d/dv-lapsed"].map((id) => all.find((d) => d.id === id)?.in_force), [true, false, false]);
+  });
+  test("and without --all, only those in force", () => {
+    const now: { id: string }[] = JSON.parse(ok(["decisions", "--json"]));
+    assert.ok(now.some((d) => d.id === "d/decided-unit-stays-square") && !now.some((d) => d.id === "d/decided-unit-is-shiny"));
   });
   test("and with --for too", () => {
     const out = ok(["decisions", "--all", "--for", "dv/a"]);
