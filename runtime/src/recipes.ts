@@ -86,8 +86,16 @@ export const UNTIL_HELP = `until <seconds> [-- <check…>]: wait up to <seconds>
 if it still fails at the limit. With no check, wait that long. One word after -- runs in bash
 (\`just until 60 -- 'test -s out/a.txt && tail -3 out/a.txt'\`); several run as they are. At most
 540 seconds, under the 10-minute cut-off of a Bash call: a longer job goes through \`just long\`.
+A check that can't change (\`false\`, \`true\`) is refused (exit 2): wait on a
+subagent by starting it with run_in_background: false, on a job with \`just long wait\`.
 It's how a session waits: the CLI refuses a Bash call that starts with \`sleep\`, and points to
 a Monitor tool lanes don't take.`;
+
+export const UNTIL_TRIVIAL = "until: waits for a condition to come true. To wait on a subagent, start it with run_in_background: false; to wait on a job, `just long wait <name>`.";
+const TRIVIAL = new Set(["false", "true", ":"]);
+// The check's text, unwrapped from one `bash -c` / `sh -c`, trimmed.
+const trivialOf = (check: string[]) => (check.length === 3 && /^(?:ba)?sh$/.test(check[0]) && check[1] === "-c" ? check[2] : check.length === 1 ? check[0] : "")
+  .trim().replace(/^(?:(?:ba)?sh -c\s+)?(['"]?)(.*)\1$/, "$2").trim();
 
 // Wait for something a session can't wait on with `just long wait`: an app to settle, a file a
 // background job writes (Oct 2026: 25 Bash calls refused for starting with sleep).
@@ -99,6 +107,9 @@ export async function untilCli(args: string[], env: NodeJS.ProcessEnv = process.
   const rest = args.slice(1);
   if (rest.length && rest[0] !== "--") { console.error(`until: the check goes after --: just until ${args[0]} -- <check…>`); return 2; }
   const check = rest.slice(1);
+  // A check that can never change (`false`, `true`, `bash -c false`): a blind sleep dressed as a
+  // wait. Lanes waited on background subagents with `just until 500 -- false`.
+  if (check.length && TRIVIAL.has(trivialOf(check))) { console.error(UNTIL_TRIVIAL); return 2; }
   const end = Date.now() + secs * 1000, p = Number(env.FACTORY_UNTIL_POLL), poll = (Number.isFinite(p) && p > 0 ? p : 2) * 1000;
   if (!check.length) { await sleep(secs * 1000); return 0; }
   const [cmd, ...cargs] = check.length === 1 ? ["bash", "-c", check[0]] : check;

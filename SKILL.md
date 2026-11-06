@@ -166,7 +166,8 @@ When the owner says "continue" in a factory repo, work **one unit** by
 `docs/factory.md`'s loop, then report: the unit, its new state, questions
 waiting, and what `just next` offers now.
 - **Finish the unit, including its independent check.** Spawn a verifier
-  subagent with a fresh context. Give it the unit, the acceptance criteria and
+  subagent with a fresh context, waited on in the same call
+  (`run_in_background: false`). Give it the unit, the acceptance criteria and
   where the output is, and ask for a verdict with evidence. Then
   `just done <id> --checker <tag> --evidence "…"`. Don't leave it in
   `review` for "a later session": finishing those took one factory

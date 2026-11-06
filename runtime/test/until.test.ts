@@ -49,6 +49,17 @@ test("until: refuses past a Bash call's limit, and a check without --", () => {
   assert.equal(run(["5", "true"]).status, 2);
 });
 
+test("until: refuses at once a check that can never change, pointing to the real waits", () => {
+  for (const check of [["false"], [" true "], ["bash", "-c", "false"], ["sh -c 'true'"]]) {
+    const t = Date.now(), r = run(["500", "--", ...check]);
+    assert.equal(r.status, 2, check.join(" "));
+    assert.ok(Date.now() - t < 5000);
+    assert.equal(r.stderr.trim(), "until: waits for a condition to come true. To wait on a subagent, start it with run_in_background: false; to wait on a job, `just long wait <name>`.");
+  }
+  // A real check that happens to start with the word still runs.
+  assert.equal(run(["1", "--", "true && test -d /"]).status, 0);
+});
+
 test("until: a check that prints a lot still passes, with its output's end", () => {
   const r = run(["5", "--", "head -c 2000000 /dev/zero | tr '\\0' a; echo; echo the end"]);
   assert.equal(r.status, 0, r.stderr);
@@ -66,7 +77,7 @@ test("until: at the limit the check's whole group goes, and it says so", () => {
 
 test("until: a poll setting that isn't a number falls back to 2 s", () => {
   const t = Date.now();
-  const r = spawnSync(process.execPath, [main, "until", "1", "--", "false"], { encoding: "utf8", env: { ...process.env, FACTORY_UNTIL_POLL: "soon" } });
+  const r = spawnSync(process.execPath, [main, "until", "1", "--", "test -e /nonexistent-until-check"], { encoding: "utf8", env: { ...process.env, FACTORY_UNTIL_POLL: "soon" } });
   assert.equal(r.status, 124);
   assert.ok(Date.now() - t < 10_000);
 });

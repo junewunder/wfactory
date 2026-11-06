@@ -53,7 +53,8 @@ for another unit, `just log`). Don't guess IDs.
      block` it, and don't move the check into a new unit unless `{{SPEC}}`
      splits it so. The loop's review sends back a unit whose evidence says
      its check didn't run.
-   - **independent** unit: a fresh-context verifier subagent checks it, then
+   - **independent** unit: a fresh-context verifier subagent checks it
+     (waited on in the same call: `run_in_background: false`), then
      `just done <id> --checker <its tag> --evidence "…"`; or
      `just review <id> --evidence "…"` for a later session.
    - With branches, the loop reviews every unit's diff after your session,
