@@ -164,7 +164,7 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
   for (const l of L) if (gone.get(key(l))) say(`unreachable at the last look: ${l.m} lane ${l.n}`);
   if (news.length) {
     say("--- for the owner:");
-    for (const l of news) { const f = l.split("\t"); say([...f.slice(0, 2), ...f.slice(3)].join(" · ")); }
+    for (const l of news) { const f = l.split("\t"); say([...f.slice(0, 2), ...f.slice(3, 5)].join(" · ")); }
   }
   if (later) say(`(${later} more for the morning summary: \`just fleet summary\`)`);
   say(why);

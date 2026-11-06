@@ -105,7 +105,7 @@ export class Loop {
   get noroom() { return `${process.env.FACTORY_LOCKS}/noroom-until`; }
 
   // For the overseer: one line per thing the owner may need to hear about.
-  event(kind: string, msg: string) { ev(kind, msg, this.env); }
+  event(kind: string, msg: string, unit?: string) { ev(kind, msg, this.env, unit); }
 
   // A restarted copy that exits before it's running (a broken deploy, the tracker's data broken)
   // says so; the full exit steps replace this once it is. Its leases go stale in 30 minutes.

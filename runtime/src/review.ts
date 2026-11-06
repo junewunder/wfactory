@@ -119,7 +119,7 @@ export async function runReview(l: Loop, r: ReviewInput): Promise<Verdict> {
   if (await sessionOom(l, scope, f.err)) {
     const big = oomSnapshot(f.out, f.err, o.mem, s.end);
     log(`the review of ${r.title} was OOM-killed inside its ${o.mem} scope; the branch lands unreviewed`);
-    l.event("oom-kill", `the review of ${r.title} was killed: out of memory at ${o.mem}; biggest: ${big}. The branch lands unreviewed`);
+    l.event("oom-kill", `the review of ${r.title} was killed: out of memory at ${o.mem}; biggest: ${big}. The branch lands unreviewed`, r.unit);
     return { verdict: "none", why: `its review was killed: out of memory at ${o.mem} (biggest: ${big})` };
   }
   if (limitHit(f.out, f.err)) return { verdict: "none", why: "the reviewer hit a usage limit" };

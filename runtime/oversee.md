@@ -450,7 +450,9 @@ end-of-run report sums them up in one line.
    first line says so ("Nothing went wrong this run"). Say each problem
    plainly, as it is: never "mostly fine", "a few small issues", or good
    news ahead of it. `just fleet summary` prints its problems first ("What
-   went wrong"), so read it before you write.
+   went wrong"), so read it before you write. For each failure, say what
+   happened next as its `unit:` line says; if it says nothing (or
+   "unknown"), say you don't know.
    - What's wrong, first:
      - what broke: units stuck or blocked, a red main, branches that
        wouldn't land, units landed without the review, and CI that failed

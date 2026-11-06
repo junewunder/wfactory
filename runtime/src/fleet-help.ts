@@ -55,7 +55,8 @@ Usage:
                                           what went wrong first: CI that failed, was cut off or never
                                           started, the problem events of either tier (EVENTS_PROBLEM),
                                           the journal's oom and memory-low, and what waits on the
-                                          owner; then the rest of the morning-summary events and the
+                                          owner; under each event in a unit, that unit, its status
+                                          now and its newest note (what became of it); then the rest of the morning-summary events and the
                                           CI that passed; since T ("09:00", "-24 hours"; default:
                                           since this checkout's last fleet start), then the check-in
                                           offer when one is due (tracker prune --due); with --done,
@@ -133,4 +134,9 @@ export const EVENTS_WAKE = `question ci-published ci-broken ci-known-failing ci-
 export const EVENTS_PROBLEM = `ci-broken ci-known-failing ci-unrecorded ci-affected-failed land-check-unrun oom-kill stuck main-broken review-skipped
   stuck-merge stuck-merging stuck-branch inbox-unread silent restart-failed lost-lease store-down store-torn store-aside-unfiled gone-lane-left resume-refused
   resume-failed oom memory-low ci-broken-noship ci-known-failing-again store-aside-old resume-skipped land-check-timeout idle`.split(/\s+/);
+// The problem kinds that happen in a unit's session or landing: \`fleet summary\` says under each
+// which unit, and what became of it (or "unit: unknown"). Other kinds get that line only when
+// their line names a unit.
+export const EVENTS_OF_A_UNIT = `oom-kill stuck review-skipped stuck-merge stuck-merging stuck-branch inbox-unread silent land-check-unrun
+  land-check-timeout resume-refused resume-failed resume-skipped`.split(/\s+/);
 export const EVENTS_SUMMARY = "ci-republished ci-broken-noship ci-known-failing-again store-aside store-aside-old lane-stop held-back restarted wrap-up wrapped-up factory-edits tracker-edits resume-skipped land-check-timeout gone-lane-merged".split(" ");

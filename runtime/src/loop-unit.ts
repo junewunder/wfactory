@@ -256,7 +256,9 @@ export async function workUnit(l: Loop, u: Claimed): Promise<"next" | "stop"> {
     // No auto-memory: a factory keeps what sessions learn in its own files and the tracker.
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
     CLAUDE_CODE_SHELL: path.join(l.here, "lane-bash.sh"), FACTORY_OWNER_SHELL: env.FACTORY_OWNER_SHELL || env.SHELL || "",
-    FACTORY_INBOX: inbox, FACTORY_STOP_FILE: "runs/.pause-now", FACTORY_DEADLINE: String(l.clock.deadline), FACTORY_TAG: tag, FACTORY_SESSION: l.uuid, FACTORY_PID: String(process.pid), FACTORY_ACTOR: "loop" };
+    FACTORY_INBOX: inbox, FACTORY_STOP_FILE: "runs/.pause-now", FACTORY_DEADLINE: String(l.clock.deadline), FACTORY_TAG: tag, FACTORY_SESSION: l.uuid, FACTORY_PID: String(process.pid), FACTORY_ACTOR: "loop",
+    // The unit it holds, for the events its jobs log (an oom-kill: events.ts).
+    FACTORY_SESSION_UNIT: unit };
   // A session silent this long with no tool call open is ended (runSession).
   const silent = setting("session_silence", 30);
   const s = await runSession({ out, err: errf, scope, cmd: scope ? platform.cappedCmd(scope, o.mem, agent) : agent, stdin: files?.prompt, env: senv, stopFile: "runs/.pause-now", deadline: l.clock.deadline, tick, silent: silent * 60 },

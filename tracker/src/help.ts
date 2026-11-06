@@ -101,6 +101,7 @@ Setting up:
   land-fail <branch> --evidence "…"    loop.sh: its check before landing failed; back to ready (stuck the 3rd time)
   unclaim <id> [--unstarted]            give back this session's claim (its work kept, if it did any)
   lanes-stopped [--failed "…"]          loop.sh: this machine's last lane stopped and tidied up
+  held-at <host> <time> [--json]        the units whose sessions on host were open then (fleet summary)
   overseer [take <id>]                  which thread oversees the factory (fleet attach)
   leases | lease holder|mine|idle|beat|take|release   group data leases
   data <group> | --unit <id> | --all    where a group's data lives (factory/store.sh)
@@ -358,6 +359,10 @@ Which machine leases which group's data, and how fresh each lease's heartbeat is
 Which thread oversees the factory: its id, its machine and since when ("none" before the first).
 take: this thread is the overseer now (\`fleet attach\` does it); the one before it learns so at its
 next \`fleet wait --as <its id>\`. The newest to take it wins.`,
+  "held-at": `held-at <host> <time> [--json]
+The units whose sessions on <host> were open at <time> (to the minute: any moment in it), from the
+log: a claim, to the last line its session wrote about the unit (to now if it's still claimed).
+\`fleet summary\` asks it to tie an event that names no unit to the session it happened in.`,
   "lanes-stopped": `lanes-stopped [--failed "…"]
 loop.sh, as the last lane on this machine stops: log that it tidied up (copied its leases back and ran
 factory/tidy), with --failed naming what didn't work, before it lets the machine sleep. The overseer

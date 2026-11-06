@@ -146,6 +146,30 @@ describe("fleet wait: what wakes it", () => {
     assert.ok(at("The rest:") < at("store-aside (1):"));
     has(o, "landed without the loop's review: its review ran over 30 minutes");
   });
+  // Under each problem, the unit it happened in and what became of it, as the tracker has it now:
+  // an overseer once reported a killed job as rerun and finished when it was neither.
+  let sum2 = "";
+  test("  under a problem event, its unit, the unit's status now and its newest note", () => {
+    setup(["add-unit", "g/emsum", "--title", "Sum the emitters"]);
+    setup(["note", "g/emsum", "Split the big part off; the rerun never finished"]);
+    setup(["block", "g/emsum", "--why", "the rerun at 8G was killed too"]);
+    ev("oom-kill", "just long start emsum (make sum) was killed: out of memory at 6G\tg/emsum");
+    sum2 = out(["summary"]);
+    has(sum2, "just long start emsum (make sum) was killed: out of memory at 6G\n      unit: Sum the emitters (g/emsum): stuck: the rerun at 8G was killed too\n      last note: Split the big part off; the rerun never finished");
+  });
+  test("  a line that names no unit but its message does: that one", () => {
+    ev("stuck", "Sum the emitters (g/emsum): stuck after its review");
+    has(out(["summary"]), "Sum the emitters (g/emsum): stuck after its review\n      unit: Sum the emitters (g/emsum): stuck");
+  });
+  test("  an older kill in a job, with no unit: the session open on that host then", () => {
+    ev("oom-kill", "just capped make all was killed: out of memory at 4G");
+    has(out(["summary"]), "just capped make all was killed: out of memory at 4G\n      unit: Unit seven (g/seven): in progress");
+  });
+  test("  one in a unit with none to be found: unit: unknown", () => {
+    ev("silent", "a session said nothing for 30 minutes");
+    has(out(["summary"]), "a session said nothing for 30 minutes\n      unit: unknown");
+  });
+  test("  (and the events list doesn't print the unit field)", () => { hasnt(out(["events", "50"]), "6G · g/emsum"); });
   // The check-in offer (tracker prune --due), after the CI: only when one is due.
   test("  no check-in offer when none is due", () => { hasnt(out(["summary"]), "Check-in due"); });
   test("  a due one: the decisions to prune", () => {

@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { ymdHm } from "./sys.ts";
 import { beat } from "./fleet-beat.ts";
 import { cat, chomp, dateHm, lines, say } from "./fleet-util.ts";
-import { EVENTS_PROBLEM } from "./fleet-help.ts";
+import { EVENTS_OF_A_UNIT, EVENTS_PROBLEM } from "./fleet-help.ts";
 import { JOURNAL } from "./fleet-scripts.ts";
 import type { Fleet } from "./fleet-ctx.ts";
 
@@ -34,7 +34,7 @@ export function attach(f: Fleet, args: string[]): number {
   const wake = onlyTier("wake", evs.filter(fresh).join("\n")), summary = onlyTier("summary", evs.filter(fresh).join("\n"));
   const ns = notes.filter(fresh);
   say(`--- since ${since}${lastOf ? " (the last overseer's last note)" : was ? " (when the last overseer attached)" : ""}:`);
-  const merged = [...wake.map((l) => { const f = l.split("\t"); return [f[0], [...f.slice(0, 2), ...f.slice(3)].join(" · ")]; }),
+  const merged = [...wake.map((l) => { const f = l.split("\t"); return [f[0], [...f.slice(0, 2), ...f.slice(3, 5)].join(" · ")]; }),
     ...ns.slice(-30).map((l) => { const f = l.split("\t"); return [f[0], `${f[0]} · ${f[1]} · overseer ${f[2]}: ${f.slice(3).join(" ")}`]; })]
     .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, l]) => l);
   if (!merged.length) say("  nothing for the owner");
@@ -113,12 +113,18 @@ export function summary(f: Fleet, args: string[]): number {
   }
   const fresh = lines(all).filter((l) => l.split("\t")[0] >= since);
   const kind = (l: string) => l.split("\t")[3] ?? "";
-  // Grouped by kind, so a night's republishes read as one list.
-  const byKind = (ls: string[]) => {
+  const outcome = unitOutcome(env);
+  // Grouped by kind, so a night's republishes read as one list. With outcomes: under each event,
+  // the unit it happened in and what became of it, so the report says what followed, not a guess.
+  const byKind = (ls: string[], outcomes = false) => {
     for (const k of [...new Set(ls.map(kind))].sort()) {
       const of = ls.filter((l) => kind(l) === k);
       say(`  ${k} (${of.length}):`);
-      for (const l of of) { const f = l.split("\t"); say(`    ${[f[0], f[1], ...f.slice(4, 5)].join(" · ")}`); }
+      for (const l of of) {
+        const f = l.split("\t");
+        say(`    ${[f[0], f[1], ...f.slice(4, 5)].join(" · ")}`);
+        if (outcomes) for (const x of outcome(f)) say(`      ${x}`);
+      }
     }
   };
   // The bad news first (the owner reads the top of the report): CI that didn't pass, the problem
@@ -132,7 +138,7 @@ export function summary(f: Fleet, args: string[]): number {
   say("What went wrong:");
   if (c.why) say(`  ${c.why}`);
   if (c.bad.length) { say("  Group CI that didn't pass:"); for (const l of c.bad) say(`  ${l}`); }
-  byKind(problems);
+  byKind(problems, true);
   if (journal.length) { say(`  in the overseer's journal (${journal.length}):`); for (const l of journal) { const f = l.split("\t"); say(`    ${f[0]} · ${f[3]}`); } }
   if (q) say(`  waiting on the owner: ${q} question${q === 1 ? "" : "s"} or gate${q === 1 ? "" : "s"} (\`just questions\`)`);
   if (!c.why && !c.bad.length && !problems.length && !journal.length && !q) say("  nothing");
@@ -145,6 +151,40 @@ export function summary(f: Fleet, args: string[]): number {
   return 0;
 }
 
+// The unit an event happened in, and what became of it, as the tracker has it now: lines to print
+// under the event. The unit is the line's own (its sixth field, events.ts), else one its message
+// names in parentheses that the tracker knows ("Title (group/unit)"), else, for a kill in a job
+// (an older line, from before events named their unit), the one session the tracker's log shows
+// open on that host then. Found none: "unit: unknown" for a kind that happens in a unit, nothing
+// for the rest (a group's CI, a machine's store).
+function unitOutcome(env: NodeJS.ProcessEnv) {
+  const shown = new Map<string, { id: string; title: string; label: string; notes: { text: string }[] } | null>();
+  const show = (id: string) => {
+    if (!shown.has(id)) {
+      const r = spawnSync("factory/tracker", ["show", id, "--json"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      let u = null; try { if (r.status === 0) u = JSON.parse(r.stdout); } catch {}
+      shown.set(id, u);
+    }
+    return shown.get(id)!;
+  };
+  // "2026-11-05 03:12" (local, as events.log has it) as the tracker reads a time.
+  const iso = (t: string) => { const d = new Date(t.replace(" ", "T")); return Number.isNaN(d.getTime()) ? "" : d.toISOString(); };
+  const heldAt = (host: string, t: string) => {
+    if (!iso(t)) return [];
+    const r = spawnSync("factory/tracker", ["held-at", host, iso(t), "--json"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    try { return r.status === 0 ? JSON.parse(r.stdout) as { id: string }[] : []; } catch { return []; }
+  };
+  return (f: string[]): string[] => {
+    const [at, host, , k, msg = "", own = ""] = f;
+    let u = own ? show(own) : null;
+    for (const m of own ? [] : msg.matchAll(/\(([^()\s]+\/[^()\s]+)\)/g)) if ((u = show(m[1]))) break;
+    if (!u && !own && k === "oom-kill") { const h = heldAt(host, at); if (h.length === 1) u = show(h[0].id); }
+    if (!u) return own ? [`unit: ${own} (the tracker has no such unit now)`] : EVENTS_OF_A_UNIT.includes(k) ? ["unit: unknown"] : [];
+    const note = u.notes[0]?.text;
+    return [`unit: ${u.title} (${u.id}): ${u.label}`, ...(note ? [`last note: ${note}`] : [])];
+  };
+}
+
 // fleet events [N]: the last N events from every lane.
 export function events(f: Fleet, args: string[]): number {
   const { sh, allLanes } = f;
@@ -152,6 +192,6 @@ export function events(f: Fleet, args: string[]): number {
   let all: string[] = [];
   for (const { m, d } of allLanes()) all.push(...lines(sh(m, d, `tail -n ${n} runs/events.log 2>/dev/null`, { out: "capture" }).out));
   all = all.sort().slice(-Number(n) || all.length);
-  for (const l of all) { const f = l.split("\t"); say([...f.slice(0, 2), ...f.slice(3)].join(" · ")); }
+  for (const l of all) { const f = l.split("\t"); say([...f.slice(0, 2), ...f.slice(3, 5)].join(" · ")); }
   return 0;
 }

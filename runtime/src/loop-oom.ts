@@ -110,11 +110,11 @@ export async function oomSession(l: Loop, u: string, t: string, tg: string, out:
       : `out of memory at ${MEM}, and the loop couldn't note it; what used the memory is in ${where}`;
     if (trWait(["block", u, "--why", why], log, { FACTORY_TAG: tg, FACTORY_ACTOR: "loop" }).code !== 0) log(`tracker: couldn't block ${t} (${u})`);
     log(`session ${tg} was OOM-killed inside its ${MEM} scope (${kind || "unknown"}); ${why}, so ${t} (${u}) is blocked; the lane goes on`);
-    l.event("oom-kill", `session ${tg} on ${t} (${u}) was killed: out of memory at ${MEM}; biggest: ${big}. It's blocked: ${why}`);
+    l.event("oom-kill", `session ${tg} on ${t} (${u}) was killed: out of memory at ${MEM}; biggest: ${big}. It's blocked: ${why}`, u);
     l.stuckEvent(u, t);
   } else {
     log(`session ${tg} was OOM-killed inside its ${MEM} scope; ${t} (${u}) shows as interrupted, with a note on what used the memory; the lane goes on`);
-    l.event("oom-kill", `session ${tg} on ${t} (${u}) was killed: out of memory at ${MEM}; biggest: ${big}. It shows as interrupted and the lane goes on; a second kill by the same kind of process blocks it`);
+    l.event("oom-kill", `session ${tg} on ${t} (${u}) was killed: out of memory at ${MEM}; biggest: ${big}. It shows as interrupted and the lane goes on; a second kill by the same kind of process blocks it`, u);
   }
   await l.commitTracker(`tracker: ${t} (${u}), out of memory in session ${tg}`);
 }

@@ -472,3 +472,30 @@ C["aside-set"] = (a) => mutate((T) => {
   touch(T, u); log(T, "aside-set", u.id, `${u.title}: its unfinished outputs set aside on ${ctx.HOST} in ${p}`);
   return 0;
 });
+
+// held-at <host> <time> [--json]: the units whose sessions on host were open at that time, from
+// the log (a claim, to the last line its tag wrote about that unit; to now if still claimed). For
+// the morning summary, to tie an event that names no unit (an older long job's kill) to the
+// session it happened in. The time is to the minute, as events.log has it: the minute it names.
+C["held-at"] = (a) => {
+  const o = parseArgs(a);
+  const [host, at] = o._;
+  if (!host || !at) die("usage: held-at <host> <time> [--json]");
+  const t = Date.parse(at);
+  if (Number.isNaN(t)) die(`held-at: not a time: ${at}`);
+  const T = load();
+  const open = new Map<string, { id: string; tag: string; from: number; to: number }>(), all: { id: string; tag: string; from: number; to: number }[] = [];
+  for (const l of readLog() ?? []) {
+    if (!l.tag || !l.id) continue;
+    const k = `${l.tag} ${l.id}`, lt = Date.parse(l.at);
+    if (l.cmd === "claim") { if (l.host !== host) { open.delete(k); continue; } const s = { id: l.id, tag: l.tag, from: lt, to: lt }; open.set(k, s); all.push(s); continue; }
+    const s = open.get(k);
+    if (s && !["merged", "lease", "release"].includes(l.cmd)) s.to = lt;
+  }
+  for (const s of all) { const r = T.byId.get(s.id)?.record; if (r?.state === "claimed" && r.by === s.tag && claimAlive(T, r)) s.to = Date.now(); }
+  const seen = new Set<string>();
+  const us = all.filter((s) => s.from < t + 60e3 && s.to >= t && !seen.has(s.id) && (seen.add(s.id), true)).map((s) => ({ id: s.id, title: T.byId.get(s.id)?.title ?? s.id, tag: s.tag }));
+  if (o.json) console.log(JSON.stringify(us));
+  else for (const u of us) console.log(`${u.title} (${u.id}), session ${u.tag}`);
+  return 0;
+};
