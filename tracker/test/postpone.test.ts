@@ -50,7 +50,11 @@ describe("an answer that puts the work off parks it, and keeps it parked", () =>
     assert.equal(state("pp/later"), "parked");
     has(ok(["show", "pp/later"]), "the owner put it off: Should the old menus be ported now: Leave it for later");
   });
-  test("so is a unit the decision's scope names", () => { assert.equal(state("pp/scoped"), "parked"); });
+  test("a unit only its scope names isn't put off: the decision lists what it parked", () => {
+    assert.deepEqual(f.json("tracker/decisions.json").decisions.find((x: { id: string }) => x.id === "d/old-menus").parked, ["pp/later"]);
+    assert.equal(state("pp/scoped"), "ready");
+    setup(["park", "pp/scoped", "--why", "test"]);
+  });
   test("next never offers them", () => {
     assert.equal(nextFor("lane2").id, "pp/other");
     setup(["drop", "pp/other", "--why", "test"]);
@@ -67,10 +71,49 @@ describe("an answer that puts the work off parks it, and keeps it parked", () =>
     assert.equal(state("pp/later"), "ready");
     assert.equal(nextFor("lane2").id, "pp/later");
   });
-  test("and only it: the scoped unit stays put off", () => { assert.equal(state("pp/scoped"), "parked"); });
+  test("and only it: a unit parked by hand stays parked", () => { assert.equal(state("pp/scoped"), "parked"); });
   test("a decision without the flag parks nothing", () => {
     setup(["ask", "--title", "Do the old menu sounds keep their mix?", "--context", "x", "--option", "a | Keep | x", "--option", "b | Remix | y", "--default", "a", "--blocks", "pp/later", "--id", "mix"]);
     has(ok(["answer", "q/mix", "a"]), "Released 1 unit: Port the old menus (pp/later)");
     assert.equal(state("pp/later"), "ready");
+  });
+});
+
+describe("a postponement holds the units it parked, by ID, and no others", () => {
+  test("released and later: the released unit is free, the other parked", () => {
+    setup(["add-group", "pr", "--title", "Released or put off"]);
+    for (const u of ["a", "b"]) setup(["add-unit", `pr/${u}`, "--title", `Port part ${u}`]);
+    setup(["ask", "--title", "Which parts of the port go ahead?", "--context", "x", "--option", "now | Both | both go", "--option", "later | Part a only | a goes, b waits | releases: pr/a",
+      "--parks", "later", "--default", "now", "--blocks", "pr/a", "--blocks", "pr/b", "--id", "parts"]);
+    has(ok(["answer", "q/parts", "later"]), "Released 1 unit: Port part a (pr/a)");
+    assert.equal(`${state("pr/a")},${state("pr/b")}`, "ready,parked");
+  });
+  test("a group's later: a unit filed in the group after it isn't parked", () => {
+    setup(["add-group", "pg", "--title", "Group put off"]);
+    setup(["add-unit", "pg/a", "--title", "Group part a"]);
+    setup(["ask", "--title", "Should the menus team start the renaming?", "--context", "x", "--option", "now | Now | it goes", "--option", "later | Later | it waits", "--parks", "later", "--default", "now", "--blocks", "group:pg", "--id", "pg-later"]);
+    ok(["answer", "q/pg-later", "later"]);
+    setup(["add-unit", "pg/b", "--title", "Group part b"]);
+    assert.equal(`${state("pg/a")},${state("pg/b")}`, "parked,ready");
+  });
+  test("  and a question about the group's other units can still be asked", () => {
+    const r = t(["ask", "--title", "Is part b of the group in scope?", "--context", "x", "--option", "a | Yes | x", "--option", "b | No | y", "--default", "a", "--blocks", "group:pg", "--id", "pg-b"], {}, { merged: true });
+    assert.equal(r.code, 0, r.stdout);
+    setup(["withdraw", "q/pg-b", "--why", "test"]);
+  });
+  test("  unpark brings the group's unit back for good", () => {
+    ok(["unpark", "group:pg"]);
+    setup(["add-unit", "pg/c", "--title", "Group part c"]);
+    assert.equal(`${state("pg/a")},${state("pg/b")},${state("pg/c")}`, "ready,ready,ready");
+  });
+  test("--blocks '*' and later: only the asking unit is parked", () => {
+    setup(["add-group", "ps", "--title", "Everything"]);
+    for (const u of ["a", "b"]) setup(["add-unit", `ps/${u}`, "--title", `Everything part ${u}`]);
+    setup(["claim", "ps/a"], { FACTORY_TAG: "lane7" });
+    const r = t(["ask", "--title", "Does everything stop for now?", "--context", "x", "--option", "now | No | go on", "--option", "later | Later | it waits", "--parks", "later", "--default", "now", "--blocks", "*", "--id", "all-later"], { FACTORY_TAG: "lane7" }, { merged: true });
+    assert.equal(r.code, 0, r.stdout);
+    ok(["answer", "q/all-later", "later"]);
+    setup(["add-unit", "ps/c", "--title", "Everything part c"]);
+    assert.equal(`${state("ps/a")},${state("ps/b")},${state("ps/c")}`, "parked,ready,ready");
   });
 });

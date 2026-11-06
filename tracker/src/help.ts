@@ -273,10 +273,11 @@ neither the unit's group nor the group whose data it works on has CI: give the r
     --default a --blocks <id or selector> … [--scope <selector> …] [--example "…"] [--id <slug>] [--parks <key>] [--force]
 Ask the owner. Refused if a decision already answers it or a similar question is open.
 --parks <key>: that option puts the work off ("not yet", "leave it for later"). Answered so, the
-units waiting on the question are parked (with drops: or releases:, the ones it doesn't name), and
-the decision is a postponement: while it holds, a unit the question was asked from or blocks, or
-that its --scope names (not '*'), is never offered, even after a reopen, until \`unpark\`. Asking
-again about a unit the owner put off is refused, --force or not.`,
+units waiting on the question are parked: the asking unit and those --blocks names by a selector
+other than '*' (with drops: or releases:, only the ones it doesn't name). The decision lists them
+and is a postponement: while it holds, those units are never offered, even after a reopen, until
+\`unpark\`. Units filed later aren't. Asking again about one by ID, or from it, is refused,
+--force or not.`,
   answer: `answer q/<slug> <key> [--note "…"] [--via <thread>] [--until T | --for-run]
 Record the owner's answer as a decision and release the units it blocked (an option asked with
 --parks parks them instead, and the decision remembers it put them off). Key "other" needs --note.

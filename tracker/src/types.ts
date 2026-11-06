@@ -308,6 +308,8 @@ export interface Decision {
   // From an answer whose option puts the work off (ask --parks): what it's tied to isn't offered
   // while it's in force (postpone.ts).
   postpones?: true;
+  // The units that answer parked, by ID: the only ones the postponement holds back.
+  parked?: string[];
   // When it stops holding (decide --until): it leaves the cards then, and stays in `decisions --all`.
   until?: string;
   // Taken off the cards by pruning (prune --apply): a later decision says the same or more

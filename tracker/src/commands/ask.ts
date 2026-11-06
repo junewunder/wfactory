@@ -58,7 +58,11 @@ C.ask = (a) => {
     }
     const scope = strs(o.scope).flatMap(list);
     // The owner already put this unit off: asking again (with --force too) only asks them twice.
-    const off = selected(T, blocks).map((u) => [u, postponedBy(T, u)] as const).filter(([, d]) => d);
+    // (The units it names by ID, and the one this session holds: a selector that takes in a put-off
+    // unit doesn't stop a question about the rest.)
+    const named = [...new Set([...blocks.filter((b) => !b.includes(":") && !b.includes("*")).map((b) => resolve(T, b)),
+      ...selected(T, blocks).filter((u) => u.record?.state === "claimed" && u.record.by === ctx.TAG)])];
+    const off = named.map((u) => [u, postponedBy(T, u)] as const).filter(([, d]) => d);
     if (off.length) die(`${off.map(([u, d]) => `  ${name(u)}: ${decisionText(T, d!)}`).join("\n")}\nThe owner put this off, above, so nothing was asked. Hand the unit back (\`just unclaim <id>\`) and stop: it stays parked until the owner unparks it.`);
     if (!o.force) {
       const hitD = T.decisions.filter((d) => inForce(T, d) && overlap(d.title + " " + (d.question ? findQ(T, d.question)?.title || "" : ""), title) >= 0.5);
@@ -111,7 +115,11 @@ C.answer = (a) => {
     const released: Unit[] = [], dropped: Unit[] = [], held: Unit[] = [], parked: Unit[] = [];
     // Put off: parked while the decision holds (an unpark, or the decision ending, brings them back).
     const park = (u: Unit) => { u.record = { state: "parked", why: `put off by the owner's answer to {q:${q.id.replace(/^q\//, "")}}: ${op!.label}`, decision: did, by: ctx.TAG, at: now() }; touch(T, u); parked.push(u); };
-    if (op?.parks && !hasEffects(op)) for (const u of waiting) park(u);
+    // What a "later" parks: the asking unit, and those the question blocks by a selector other than
+    // '*' (one answer never parks everything). The rest waiting on it are released.
+    const parkable = (u: Unit) => u.id === q.asked?.unit || (u.record?.state === "blocked" && u.record.on === q.id) || (q.blocks || []).some((b) => b !== "*" && matches(T, b, u));
+    const release = (u: Unit) => { if (u.record?.state === "blocked" && u.record.on === q.id) { u.record = undefined; touch(T, u); } released.push(u); };
+    if (op?.parks && !hasEffects(op)) for (const u of waiting) { if (parkable(u)) park(u); else release(u); }
     else if (!hasEffects(op)) {
       for (const u of T.byId.values()) if (u.record?.state === "blocked" && u.record.on === q.id) { u.record = undefined; touch(T, u); released.push(u); }
       for (const u of selected(T, q.blocks || [])) if (!released.includes(u)) released.push(u);
@@ -122,11 +130,13 @@ C.answer = (a) => {
       for (const u of drops) { u.record = { state: "dropped", why, by: ctx.TAG, at: now() }; touch(T, u); dropped.push(u); }
       for (const u of rel) { if (u.record?.state === "blocked" && u.record.on === q.id) { u.record = undefined; touch(T, u); } released.push(u); }
       for (const u of waiting.filter((x) => !drops.includes(x) && !rel.includes(x))) {
-        if (op!.parks) { park(u); continue; }
+        if (op!.parks) { if (parkable(u)) park(u); else release(u); continue; }
         u.record = { state: "blocked", why: `${why}, which doesn't say what happens to this unit: reopen or drop it`, by: ctx.TAG, at: now() };
         touch(T, u); held.push(u);
       }
     }
+    // Exactly what it put off, for postpone.ts: never worked out again from selectors.
+    if (op?.parks) d.parked = parked.map((u) => u.id);
     log(T, "answer", null, `the owner answered "${q.title}": ${op ? op.label : note}`, { actor: "owner", more: { q: q.id, d: did, via } });
     T._memo = null;
     const freed = released.filter((u) => ["ready", "waiting", "resource"].includes(derive(T, u).s));
