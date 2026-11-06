@@ -129,6 +129,10 @@ drops: group:legacy"`); it must then name every unit the question blocks, and
 `show` and `questions` print what each option does. `just answer q/<slug>
 <key>` records the owner's reply as a decision and does what the option says;
 an option with neither field releases every unit the question blocked.
+An option that puts the work off ("not yet") is marked `--parks <key>`:
+answered so, its units are parked, and while that decision holds they aren't
+offered (even reopened) and `ask` refuses to ask about them again, until
+`unpark`.
 Decisions in scope show on each unit's card, so 80 units that share a
 question get it asked once, not 80 times. Gates are units of kind `gate`;
 `just pass <id>`.

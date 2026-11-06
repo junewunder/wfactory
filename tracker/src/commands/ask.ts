@@ -6,11 +6,12 @@ import { checkText, findD, findQ, isOpen, matches, name, resolve, selected } fro
 import { canWait, decisionText, effectOn, EFFECTS, hasEffects, waitingOn } from "../cards.ts";
 import { derive, SETTLED } from "../status.ts";
 import { decisionParks, freedText, inForce, parseUntil, runEnd, when } from "../decisions.ts";
+import { postponedBy } from "../postpone.ts";
 import { C } from "./registry.ts";
 import type { Decision, Option, Question, Unit } from "../types.ts";
 
 C.ask = (a) => {
-  const o = parseArgs(a, ["option", "blocks", "scope"]);
+  const o = parseArgs(a, ["option", "blocks", "scope", "parks"]);
   return mutate((T) => {
     const title = typeof o.title === "string" ? o.title.trim() : die('ask needs --title "…?": the question, in plain words');
     if (!title.endsWith("?")) die("the title is the question itself and ends with ?");
@@ -37,6 +38,12 @@ C.ask = (a) => {
       return { key, label, changes: rest.join(" | "), ...fx };
     });
     if (options.length < 2) die("give at least two --option, each saying what it changes");
+    // --parks <key>: that option puts the work off ("not yet", "leave it for later"). Answered so,
+    // what the question blocks is parked rather than released, and stays so (postpone.ts).
+    for (const k of strs(o.parks).flatMap(list)) {
+      const op = options.find((x) => x.key === k) || die(`--parks ${k} isn't one of the options (${options.map((x) => x.key).join(", ")})`);
+      op.parks = true;
+    }
     const dflt = typeof o.default === "string" ? o.default : die("ask needs --default <key>: what agents assume if the owner says take the defaults");
     if (!options.some((x) => x.key === dflt)) die(`--default ${dflt} isn't one of the options (${options.map((x) => x.key).join(", ")})`);
     const blocks = strs(o.blocks).flatMap(list);
@@ -44,12 +51,15 @@ C.ask = (a) => {
     for (const b of blocks) if (!b.includes(":") && !b.includes("*") && !resolve(T, b, { soft: true })) die(`--blocks ${b}: no such unit`);
     const waiting = selected(T, blocks).filter((u) => canWait(T, u));
     for (const op of options) for (const k of EFFECTS) for (const x of op[k] || []) if (!x.includes(":") && !x.includes("*") && !waiting.includes(T.byId.get(x)!)) die(`--option ${op.key} ${k} ${name(T.byId.get(x))}, which the question doesn't block: add it to --blocks`);
-    for (const op of options.filter(hasEffects)) {
+    for (const op of options.filter((x) => hasEffects(x) && !x.parks)) {
       const has = new Set(EFFECTS.flatMap((k) => selected(T, op[k] || [])));
       const miss = waiting.filter((u) => !has.has(u));
       if (miss.length) die(`--option ${op.key} drops or releases units, so it has to say which for every unit the question blocks; it leaves out ${miss.slice(0, 6).map((u) => name(u)).join(", ")}${miss.length > 6 ? ` and ${miss.length - 6} more` : ""}`);
     }
     const scope = strs(o.scope).flatMap(list);
+    // The owner already put this unit off: asking again (with --force too) only asks them twice.
+    const off = selected(T, blocks).map((u) => [u, postponedBy(T, u)] as const).filter(([, d]) => d);
+    if (off.length) die(`${off.map(([u, d]) => `  ${name(u)}: ${decisionText(T, d!)}`).join("\n")}\nThe owner put this off, above, so nothing was asked. Hand the unit back (\`just unclaim <id>\`) and stop: it stays parked until the owner unparks it.`);
     if (!o.force) {
       const hitD = T.decisions.filter((d) => inForce(T, d) && overlap(d.title + " " + (d.question ? findQ(T, d.question)?.title || "" : ""), title) >= 0.5);
       if (hitD.length) die(`${hitD.map((d) => "  " + decisionText(T, d)).join("\n")}\nA decision above may already answer this, so nothing was asked. If it does, follow it; if it really doesn't, ask again with --force.`);
@@ -58,7 +68,9 @@ C.ask = (a) => {
     }
     let id = typeof o.id === "string" ? "q/" + slugify(o.id.replace(/^q\//, ""), 48) : "q/" + keySlug(title);
     for (let n = 2; T.questions.some((q) => q.id === id); n++) id = id.replace(/-\d+$/, "") + "-" + n;
-    const q: Question = { id, title, context, example: str(o.example), options, default: dflt, scope: scope.length ? scope : undefined, blocks, asked: { at: now(), by: ctx.TAG, host: ctx.HOST }, answer: null };
+    // The unit the asking session holds, so the answer is tied to it even once --blocks no longer matches it.
+    const mine = selected(T, blocks).find((u) => u.record?.state === "claimed" && u.record.by === ctx.TAG);
+    const q: Question = { id, title, context, example: str(o.example), options, default: dflt, scope: scope.length ? scope : undefined, blocks, asked: { at: now(), by: ctx.TAG, host: ctx.HOST, ...(mine ? { unit: mine.id } : {}) }, answer: null };
     T.questions.push(q);
     T.dirty.add("questions");
     for (const u of selected(T, blocks)) if (u.record?.state === "claimed" && u.record.by === ctx.TAG) { u.record = { state: "blocked", on: id, by: ctx.TAG, at: now() }; touch(T, u); }
@@ -91,13 +103,16 @@ C.answer = (a) => {
     const until = untilOf(o);
     let did = q.id.replace(/^q\//, "d/");
     for (let n = 2; T.decisions.some((d) => d.id === did); n++) did = did.replace(/-\d+$/, "") + "-" + n;
-    const d: Decision = { id: did, title: str(o.title) ?? `${q.title.replace(/\?$/, "")}: ${op ? op.label : note}`, why: note || (op ? op.changes : ""), by: "owner", at: now(), question: q.id, scope: q.scope, via, ...(until ? { until } : {}) };
+    const d: Decision = { id: did, title: str(o.title) ?? `${q.title.replace(/\?$/, "")}: ${op ? op.label : note}`, why: note || (op ? op.changes : ""), by: "owner", at: now(), question: q.id, scope: q.scope, via, ...(until ? { until } : {}), ...(op?.parks ? { postpones: true as const } : {}) };
     const waiting = waitingOn(T, q);
     T.decisions.push(d);
     q.answer = { key, note, by: "owner", via, at: now(), decision: did };
     T.dirty.add("questions"); T.dirty.add("decisions");
-    const released: Unit[] = [], dropped: Unit[] = [], held: Unit[] = [];
-    if (!hasEffects(op)) {
+    const released: Unit[] = [], dropped: Unit[] = [], held: Unit[] = [], parked: Unit[] = [];
+    // Put off: parked while the decision holds (an unpark, or the decision ending, brings them back).
+    const park = (u: Unit) => { u.record = { state: "parked", why: `put off by the owner's answer to {q:${q.id.replace(/^q\//, "")}}: ${op!.label}`, decision: did, by: ctx.TAG, at: now() }; touch(T, u); parked.push(u); };
+    if (op?.parks && !hasEffects(op)) for (const u of waiting) park(u);
+    else if (!hasEffects(op)) {
       for (const u of T.byId.values()) if (u.record?.state === "blocked" && u.record.on === q.id) { u.record = undefined; touch(T, u); released.push(u); }
       for (const u of selected(T, q.blocks || [])) if (!released.includes(u)) released.push(u);
     } else {
@@ -107,6 +122,7 @@ C.answer = (a) => {
       for (const u of drops) { u.record = { state: "dropped", why, by: ctx.TAG, at: now() }; touch(T, u); dropped.push(u); }
       for (const u of rel) { if (u.record?.state === "blocked" && u.record.on === q.id) { u.record = undefined; touch(T, u); } released.push(u); }
       for (const u of waiting.filter((x) => !drops.includes(x) && !rel.includes(x))) {
+        if (op!.parks) { park(u); continue; }
         u.record = { state: "blocked", why: `${why}, which doesn't say what happens to this unit: reopen or drop it`, by: ctx.TAG, at: now() };
         touch(T, u); held.push(u);
       }
@@ -116,6 +132,7 @@ C.answer = (a) => {
     const freed = released.filter((u) => ["ready", "waiting", "resource"].includes(derive(T, u).s));
     const few = (us: Unit[]) => (us.length ? ": " + us.slice(0, 6).map((u) => name(u)).join(", ") + (us.length > 6 ? ` and ${us.length - 6} more` : "") : "");
     console.log(`recorded: ${until ? decisionText(T, d) : name(d)}\nReleased ${plural(freed.length, "unit")}${few(freed)}`);
+    if (parked.length) console.log(`Parked, as the owner put ${parked.length === 1 ? "it" : "them"} off: ${plural(parked.length, "unit")}${few(parked)}; \`just tracker unpark <id>\` brings one back`);
     if (dropped.length) console.log(`Dropped ${plural(dropped.length, "unit")}${few(dropped)}`);
     if (held.length) console.log(`Stuck, because the answer doesn't say what happens to them: ${plural(held.length, "unit")}${few(held)}`);
     return 0;

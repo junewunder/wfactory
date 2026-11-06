@@ -133,12 +133,12 @@ export const waitingOn = (T: State, q: Question) => qBlocked(T, q).filter((u) =>
 export const canWait = (T: State, u: Unit) => u.kind !== "gate" && (!lanesWork(u) || (u.record!.state === "claimed" && u.record!.by === ctx.TAG)) && !["done", "dropped", "merging", "broken", "parked"].includes(derive(T, u).s);
 export const effectOn = (T: State, q: Question, op: Option, k: (typeof EFFECTS)[number], us = waitingOn(T, q)) => selected(T, op[k] || []).filter((u) => us.includes(u));
 export function effectsText(T: State, q: Question, op: Option) {
-  if (!(q.options || []).some(hasEffects)) return "";
-  if (!hasEffects(op)) return "releases everything it blocks";
-  return EFFECTS.filter((k) => op[k]?.length).map((k) => {
+  if (!(q.options || []).some((x) => hasEffects(x) || x.parks)) return "";
+  if (!hasEffects(op)) return op.parks ? "puts it off: parks everything it blocks" : "releases everything it blocks";
+  return [...EFFECTS.filter((k) => op[k]?.length).map((k) => {
     const us = effectOn(T, q, op, k);
     return `${k} ${plural(us.length, "unit")}${us.length ? ": " + us.slice(0, 4).map((u) => name(u)).join(", ") + (us.length > 4 ? ` and ${us.length - 4} more` : "") : ""}`;
-  }).join("; ");
+  }), ...(op.parks ? ["parks the rest"] : [])].join("; ");
 }
 // Units waiting on the question that an option with effects says nothing about.
 export const unaccounted = (T: State, q: Question, op: Option) => { const has = new Set(EFFECTS.flatMap((k) => selected(T, op[k] || []))); return waitingOn(T, q).filter((u) => !has.has(u)); };
@@ -167,7 +167,7 @@ export function questionText(T: State, q: Question, _full = false) {
 const KEPT: Record<string, string> = { lapse: "lapsed", superseded: "superseded", merge: "a repeat", narrow: "narrowed", code: "held by the code" };
 export function decisionText(T: State, d: Decision, full = false) {
   const e = ended(T, d);
-  let s = `${expand(T, d.title)} (${d.by === "owner" ? "the owner" : "agent " + d.by}, ${d.at.slice(0, 10)}; ${d.id})${e ? ` [${endedText(T, e)}]` : d.until ? ` [until ${when(d.until)}]` : ""}${d.kept?.length ? ` [kept: not ${d.kept.map((k) => KEPT[k.kind] ?? k.kind).join(", not ")}]` : ""}`;
+  let s = `${expand(T, d.title)} (${d.by === "owner" ? "the owner" : "agent " + d.by}, ${d.at.slice(0, 10)}; ${d.id})${e ? ` [${endedText(T, e)}]` : d.until ? ` [until ${when(d.until)}]` : ""}${d.postpones ? " [put off]" : ""}${d.kept?.length ? ` [kept: not ${d.kept.map((k) => KEPT[k.kind] ?? k.kind).join(", not ")}]` : ""}`;
   if (full) {
     if (d.why) s += `\n  Why: ${expand(T, d.why)}`;
     if (d.question) s += `\n  Answers: ${name(T.questions.find((q) => q.id === d.question))}`;

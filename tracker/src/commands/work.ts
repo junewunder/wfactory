@@ -432,9 +432,11 @@ C.park = (a) => {
 };
 C.unpark = (a) => mutate((T) => {
   const sel = a[0] || die("usage: unpark <id | selector>");
-  const us = (resolve(T, sel, { soft: true }) ? [resolve(T, sel)] : selected(T, [sel])).filter((u) => u.record?.state === "parked");
+  // A unit the owner put off (postpone.ts) shows as parked with its own record (or none): the
+  // unpark line is what lifts it, and the record (an interrupted claim's kept work) stays.
+  const us = (resolve(T, sel, { soft: true }) ? [resolve(T, sel)] : selected(T, [sel])).filter((u) => u.record?.state === "parked" || derive(T, u).s === "parked");
   if (!us.length) die(`nothing parked matches ${sel}`);
-  for (const u of us) { u.record = undefined; touch(T, u); log(T, "unpark", u.id, `${u.title}: back from parked`); }
+  for (const u of us) { if (u.record?.state === "parked") { u.record = undefined; touch(T, u); } log(T, "unpark", u.id, `${u.title}: back from parked`); }
   T._memo = null;
   console.log(`back to work: ${us.slice(0, 6).map((u) => `${name(u)} (${sentence(T, u)})`).join("; ")}${us.length > 6 ? ` and ${us.length - 6} more` : ""}`);
   return 0;

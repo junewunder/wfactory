@@ -89,7 +89,8 @@ for another unit, `just log`). Don't guess IDs.
 5. **When it needs the owner:** first `just decisions <words>`, in case it's
    already answered. If not, `just ask` with the question in plain words,
    at least two options that each say what they change, a default, and
-   `--blocks` for what waits on it. Refer to units as `{unit:<id>}`, never by
+   `--blocks` for what waits on it; mark an option that puts it off ("not
+   yet") with `--parks <key>`. Refer to units as `{unit:<id>}`, never by
    a bare ID. The unit then waits; this iteration ends there, and the loop goes
    on to other work. Don't guess at a decision the docs reserve for the owner.
 6. Then stop. Your final message is three lines at most: the unit (title, ID

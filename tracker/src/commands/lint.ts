@@ -137,7 +137,7 @@ C.lint = (a = []) => {
       if (/\bdropped\b/i.test(text) && !op.drops?.length) slips.push(`${at}: option ${op.key} says units are dropped, but answering it drops nothing: end the option with "| drops: <units>" (ask it again and withdraw this one)`);
       if (/\breleased\b/i.test(text) && hasEffects(op) && !op.releases?.length) slips.push(`${at}: option ${op.key} says units are released, but it only drops: add "| releases: <units>" (ask it again and withdraw this one)`);
       for (const k of EFFECTS) for (const s of op[k] || []) if (!selected(T, [s]).length) slips.push(`${at}: option ${op.key} ${k} ${s}, which matches no unit`);
-      if (hasEffects(op)) { const miss = unaccounted(T, q, op); if (miss.length) slips.push(`${at}: option ${op.key} doesn't say what happens to ${miss.map((u) => name(u)).join(", ")}, so answering it leaves them stuck`); }
+      if (hasEffects(op) && !op.parks) { const miss = unaccounted(T, q, op); if (miss.length) slips.push(`${at}: option ${op.key} doesn't say what happens to ${miss.map((u) => name(u)).join(", ")}, so answering it leaves them stuck`); }
     }
     if (!(q.options || []).some((x) => x.key === q.default)) slips.push(`${at}: no default among its options`);
     bareRef(`${at} title`, q.title); bareRef(`${at} context`, q.context);

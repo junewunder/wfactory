@@ -56,12 +56,13 @@ For agents:
   reopen <id> [--note "…"]              back to ready
   drop <id> --why "…"
   park <id | selector> --why "…"        the owner set it aside: not offered, not waited on
-  unpark <id | selector>                back to ready
+  unpark <id | selector>                back to ready (also lifts the owner's "later" on it)
   note <id> "…" [--dry-run]             for the next attempt (keeps 3)
   ask --title "…?" --context "…" --option "a | label | what it changes" …
       --default a --blocks <selector> … [--scope <selector> …] [--force]
       an option may end "| drops: <selector>, …" and "| releases: <selector>, …";
-      then it must say which of the two happens to every unit the question blocks
+      then it must say which of the two happens to every unit the question blocks;
+      --parks <key>: that option puts the work off ("not yet"): answered so, what it blocks is parked
   answer <q> <key> [--note "…"] [--via <thread>] [--until T | --for-run]   record the owner's answer
   withdraw <q> --why "…"                close a question nobody needs answered
       (re-asked as another, or moot); no decision is recorded
@@ -259,7 +260,8 @@ Drop a unit for good.`,
 The owner set this work aside: it isn't offered, isn't waited on, and isn't counted as
 anything for the owner to do. Selectors: group:<g>, tag:<t>, a glob. Undo with unpark.`,
   unpark: `unpark <id | selector>
-Bring parked units back to ready.`,
+Bring parked units back to ready. A unit the owner put off (ask --parks) shows as parked while the
+decision holds, even after a reopen; unpark is what brings it back.`,
   note: `note <id> "…" [--dry-run]
 What the next attempt must know (280 characters at most, {unit:<id>} counting as the
 ID; the last 3 are kept). Name units as {unit:<id>}; a bare ID is written so, with a
@@ -267,10 +269,16 @@ warning. --dry-run checks it and shows it, noting nothing.
 A note (or evidence, or a detail) that waits on CI ("look after her CI rebuild") is refused when
 neither the unit's group nor the group whose data it works on has CI: give the rebuild command.`,
   ask: `ask --title "…?" --context "…" --option "a | label | what it changes" --option "b | …"
-    --default a --blocks <id or selector> … [--scope <selector> …] [--example "…"] [--id <slug>] [--force]
-Ask the owner. Refused if a decision already answers it or a similar question is open.`,
+    --default a --blocks <id or selector> … [--scope <selector> …] [--example "…"] [--id <slug>] [--parks <key>] [--force]
+Ask the owner. Refused if a decision already answers it or a similar question is open.
+--parks <key>: that option puts the work off ("not yet", "leave it for later"). Answered so, the
+units waiting on the question are parked (with drops: or releases:, the ones it doesn't name), and
+the decision is a postponement: while it holds, a unit the question was asked from or blocks, or
+that its --scope names (not '*'), is never offered, even after a reopen, until \`unpark\`. Asking
+again about a unit the owner put off is refused, --force or not.`,
   answer: `answer q/<slug> <key> [--note "…"] [--via <thread>] [--until T | --for-run]
-Record the owner's answer as a decision and release the units it blocked. Key "other" needs --note.
+Record the owner's answer as a decision and release the units it blocked (an option asked with
+--parks parks them instead, and the decision remembers it put them off). Key "other" needs --note.
 --until and --for-run: the answer holds until then, as for decide.`,
   withdraw: `withdraw q/<slug> --why "…"
 Close a question nobody needs answered (re-asked as another, or moot). No decision is recorded.`,

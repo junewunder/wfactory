@@ -276,6 +276,8 @@ export interface Option {
   changes: string;
   drops?: string[];
   releases?: string[];
+  // The owner putting it off (ask --parks <key>): answered so, the units it blocks are parked.
+  parks?: true;
 }
 
 export interface Question {
@@ -287,7 +289,8 @@ export interface Question {
   default?: string;
   scope?: string[];
   blocks?: string[];
-  asked?: { at: string; by: string; host?: string };
+  // unit: the one the asking session held (claimed by its tag, among --blocks).
+  asked?: { at: string; by: string; host?: string; unit?: string };
   answer: null | { key: string; note?: string; by: string; via?: string; at: string; decision: string };
   withdrawn?: { at: string; by: string; why: string };
 }
@@ -302,6 +305,9 @@ export interface Decision {
   scope?: string[];
   replaces?: string;
   via?: string;
+  // From an answer whose option puts the work off (ask --parks): what it's tied to isn't offered
+  // while it's in force (postpone.ts).
+  postpones?: true;
   // When it stops holding (decide --until): it leaves the cards then, and stays in `decisions --all`.
   until?: string;
   // Taken off the cards by pruning (prune --apply): a later decision says the same or more

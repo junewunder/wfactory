@@ -9,6 +9,7 @@
 // handed back with its work kept (unclaim) is one of the last three.
 import { ctx } from "./ctx.ts";
 import { inForce } from "./in-force.ts";
+import { postponedBy } from "./postpone.ts";
 import { die, plural } from "./text.ts";
 import { expand, isOpen, matches, name, groupTitle } from "./names.ts";
 import { capsOk, capsSomewhere, claimAlive, dataGroup, heldHere, leaseOk, leasedHere, liveLease, lockHeld, resTitle, resourceBusy } from "./machine.ts";
@@ -32,7 +33,7 @@ export function derive(T: State, u: Unit, memo: Map<string, Derived> = T._memo |
   seen.add(u.id);
   const r = u.record || ({} as Partial<NonNullable<Unit["record"]>>);
   const g = T.groupOf.get(u.id);
-  let out: Derived;
+  let out: Derived, pp: ReturnType<typeof postponedBy> = null;
   // A check also waits for the open fixes it covers (checks.ts), unless the owner parked them.
   const covered = () => coveredFixes(T, u).filter((f) => !["parked", ...SETTLED].includes(derive(T, f, memo, seen).s));
   const unmet = () => [...[...(g?.needs || []).filter((n) => n !== u.id), ...(u.needs || [])].map((n): Unit | MissingUnit => T.byId.get(n) || { id: n, title: n, missing: true })
@@ -45,6 +46,10 @@ export function derive(T: State, u: Unit, memo: Map<string, Derived> = T._memo |
   else if (r.state === "broken") out = { s: "broken", why: r.evidence };
   // A park a decision made (decide --park) lifts once that decision lapses, is replaced or retired.
   else if (r.state === "parked" && !(r.decision && !parkHolds(T, r.decision))) out = { s: "parked", why: r.why };
+  // One the owner put off (an answer that parks, postpone.ts) stays parked when its record is
+  // cleared (reopened, refiled as ready) or its claim's session is gone, until an unpark or the
+  // decision ends. (A live claim is left to its session.)
+  else if (u.kind !== "gate" && (!r.state || (r.state === "claimed" && !claimAlive(T, u.record!))) && (pp = postponedBy(T, u))) out = { s: "parked", why: `the owner put it off: {d:${pp.id.replace(/^d\//, "")}}` };
   else if (u.kind === "gate") {
     const un = unmet();
     out = un.length ? { s: "waiting", unmet: un } : { s: "you", gate: true };
