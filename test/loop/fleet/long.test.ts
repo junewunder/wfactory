@@ -74,7 +74,10 @@ describe("long jobs", () => {
     assert.equal(mm.code, 2);
   });
   test("  says to use --mem", () => { has(`${mm.stdout}${mm.stderr ?? ""}`, "--mem SIZE"); });
-  test("  and inside bash -c too", () => { assert.equal(long(["start", "memmax-sh", "--", "bash", "-c", "systemd-run --user --scope -p MemoryMax=16G true"]).code, 2); });
+  test("  and inside bash -c too", () => { assert.equal(long(["start", "memmax-sh", "--", "bash", "-c", "env MemoryMax=16G true"]).code, 2); });
+  test("  but a scope capped in place with systemd-run's -p MemoryMax= starts", () => {
+    assert.equal(long(["start", "memmax-scope", "--light", "--", "bash", "-c", "echo systemd-run --user --scope -p MemoryMax=3G x"]).code, 0);
+  });
   test("long start --light: no heavy-job slot, and done", () => {
     long(["start", "lt", "--light", "--", "bash", "-c", "echo light"]);
     has(out(["wait", "lt", "--max", "30"]), "done: lt finished");

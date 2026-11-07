@@ -48,7 +48,8 @@ runs/long/<name>.log, the exit status to runs/long/<name>.exit.
 Memory: --mem, else $FACTORY_LONG_MEM, is both its share of the budget and its
 cap; neither given, its share is its last 3 peaks plus 20%, else 4G, and its
 cap that or 8G, whichever is more (systemd sizes). \`start\` refuses a command
-that sets MemoryMax= itself (env or systemd-run): use --mem. The wait
+that sets MemoryMax= as an environment variable (it sets no cap; use --mem).
+It reads only the command as typed, not the scripts it runs. The wait
 limit: --max, else $FACTORY_LONG_WAIT, else 540 seconds. A job killed over its
 cap, or by the whole machine running out, says so in \`wait\`, and an
 \`oom-kill\` event tells the overseer (capped.sh).
@@ -108,6 +109,26 @@ function startedAt(n: string) {
   return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() : Date.now();
 }
 
+// Whether the command, as typed, sets MemoryMax=<size> as an environment variable (`env
+// MemoryMax=16G cmd`, `MemoryMax=16G cmd`, also inside a `bash -c` string): a variable no
+// program reads, so the job keeps its default cap. Only where a shell reads an assignment: the
+// command's start, after `env` and its flags, after other assignments, or after ; && || | ( .
+// A mention elsewhere (`grep MemoryMax= …`) and systemd-run's `-p MemoryMax=` are left alone.
+export function setsMemoryMaxVar(args: string[]): boolean {
+  let head = true, shell = false, script = false;
+  for (const a of args) {
+    // The string after a shell's -c is a command line of its own: read its words.
+    if (script) { if (setsMemoryMaxVar(a.split(/\s+/).filter(Boolean))) return true; script = false; continue; }
+    const t = a.replace(/^["'(]+/, "");
+    if (head && /^MemoryMax=\S/.test(t)) return true;
+    if (shell && a === "-c") { script = true; continue; }
+    if ([";", "&&", "||", "|", "(", "env", "exec", "then", "do"].includes(a) || /[;|&]$/.test(a)) head = true;
+    else if (head && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(t) || t.startsWith("-"))) head = true;
+    else { shell = (shell && t.startsWith("-")) || /^(\/usr)?(\/bin\/)?(bash|sh)$/.test(t); head = false; }
+  }
+  return false;
+}
+
 function start(args: string[], unit: (n: string) => string, root: string, env: NodeJS.ProcessEnv): number {
   const n = args.shift();
   if (!n) { console.error("usage: long start <name> [--mem SIZE] [--light] -- <command…>"); return 2; }
@@ -122,10 +143,8 @@ function start(args: string[], unit: (n: string) => string, root: string, env: N
   }
   if (args[0] === "--") args = args.slice(1);
   if (!args.length) { console.error(`long start: no command (long start ${n} -- <command…>)`); return 2; }
-  // A MemoryMax= in the command sets no cap: as an env var nothing reads it, and through
-  // systemd-run it makes a scope outside this job's service, so outside the memory budget.
-  if (args.some((a) => /\bMemoryMax=/.test(a))) {
-    console.error(`long start: the command sets MemoryMax=, which doesn't change ${n}'s cap (an env var does nothing; systemd-run's scope escapes the memory budget). Drop it and give the cap as \`just long start ${n} --mem SIZE -- …\`.`);
+  if (setsMemoryMaxVar(args)) {
+    console.error(`long start: the command sets MemoryMax= as an environment variable, which nothing reads, so ${n}'s cap stays the default. Drop it and give the cap as \`just long start ${n} --mem SIZE -- …\`.`);
     return 2;
   }
   if (given !== undefined && !capOk(given)) { console.error(`long start: not a size: ${given} (512M, 4G, 50%, infinity)`); return 2; }
