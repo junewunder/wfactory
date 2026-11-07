@@ -68,6 +68,16 @@ describe("long jobs", () => {
   test("long wait: a job that never ran, exit 2", () => { assert.equal(long(["wait", "nosuch"]).code, 2); });
   test("long start: a name that isn't lowercase words and dashes, exit 2", () => { assert.equal(long(["start", "Bad_Name", "--", "true"]).code, 2); });
   test("long start: no command, exit 2", () => { assert.equal(long(["start", "nocmd", "--"]).code, 2); });
+  let mm = { code: 0, stdout: "", stderr: "" };
+  test("long start: a command setting MemoryMax= itself, exit 2", () => {
+    mm = long(["start", "memmax", "--", "env", "MemoryMax=16G", "true"]);
+    assert.equal(mm.code, 2);
+  });
+  test("  says to use --mem", () => { has(`${mm.stdout}${mm.stderr ?? ""}`, "--mem SIZE"); });
+  test("  and inside bash -c too", () => { assert.equal(long(["start", "memmax-sh", "--", "bash", "-c", "env MemoryMax=16G true"]).code, 2); });
+  test("  but a scope capped in place with systemd-run's -p MemoryMax= starts", () => {
+    assert.equal(long(["start", "memmax-scope", "--light", "--", "bash", "-c", "echo systemd-run --user --scope -p MemoryMax=3G x"]).code, 0);
+  });
   test("long start --light: no heavy-job slot, and done", () => {
     long(["start", "lt", "--light", "--", "bash", "-c", "echo light"]);
     has(out(["wait", "lt", "--max", "30"]), "done: lt finished");
