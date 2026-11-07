@@ -47,7 +47,8 @@ the CPU. How a job ended: \`just heavy why <name>\`.
 runs/long/<name>.log, the exit status to runs/long/<name>.exit.
 Memory: --mem, else $FACTORY_LONG_MEM, is both its share of the budget and its
 cap; neither given, its share is its last 3 peaks plus 20%, else 4G, and its
-cap that or 8G, whichever is more (systemd sizes). The wait
+cap that or 8G, whichever is more (systemd sizes). \`start\` refuses a command
+that sets MemoryMax= itself (env or systemd-run): use --mem. The wait
 limit: --max, else $FACTORY_LONG_WAIT, else 540 seconds. A job killed over its
 cap, or by the whole machine running out, says so in \`wait\`, and an
 \`oom-kill\` event tells the overseer (capped.sh).
@@ -121,6 +122,12 @@ function start(args: string[], unit: (n: string) => string, root: string, env: N
   }
   if (args[0] === "--") args = args.slice(1);
   if (!args.length) { console.error(`long start: no command (long start ${n} -- <command…>)`); return 2; }
+  // A MemoryMax= in the command sets no cap: as an env var nothing reads it, and through
+  // systemd-run it makes a scope outside this job's service, so outside the memory budget.
+  if (args.some((a) => /\bMemoryMax=/.test(a))) {
+    console.error(`long start: the command sets MemoryMax=, which doesn't change ${n}'s cap (an env var does nothing; systemd-run's scope escapes the memory budget). Drop it and give the cap as \`just long start ${n} --mem SIZE -- …\`.`);
+    return 2;
+  }
   if (given !== undefined && !capOk(given)) { console.error(`long start: not a size: ${given} (512M, 4G, 50%, infinity)`); return 2; }
   const { reserve, cap: mem } = sizes(args.join(" "), given, env);
   if (platform.jobRunning(unit(n))) { console.error(`long: ${n} is already running; \`just long wait ${n}\``); return 2; }
