@@ -68,7 +68,7 @@ try{const v=JSON.parse(localStorage.getItem(UK)||'null');if(v)F=Object.assign(F,
 const save=()=>{try{localStorage.setItem(UK,JSON.stringify(F))}catch(e){}};
 app.append($('<h2 id="units">Units</h2>'));
 const uf=$('<div class="uf"></div>');app.append(uf);
-const uq=$('<input type="search" placeholder="search units: title, id, detail, notes">');uq.value=F.q;uf.append(uq);
+const uq=$('<input type="search" placeholder="search units: title, id, tag, detail, notes">');uq.value=F.q;uf.append(uq);
 const ug=$('<select></select>');ug.append($('<option value="">every group</option>'));
 for(const g of D.groups){const n=g.units.filter(u=>!['done','dropped'].includes(u.s)).length;const o=document.createElement('option');o.value=g.id;o.textContent=g.title+' ('+n+' open)';ug.append(o)}
 ug.value=F.g;if(ug.value!==F.g)F.g='';uf.append(ug);
@@ -78,7 +78,7 @@ const chips=$('<div class="chips"></div>');app.append(chips);
 const ucount=$('<div class="mute"></div>');app.append(ucount);
 const ul=$('<div class="card ul"></div>');app.append(ul);
 let cap=200;
-const hay=u=>(u.title+' '+u.id+' '+(u.label||'')+' '+(u.detail||'')+' '+(u.notes||[]).join(' ')+' '+GT[u.g]).toLowerCase();
+const hay=u=>(u.title+' '+u.id+' '+(u.tags||[]).join(' ')+' '+(u.label||'')+' '+(u.detail||'')+' '+(u.notes||[]).join(' ')+' '+GT[u.g]).toLowerCase();
 const SORT={next:(a,b)=>a.o-b.o,changed:(a,b)=>String(b.last||'').localeCompare(String(a.last||''))||a.o-b.o,added:(a,b)=>String(b.first||'').localeCompare(String(a.first||''))||a.o-b.o,
   status:(a,b)=>UO.indexOf(a.s)-UO.indexOf(b.s)||a.o-b.o,group:(a,b)=>a.gi-b.gi||a.ui-b.ui,title:(a,b)=>a.title.localeCompare(b.title)};
 function drawU(){
@@ -94,7 +94,7 @@ function drawU(){
   ul.innerHTML='';
   for(const u of list.slice(0,cap)){
     const when=F.sort==='added'?(u.first?'added '+u.first.slice(0,10):''):(u.last?'changed '+u.last.slice(0,16).replace('T',' '):'');
-    const d=$('<div class="u"><span class="dot s-'+u.s+'"></span>'+(u.gate?'Gate: ':'')+esc(u.title)+' <span class="mute">('+esc(u.id)+')</span><div class="gt">'+esc(GT[u.g])+(u.p?' · priority '+u.p:'')+(when?' · '+when:'')+'</div><small>'+code(u.label)+'</small><div class="more"></div></div>');
+    const d=$('<div class="u"><span class="dot s-'+u.s+'"></span>'+(u.gate?'Gate: ':'')+esc(u.title)+' <span class="mute">('+esc(u.id)+')</span><div class="gt">'+esc(GT[u.g])+(u.p?' · priority '+u.p:'')+((u.tags||[]).length?' · '+esc(u.tags.join(', ')):'')+(when?' · '+when:'')+'</div><small>'+code(u.label)+'</small><div class="more"></div></div>');
     const m=d.querySelector('.more');if(u.detail)m.append($('<small>'+code(u.detail)+'</small>'));if(u.evidence&&u.s==='done')m.append($('<small>Evidence: '+code(u.evidence)+'</small>'));for(const n of u.notes)m.append($('<small>Note: '+code(n)+'</small>'));
     d.onclick=()=>d.classList.toggle('open');ul.append(d)}
   if(!list.length)ul.append($('<p class="mute">No units match.</p>'));
