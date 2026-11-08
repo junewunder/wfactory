@@ -12,7 +12,7 @@ import { list, plural } from "../text.ts";
 import { bareIds, isOpen, missingRefs, MAX_NOTE, MAX_TITLE, name, noteLength, selected } from "../names.ts";
 import { namedBy, resourceKnown, unnamedUses, usesHint } from "../machine.ts";
 import { CI_STEP_KEYS } from "../ci.ts";
-import { EFFECTS, hasEffects, unaccounted } from "../cards.ts";
+import { EFFECTS, hasEffects, optionWordSlip, unaccounted } from "../cards.ts";
 import { memoryIndex } from "./memory.ts";
 import { C } from "./registry.ts";
 import type { Unit } from "../types.ts";
@@ -133,9 +133,8 @@ C.lint = (a = []) => {
     if ((q.options || []).length < 2) slips.push(`${at}: fewer than two options`);
     for (const op of q.options || []) if (!op.changes) slips.push(`${at}: option ${op.key} doesn't say what it changes`);
     for (const op of q.options || []) {
-      const text = `${op.label} ${op.changes}`;
-      if (/\bdropped\b/i.test(text) && !op.drops?.length) slips.push(`${at}: option ${op.key} says units are dropped, but answering it drops nothing: end the option with "| drops: <units>" (ask it again and withdraw this one)`);
-      if (/\breleased\b/i.test(text) && hasEffects(op) && !op.releases?.length) slips.push(`${at}: option ${op.key} says units are released, but it only drops: add "| releases: <units>" (ask it again and withdraw this one)`);
+      const word = optionWordSlip(op);
+      if (word) slips.push(`${at}: ${word} (ask it again and withdraw this one)`);
       for (const k of EFFECTS) for (const s of op[k] || []) if (!selected(T, [s]).length) slips.push(`${at}: option ${op.key} ${k} ${s}, which matches no unit`);
       if (hasEffects(op) && !op.parks) { const miss = unaccounted(T, q, op); if (miss.length) slips.push(`${at}: option ${op.key} doesn't say what happens to ${miss.map((u) => name(u)).join(", ")}, so answering it leaves them stuck`); }
     }

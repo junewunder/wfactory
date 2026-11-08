@@ -141,6 +141,15 @@ export function effectsText(T: State, q: Question, op: Option) {
   }), ...(op.parks ? ["parks the rest"] : [])].join("; ");
 }
 // Units waiting on the question that an option with effects says nothing about.
+// An option whose words say units are dropped or released but whose fields don't do it: what lint
+// reports and ask refuses, so a question asked never fails the project's lint (one did on main and
+// stopped every lane). Its fix, or null.
+export function optionWordSlip(op: Option): string | null {
+  const text = `${op.label} ${op.changes}`;
+  if (/\bdropped\b/i.test(text) && !op.drops?.length) return `option ${op.key} says units are dropped, but answering it drops nothing: end the option with "| drops: <units>"`;
+  if (/\breleased\b/i.test(text) && hasEffects(op) && !op.releases?.length) return `option ${op.key} says units are released, but it only drops: add "| releases: <units>"`;
+  return null;
+}
 export const unaccounted = (T: State, q: Question, op: Option) => { const has = new Set(EFFECTS.flatMap((k) => selected(T, op[k] || []))); return waitingOn(T, q).filter((u) => !has.has(u)); };
 
 export function questionText(T: State, q: Question, _full = false) {

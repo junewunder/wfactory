@@ -3,7 +3,7 @@ import { ctx } from "../ctx.ts";
 import { load, log, mutate, touch } from "../store.ts";
 import { die, keySlug, list, now, overlap, parseArgs, plural, slugify, str, strs, type Args } from "../text.ts";
 import { checkText, findD, findQ, isOpen, matches, name, resolve, selected } from "../names.ts";
-import { canWait, decisionText, effectOn, EFFECTS, hasEffects, waitingOn } from "../cards.ts";
+import { canWait, decisionText, effectOn, EFFECTS, hasEffects, optionWordSlip, waitingOn } from "../cards.ts";
 import { derive, SETTLED } from "../status.ts";
 import { decisionJson, decisionParks, freedText, inForce, parseUntil, runEnd, when } from "../decisions.ts";
 import { postponedBy } from "../postpone.ts";
@@ -38,6 +38,7 @@ C.ask = (a) => {
       return { key, label, changes: rest.join(" | "), ...fx };
     });
     if (options.length < 2) die("give at least two --option, each saying what it changes");
+    for (const op of options) { const word = optionWordSlip(op); if (word) die(`--${word}`); }
     // --parks <key>: that option puts the work off ("not yet", "leave it for later"). Answered so,
     // what the question blocks is parked rather than released, and stays so (postpone.ts).
     for (const k of strs(o.parks).flatMap(list)) {
