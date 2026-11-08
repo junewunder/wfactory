@@ -20,7 +20,7 @@ setup(["add-group", "fenn", "--title", "Fenn"]);
 setup(["add-unit", "fenn/rig-import", "--title", "Import Fenn's rig"]);
 
 const LONG_TITLE = "Export every one of Fenn's animations and check each against the frame data";
-const viewData = () => { const m = f.read(".tracker/view.html").match(/const D=(.*);\n/); assert.ok(m, "no data in the view"); JSON.parse(m[1]); };
+const viewData = () => { const m = f.read(".tracker/view.html").match(/const D=(.*);\n/); assert.ok(m, "no data in the view"); return JSON.parse(m[1]); };
 
 describe("bare IDs and long text, checked at write time", () => {
   test("bare ID refused at write time, with the fix", () => {
@@ -210,6 +210,19 @@ describe("log, view", () => {
   test("and still parses with $' in a note", () => {
     ok(["note", "pipe/convert", "split with sed $'s/\\t/,/g' and $& and $`"]);
     viewData();
+  });
+  // The units list sorts by these: the order next takes them, priority, and when each was added and last changed.
+  test("each unit carries its order, priority and log times", () => {
+    const us = viewData().groups.flatMap((g: { units: { id: string }[] }) => g.units);
+    const conv = us.find((u: { id: string }) => u.id === "pipe/convert");
+    assert.equal(typeof conv.o, "number");
+    assert.equal(conv.p, 0);
+    assert.ok(conv.first && conv.last && conv.first <= conv.last, "added and changed times from the log");
+    assert.deepEqual(us.map((u: { o: number }) => u.o).sort((a: number, b: number) => a - b), us.map((_: unknown, i: number) => i));
+  });
+  test("the page has the units list's search, group and sort", () => {
+    const html = f.read(".tracker/view.html");
+    has(html, 'id="units"'); has(html, "search units"); has(html, "every group"); has(html, "sort: the order next takes them");
   });
 });
 

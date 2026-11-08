@@ -19,6 +19,10 @@ button{font:inherit;font-size:12px;border:1px solid var(--line);background:var(-
 .legend span{margin-right:12px;font-size:13px}.log div{font-size:13px;padding:2px 0}.dec.replaced{text-decoration:line-through;opacity:.6}
 .ci-failed,.ci-cut,.ci-never{color:var(--bad)}
 input[type=search]{font:inherit;width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg)}
+.uf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.uf input[type=search]{flex:1 1 260px;width:auto}
+select{font:inherit;font-size:14px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);max-width:100%}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.chip{margin:0;font-size:13px;padding:2px 9px;border-radius:12px;opacity:.55}.chip.on{opacity:1;border-color:var(--fg)}.chip .dot{width:8px;height:8px;margin-right:5px}
+.ul .u{cursor:pointer}.ul .u:first-child{border-top:0}.ul .u .more{display:none}.ul .u.open .more{display:block}.ul .u .gt{font-size:12px;color:var(--mute)}
 </style></head><body><main id="app"></main>
 <script>
 const D=__DATA__;
@@ -56,14 +60,56 @@ for(const l of (seen?fresh:D.log.slice(-25)).slice(-80).reverse())lg.append($('<
 if(!lg.children.length)lg.append($('<div class="mute">Nothing new.</div>'));
 app.append(lg);
 const mark=$('<button>mark all as seen</button>');mark.onclick=()=>{localStorage.setItem(KEY,D.built);location.reload()};app.append(mark);
+// units: every unit in one list, to search, filter by status and group, and sort
+const UO=['you','broken','stuck','interrupted','doing','review','ready','resource','waiting','parked','done','dropped'];
+const GT={};const UA=[];D.groups.forEach((g,gi)=>{GT[g.id]=g.title;g.units.forEach((u,ui)=>UA.push(Object.assign({g:g.id,gi:gi,ui:ui},u)))});
+const UK='tracker-units:'+D.title;let F={q:'',st:UO.filter(k=>!['done','dropped','parked'].includes(k)),g:'',sort:'next'};
+try{const v=JSON.parse(localStorage.getItem(UK)||'null');if(v)F=Object.assign(F,v)}catch(e){}
+const save=()=>{try{localStorage.setItem(UK,JSON.stringify(F))}catch(e){}};
+app.append($('<h2 id="units">Units</h2>'));
+const uf=$('<div class="uf"></div>');app.append(uf);
+const uq=$('<input type="search" placeholder="search units: title, id, detail, notes">');uq.value=F.q;uf.append(uq);
+const ug=$('<select></select>');ug.append($('<option value="">every group</option>'));
+for(const g of D.groups){const n=g.units.filter(u=>!['done','dropped'].includes(u.s)).length;const o=document.createElement('option');o.value=g.id;o.textContent=g.title+' ('+n+' open)';ug.append(o)}
+ug.value=F.g;if(ug.value!==F.g)F.g='';uf.append(ug);
+const us=$('<select></select>');for(const [k,l] of [['next','sort: the order next takes them'],['changed','sort: changed most recently'],['added','sort: added most recently'],['status','sort: status'],['group','sort: group, as filed'],['title','sort: title']]){const o=document.createElement('option');o.value=k;o.textContent=l;us.append(o)}
+us.value=F.sort;uf.append(us);
+const chips=$('<div class="chips"></div>');app.append(chips);
+const ucount=$('<div class="mute"></div>');app.append(ucount);
+const ul=$('<div class="card ul"></div>');app.append(ul);
+let cap=200;
+const hay=u=>(u.title+' '+u.id+' '+(u.label||'')+' '+(u.detail||'')+' '+(u.notes||[]).join(' ')+' '+GT[u.g]).toLowerCase();
+const SORT={next:(a,b)=>a.o-b.o,changed:(a,b)=>String(b.last||'').localeCompare(String(a.last||''))||a.o-b.o,added:(a,b)=>String(b.first||'').localeCompare(String(a.first||''))||a.o-b.o,
+  status:(a,b)=>UO.indexOf(a.s)-UO.indexOf(b.s)||a.o-b.o,group:(a,b)=>a.gi-b.gi||a.ui-b.ui,title:(a,b)=>a.title.localeCompare(b.title)};
+function drawU(){
+  const words=F.q.toLowerCase().split(/ +/).filter(Boolean);
+  const base=UA.filter(u=>(!F.g||u.g===F.g)&&words.every(w=>hay(u).includes(w)));
+  const c={};for(const u of base)c[u.s]=(c[u.s]||0)+1;
+  chips.innerHTML='';
+  for(const [k,l,set] of [['open','open',UO.filter(x=>!['done','dropped','parked'].includes(x))],['all','all',UO]]){const b=$('<button class="chip on">'+l+'</button>');b.onclick=()=>{F.st=set.slice();cap=200;save();drawU()};chips.append(b)}
+  for(const k of UO){if(!c[k])continue;const b=$('<button class="chip'+(F.st.includes(k)?' on':'')+'"><span class="dot s-'+k+'"></span>'+NAMES[k]+' '+(c[k]||0)+'</button>');
+    b.onclick=()=>{F.st=F.st.includes(k)?F.st.filter(x=>x!==k):F.st.concat([k]);cap=200;save();drawU()};chips.append(b)}
+  const list=base.filter(u=>F.st.includes(u.s)).sort(SORT[F.sort]||SORT.next);
+  ucount.textContent=list.length+' of '+UA.length+' units'+(list.length>cap?', first '+cap+' shown':'');
+  ul.innerHTML='';
+  for(const u of list.slice(0,cap)){
+    const when=F.sort==='added'?(u.first?'added '+u.first.slice(0,10):''):(u.last?'changed '+u.last.slice(0,16).replace('T',' '):'');
+    const d=$('<div class="u"><span class="dot s-'+u.s+'"></span>'+(u.gate?'Gate: ':'')+esc(u.title)+' <span class="mute">('+esc(u.id)+')</span><div class="gt">'+esc(GT[u.g])+(u.p?' · priority '+u.p:'')+(when?' · '+when:'')+'</div><small>'+code(u.label)+'</small><div class="more"></div></div>');
+    const m=d.querySelector('.more');if(u.detail)m.append($('<small>'+code(u.detail)+'</small>'));if(u.evidence&&u.s==='done')m.append($('<small>Evidence: '+code(u.evidence)+'</small>'));for(const n of u.notes)m.append($('<small>Note: '+code(n)+'</small>'));
+    d.onclick=()=>d.classList.toggle('open');ul.append(d)}
+  if(!list.length)ul.append($('<p class="mute">No units match.</p>'));
+  if(list.length>cap){const b=$('<button>show '+Math.min(200,list.length-cap)+' more</button>');b.onclick=()=>{cap+=200;drawU()};ul.append(b)}}
+uq.oninput=()=>{F.q=uq.value;cap=200;save();drawU()};ug.onchange=()=>{F.g=ug.value;cap=200;save();drawU()};us.onchange=()=>{F.sort=us.value;save();drawU()};
+drawU();
 // groups
 app.append($('<h2>Groups</h2>'));
 app.append($('<div class="legend">'+['done','you','ready','doing','waiting','broken'].map(k=>'<span><span class="dot s-'+k+'"></span>'+NAMES[k]+'</span>').join('')+'</div>'));
 for(const g of D.groups){
   const us=g.units.filter(u=>!u.gate);const n=us.length||1;const c={};for(const u of us)c[u.s]=(c[u.s]||0)+1;
   const bar=['done','doing','review','ready','you','broken','stuck','interrupted','resource','waiting'].filter(k=>c[k]).map(k=>'<span title="'+c[k]+' '+NAMES[k]+'" style="width:'+(100*c[k]/n)+'%;background:'+COL[k]+'"></span>').join('');
-  const el=$('<div class="card g"><div class="row"><b>'+esc(g.title)+'</b><span class="mute">'+(c.done||0)+' / '+us.length+(g.host?' · '+esc(g.host):'')+'</span></div><div class="bar">'+bar+'</div>'+(g.ci?'<div class="ci ci-'+g.ci.s+'"><small>CI: '+code(g.ci.text)+'</small></div>':'')+'<div class="units"></div></div>');
+  const el=$('<div class="card g"><div class="row"><b>'+esc(g.title)+'</b><span class="mute">'+(c.done||0)+' / '+us.length+(g.host?' · '+esc(g.host):'')+'<button class="lu">list</button></span></div><div class="bar">'+bar+'</div>'+(g.ci?'<div class="ci ci-'+g.ci.s+'"><small>CI: '+code(g.ci.text)+'</small></div>':'')+'<div class="units"></div></div>');
   const box=el.querySelector('.units');
+  el.querySelector('.lu').onclick=(e)=>{e.stopPropagation();F.g=g.id;ug.value=g.id;cap=200;save();drawU();document.getElementById('units').scrollIntoView()};
   for(const u of g.units){const d=$('<div class="u"><span class="dot s-'+u.s+'"></span>'+(u.gate?'Gate: ':'')+esc(u.title)+' <span class="mute">('+esc(u.id)+')</span><small>'+code(u.label)+'</small></div>');
     if(u.detail)d.append($('<small>'+code(u.detail)+'</small>'));if(u.evidence&&u.s==='done')d.append($('<small>Evidence: '+code(u.evidence)+'</small>'));for(const n of u.notes)d.append($('<small>Note: '+code(n)+'</small>'));box.append(d)}
   el.onclick=(e)=>{if(!e.target.closest('.units'))el.classList.toggle('open')};app.append(el)}
