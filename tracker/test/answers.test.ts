@@ -84,9 +84,18 @@ describe("an answer's option says what it drops or releases, and answer does exa
     setup(["ask", "--title", "Do the Classic rules wait for the owner?", "--context", "x", "--option", "a | A | x", "--option", "b | B | y", "--default", "a", "--blocks", "group:mx", "--id", "mx-plain", "--force"]);
     has(ok(["answer", "q/mx-plain", "a"]), "Released 1 unit: Classic lcancel (mx/lcancel)");
   });
-  test("lint: an option that says dropped with no drops: field", () => {
+  // ask refuses what lint would report: a question asked with it failed the project's lint on
+  // main, and every lane stopped until it was asked again.
+  const classicDrop = ["ask", "--title", "Should the Classic rules be dropped?", "--context", "x", "--option", "a | Drop | They are dropped", "--option", "b | Keep | x", "--default", "a", "--blocks", "mx/lcancel", "--id", "classic-drop", "--force"];
+  test("ask: an option that says dropped with no drops: field is refused", () => {
     setup(["unpark", "mx/shield"]);
-    setup(["ask", "--title", "Should the Classic rules be dropped?", "--context", "x", "--option", "a | Drop | They are dropped", "--option", "b | Keep | x", "--default", "a", "--blocks", "mx/lcancel", "--id", "classic-drop", "--force"]);
+    const r = t(classicDrop, {}, { merged: true });
+    assert.equal(r.code, 2);
+    has(r.stdout, "--option a says units are dropped, but answering it drops nothing");
+  });
+  test("lint: such an option, on a question asked before ask refused it", () => {
+    setup(classicDrop.map((x) => x.replace("They are dropped", "They stay")));
+    f.edit("tracker/questions.json", (j) => { j.questions.find((q: { id: string }) => q.id === "q/classic-drop").options[0].changes = "They are dropped"; });
     has(t(["lint"], {}, { merged: true }).stdout, "q/classic-drop: option a says units are dropped, but answering it drops nothing");
   });
   after(() => {
