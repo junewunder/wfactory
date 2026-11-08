@@ -217,12 +217,13 @@ describe("log, view", () => {
     const conv = us.find((u: { id: string }) => u.id === "pipe/convert");
     assert.equal(typeof conv.o, "number");
     assert.equal(conv.p, 0);
+    assert.deepEqual(conv.tags, []);
     assert.ok(conv.first && conv.last && conv.first <= conv.last, "added and changed times from the log");
     assert.deepEqual(us.map((u: { o: number }) => u.o).sort((a: number, b: number) => a - b), us.map((_: unknown, i: number) => i));
   });
   test("the page has the units list's search, group and sort", () => {
     const html = f.read(".tracker/view.html");
-    has(html, 'id="units"'); has(html, "search units"); has(html, "every group"); has(html, "sort: the order next takes them");
+    has(html, 'id="units"'); has(html, "search units: title, id, tag"); has(html, "every group"); has(html, "sort: the order next takes them");
   });
 });
 
