@@ -651,7 +651,7 @@ either of two reasons. The event says which, and when the lanes are back.
   line reaches what's used, a time worked out when it pauses, so it resumes
   with no new reading. With more used than the lanes may use at all (85%,
   with 15 kept back), that's the week's reset. `just usage` shows it: "week
-  62% used, the line is at 58%: lanes pause until Thu 14:00".
+  62% used, the line is at 58.3%: lanes pause until Thu 14:00".
 
 Each pause and resume shows up in `just fleet wait` as news. Tell the owner
 one line at each pause ("Usage: lanes paused at 92% of the 5-hour window;
