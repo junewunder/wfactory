@@ -171,7 +171,9 @@ and looks again, until its deadline. It stops when:
   - an iteration fails for a reason other than a usage limit or the memory cap
 On a usage limit it sleeps (--limit-wait) and retries, until --hours runs out.
 Under 8% of the 5-hour window left (factory/usage.sh, the profile's "pause
-below") it pauses between units and resumes at the reset.
+below") it pauses between units and resumes at the reset. Ahead of the week's
+line (the share of the week gone by, less the profile's "keep back", 15%) it
+pauses between units until the line reaches what's used (factory/usage.sh --help).
 Restart. \`just fleet restart\` asks a lane to start again on the newest deployed copy of this
 skill (runs/.restart): it does so as soon as the unit it's on ends, or at once if it's waiting
 for work, and never waits for the machine's other lanes. It starts the new copy in place of

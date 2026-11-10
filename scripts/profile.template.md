@@ -22,6 +22,7 @@ The scripts read this table. Keep its columns.
 |---|---|
 | agent | claude |
 | pause below | 8 |
+| keep back | 15 |
 | store | none |
 
 - **agent:** the agent CLI the loop starts, one session per unit. It has to
@@ -31,6 +32,11 @@ The scripts read this table. Keep its columns.
 - **pause below:** the lanes pause between units when less than this
   percentage of the 5-hour usage window is left, and resume when it resets.
   Use 0 to never pause.
+- **keep back:** the percentage of the week's usage kept for your own use.
+  The lanes pace themselves through the week: they may have used the share
+  of the week that has gone by, less this, and pause between units while
+  they're ahead of that. 0 keeps nothing back (the lanes may use the whole
+  week, evenly); `off` means the week's usage is never acted on.
 - **store:** where big group data lives when several machines share a
   factory, as an rsync-over-ssh target (`nas:/tank/factory`). `none` is
   right for one machine. See "Scaling out" in SKILL.md.

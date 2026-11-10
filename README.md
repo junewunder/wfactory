@@ -135,9 +135,11 @@ these:
 
 Your units may be smaller or bigger than mine; the pilot's first few tell
 you. The lanes read your usage as they go and pause below a share of the
-5-hour window that you set (8% left by default). They don't act on the
-week's limit, so on a smaller plan a night can use up a week you wanted for
-other work: watch `just usage`, and give the lanes a stop time.
+5-hour window that you set (8% left by default). They also pace themselves
+through the week: they may have used the share of the week that has gone by,
+less a share kept back for you (15% by default), and they pause while they're
+ahead of that. So a night can't use up the week, and a week doesn't end with
+usage the lanes could have had. `just usage` shows where they are.
 
 ## Warning: it runs agents unattended
 

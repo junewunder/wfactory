@@ -19,7 +19,9 @@ folder opens the tracker's page.
 
 This runs real agent sessions, with the permissions the loop gives them
 (\`--permission-mode auto\`), inside the toy's folder. Five small units cost
-a few minutes and a little usage.
+a few minutes and a little usage. Its lane isn't paced against the week's
+usage (FACTORY_USAGE_KEEP_BACK=off, unless set), so it runs whatever the
+machine's other factories have used.
 
 Usage:
   scripts/smoke.sh [<dir>]     the toy goes in <dir> (default ~/wfactory-smoke);
@@ -172,6 +174,10 @@ export function smokeCli(args: string[], env: NodeJS.ProcessEnv = process.env): 
   if (!run(["git", "add", "-A"]) || !run(["git", "commit", "-qm", "Smoke-test factory: five units"])) return 1;
 
   console.log(`smoke: the toy factory is in ${dir}; running one lane until its units are done`);
+  // Not paced against the week: the owner has just agreed to these few minutes, and where other
+  // factories' lanes have the machine's reading ahead of the week's line, the toy would sit out
+  // its hour paused (factory/usage.sh --help).
+  process.env.FACTORY_USAGE_KEEP_BACK ||= "off";
   run(["just", "loop", "--model", env.SMOKE_MODEL || "sonnet", "--hours", env.SMOKE_HOURS || "1", "--max", "10"]);
   console.log();
   run(["just", "status"]);
