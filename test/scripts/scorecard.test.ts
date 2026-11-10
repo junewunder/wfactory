@@ -153,19 +153,49 @@ describe("a record it doesn't understand", () => {
   const { d, env } = fixture();
   fs.appendFileSync(path.join(d, "runs/events.log"), "2026-11-01 16:30\tfxhost\t1\tteleported\tthe lane went somewhere else\n");
   fs.appendFileSync(path.join(d, "tracker/log.jsonl"), '{"at":"2026-11-01T16:31:00Z","actor":"loop","tag":"zz","host":"fxhost","cmd":"teleport","text":"somewhere"}\nnot json at all\n');
-  fs.appendFileSync(path.join(d, "runs/index.tsv"), "a row\twith too few fields\n");
+  fs.appendFileSync(path.join(d, "runs/index.tsv"), "a row\twith too few fields\n20261101-170000\tzz9\t\tFour tries (alpha/four)\tDone, it says.\t5\t1.00\t5\n");
   let r = { code: 1, out: "", err: "" };
   test("is counted under unknown, and named", () => {
     r = run([], env, d);
     assert.equal(r.code, 0, r.err);
-    has(r.out, `Not understood (unknown): 4 records: the tracker's log: "teleport"; the tracker's log: a line that isn't a log entry; checkout's run index: a row that doesn't parse; checkout's events: "teleported"`);
+    has(r.out, `Not understood (unknown): 5 records: the tracker's log: "teleport"; the tracker's log: a line that isn't a log entry; checkout's run index: a row that doesn't parse; checkout's events: "teleported"; checkout's run index: session zz9, which the tracker's log has no line of`);
   });
   test("  in --json too", () => {
     const j = JSON.parse(run(["--json"], env, d).out);
-    assert.equal(j.figures["unknown.count"], 4);
-    assert.deepEqual(j.unknown.map((u: { what: string }) => u.what).sort(), ['"teleport"', '"teleported"', "a line that isn't a log entry", "a row that doesn't parse"]);
+    assert.equal(j.figures["unknown.count"], 5);
+    assert.deepEqual(j.unknown.map((u: { what: string }) => u.what).sort(), ['"teleport"', '"teleported"', "a line that isn't a log entry", "a row that doesn't parse", "session zz9, which the tracker's log has no line of"]);
   });
-  test("  and the rest is as before", () => { assert.equal(JSON.parse(run(["--json"], env, d).out).figures["sessions.count"], 11); });
+  // A session whose claim isn't in the log (a copy of main's log fetched before it) is neither
+  // finished nor not: the shares are of the sessions whose ending is known, as before.
+  test("  a session the log has no claim of is counted, as unknown, and out of the shares", () => {
+    const f = JSON.parse(run(["--json"], env, d).out).figures;
+    assert.deepEqual([f["sessions.count"], f["sessions.unknown.count"], f["sessions.no_unit.count"], f["sessions.no_unit.share"], f["sessions.no_unit.cost_share"]], [12, 1, 9, 0.8182, 0.575]);
+    has(run([], env, d).out, "Sessions that finished no unit: 9 of 11 (82%; 1 more not in the log, not counted), $11.50");
+  });
+});
+
+describe("the review is this machine's; a step's runs count once", () => {
+  const { d, env } = fixture();
+  // Another machine landed a branch, and its review sent one back: its review-skipped events are on it.
+  fs.appendFileSync(path.join(d, "tracker/log.jsonl"), [
+    '{"at":"2026-11-01T15:50:00Z","actor":"loop","tag":"manual","host":"elsewhere","cmd":"merged","id":"beta/stuck","text":"Stuck: on main"}',
+    `{"at":"2026-11-01T15:51:00Z","actor":"loop","tag":"manual","host":"elsewhere","cmd":"reopen","id":"beta/ask","text":"Asks: back to ready: the loop's review asked for fixes"}`, ""].join("\n"));
+  test("another machine's landings and send-backs aren't in the review's figures", () => {
+    const f = JSON.parse(run(["--json"], env, d).out).figures;
+    assert.deepEqual([f["review.landed.count"], f["review.reviewed.count"], f["review.sent_back.count"]], [2, 3, 2]);
+  });
+  test("a step whose command names no group: each run counted once, not once per group", () => {
+    const pj = path.join(d, "tracker/project.json"), p = JSON.parse(fs.readFileSync(pj, "utf8"));
+    p.ci.steps.lint = { cmd: "make lint" };
+    fs.writeFileSync(pj, JSON.stringify(p));
+    const h = path.join(d, "jobs/history.json"), j = JSON.parse(fs.readFileSync(h, "utf8"));
+    j["fx\tci-step runs/ci-20261101-123005-alpha-lint.log.secs timeout 600 bash -c make lint"] = { secs: [40] };
+    j["fx\tci-step runs/ci-20261101-125205-beta-lint.log.secs timeout 600 bash -c make lint"] = { secs: [60] };
+    fs.writeFileSync(h, JSON.stringify(j));
+    const r = run([], env, d);
+    assert.equal(JSON.parse(run(["--json"], env, d).out).figures["ci.step.lint.secs"], 50);
+    has(r.out, "CI step lint: 0 runs, 0 failed (—); takes about 1 min (the median of 2 passing runs in the heavy-job history)");
+  });
 });
 
 // Each prediction is judged on the records from when it was made to the end of its date, whatever

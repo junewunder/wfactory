@@ -8,7 +8,7 @@ import { readTime } from "./when.ts";
 import { trIn } from "./tr.ts";
 import { today } from "../../tracker/src/text.ts";
 import { readRecords } from "./scorecard-read.ts";
-import { score, pct, type Card, type Line, type PredictionNow } from "./scorecard-figures.ts";
+import { score, pct, minutes, type Card, type Line, type PredictionNow } from "./scorecard-figures.ts";
 import { NAMES, knownName } from "./scorecard-names.ts";
 
 export const SCORECARD_HELP = `just scorecard [--since <when>] [--json]
@@ -62,7 +62,7 @@ export const predictionText = (p: PredictionNow) => {
 const header = (c: Card, lanes: string[], hostName: string, logAge: number | null) => {
   const since = c.since === null ? "everything recorded" : `since ${ymdHm(new Date(c.since * 1000))}`;
   const f = c.figures;
-  return `This machine's lanes (${hostName}: ${lanes.join(", ") || "none"}), ${since}: ${f["sessions.count"]} sessions, $${(f["sessions.cost"] ?? 0).toFixed(2)}, ${f["lane.minutes"]} min of lane time. Units and CI read the tracker's log: every machine.${logAge === null ? "" : ` The log is this checkout's copy of main's, fetched ${logAge < 120 ? "just now" : `${Math.round(logAge / 60)} min ago`} (a tracker command here, \`just status\`, fetches it).`}`;
+  return `This machine's lanes (${hostName}: ${lanes.join(", ") || "none"}), ${since}: ${f["sessions.count"]} sessions, $${(f["sessions.cost"] ?? 0).toFixed(2)}, ${f["lane.minutes"]} min of lane time. Units and CI read the tracker's log: every machine.${logAge === null ? "" : ` The log is this checkout's copy of main's, fetched ${logAge < 120 ? "just now" : `${minutes(Math.round(logAge / 60))} ago`} (a tracker command here, \`just status\`, fetches it).`}`;
 };
 
 // The card for the checkout in cwd: null and why, if --since can't be read.

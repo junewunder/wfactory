@@ -167,18 +167,20 @@ export function score(R: Records, since: number | null, now = new Date(), until:
   // (A session whose claim isn't in the log isn't counted either way: it's unknown, named below.)
   const noUnit = sessions.filter((r) => !["finished", "unknown"].includes(endingOf(r)));
   figures["sessions.unknown.count"] = sessions.filter((r) => endingOf(r) === "unknown").length;
+  // (Shares of the sessions whose ending is known: one whose claim the log lacks is neither.)
+  const known = sessions.filter((r) => endingOf(r) !== "unknown"), K = known.length, CK = cost(known), more = N - K;
   figures["sessions.no_unit.count"] = noUnit.length;
-  figures["sessions.no_unit.share"] = share(noUnit.length, N);
+  figures["sessions.no_unit.share"] = share(noUnit.length, K);
   figures["sessions.no_unit.cost"] = cost(noUnit);
-  figures["sessions.no_unit.cost_share"] = share(cost(noUnit), C);
-  if (N) lines.push({ section: 1, of: "cost", share: share(cost(noUnit), C), text: `Sessions that finished no unit: ${noUnit.length} of ${N} (${pct(share(noUnit.length, N))}), ${money(cost(noUnit))}` });
+  figures["sessions.no_unit.cost_share"] = share(cost(noUnit), CK);
+  if (K) lines.push({ section: 1, of: "cost", share: share(cost(noUnit), CK), text: `Sessions that finished no unit: ${noUnit.length} of ${K} (${pct(share(noUnit.length, K))}${more ? `; ${more} more not in the log, not counted` : ""}), ${money(cost(noUnit))}` });
   for (const k of Object.keys(ENDINGS) as (keyof typeof ENDINGS)[]) {
     const rs = noUnit.filter((r) => endingOf(r) === k);
     figures[`sessions.no_unit.${k}.count`] = rs.length;
-    figures[`sessions.no_unit.${k}.share`] = share(rs.length, N);
+    figures[`sessions.no_unit.${k}.share`] = share(rs.length, K);
     figures[`sessions.no_unit.${k}.cost`] = cost(rs);
-    figures[`sessions.no_unit.${k}.cost_share`] = share(cost(rs), C);
-    if (rs.length) lines.push({ section: 1, of: "cost", share: share(cost(rs), C), text: `  Sessions that ${ENDINGS[k]}: ${rs.length} (${pct(share(rs.length, N))} of sessions), ${money(cost(rs))}` });
+    figures[`sessions.no_unit.${k}.cost_share`] = share(cost(rs), CK);
+    if (rs.length) lines.push({ section: 1, of: "cost", share: share(cost(rs), CK), text: `  Sessions that ${ENDINGS[k]}: ${rs.length} (${pct(share(rs.length, K))} of sessions), ${money(cost(rs))}` });
   }
 
   // ------------------------------------------------ 2. units by claims (every machine)
@@ -279,11 +281,12 @@ export function score(R: Records, since: number | null, now = new Date(), until:
     // its start ("… ci-step runs/ci-20261025-000714-<group>-<step>.log.secs timeout … bash -c
     // <cmd>"), each run's seconds if it passed; older keys name only the command, with no date, and
     // count only for a card of everything recorded.
-    const secs: number[] = [];
+    const secs: number[] = [], taken = new Set<string>();   // (a key once: a command naming no {group} is every group's)
     if (def) for (const g of R.groups) {
       const cmd = fill(def, { ...g.params, group: g.id });
       for (const [k, v] of Object.entries(R.history)) {
-        if (!(k === cmd || k.endsWith(` bash -c ${cmd}`)) || !Array.isArray(v.secs)) continue;
+        if (taken.has(k) || !(k === cmd || k.endsWith(` bash -c ${cmd}`)) || !Array.isArray(v.secs)) continue;
+        taken.add(k);
         const m = / runs\/ci-(\d{8}-\d{6})-\S*\.log\.secs /.exec(k), t = m ? startedAt(m[1]) : null;
         if (t === null ? since !== null || until !== null : !inP(t)) continue;
         secs.push(...v.secs.filter((x) => typeof x === "number"));
