@@ -45,7 +45,7 @@ factory starts at step 1.
    the owner passes the gate. The gate's entry checks are the finish line
    from day one, and the owner makes their few design calls here.
 3. **Settle the design** ([docs/design-questions.md](docs/design-questions.md)):
-   13 questions, yours to settle from what the opening found; the owner
+   14 questions, yours to settle from what the opening found; the owner
    hears how it's set up, not a question per item.
 4. **Pilot, then widen** ([docs/pilot.md](docs/pilot.md)): the first units
    interactively, the ramp's reviews, then the loop unattended.

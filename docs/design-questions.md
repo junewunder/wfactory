@@ -6,7 +6,8 @@ after the opening.
 At the end of the opening, before the first units, settle these. **They are
 yours to settle, not a list for the owner to approve.** The owner made
 their calls during the opening (the goal's two lines, which differences
-from the reference are bugs, gates, how the scope grows, machines: [opening.md](opening.md), "The owner's design calls");
+from the reference are bugs, gates, how the scope grows, machines, and what
+they allow on their own copies and accounts: [opening.md](opening.md), "The owner's design calls");
 the rest are mechanics that the trial units, the skill's rules and the
 repo's own lessons answer. Write each answer into `docs/factory.md`, then
 send the owner one short message saying how the factory is set up, the
@@ -16,7 +17,7 @@ changes what gets built and has no safe default; an owner who answers
 "okay" to every item was asked too much. If one of their calls was missed
 in the opening, ask it now, in that same message.
 
-After the 13 questions come three sections for the factories they fit:
+After the 14 questions come three sections for the factories they fit:
 several deliverables in one repo, units that need a GUI, and product code
 that calls a model.
 
@@ -37,6 +38,10 @@ that calls a model.
    ([opening.md](opening.md), "The reference, and which differences are
    bugs"). The kind and the two layers are the owner's call; how the check
    reads the page is yours.
+   An oracle that reads the target's code, files or memory stays within
+   what the owner allows on their own copies (the decision "What the owner
+   allows on their own copies and accounts"; [opening.md](opening.md),
+   step 1); without it, it reads only what the target offers on its own.
    **Build and test the oracle before any units** ([opening.md](opening.md), step 4).
 3. **Independent check.** *mechanical* (the check passing is enough) or
    *independent* (a context that didn't do the work verifies it). Use
@@ -161,6 +166,35 @@ that calls a model.
     to write the shared code (not at the first case, and not after the
     tenth). Say in `docs/factory.md` which shape it is and where each
     kind's code lives.
+14. **Is the build a function of the commit?** For each kind of derived
+    output (question 11): does the commit, with the fetched inputs, decide
+    it, or does it live in one folder per machine, written in place, that
+    is at once the cache, the units' workspace and what gets published?
+    In that folder units, side scripts and hand edits all write, the checks
+    read what this machine happens to hold, one commit passes on one
+    machine and fails on another, and most of CI's red is copies drifting
+    apart, not broken work. A build tool that keys outputs by their inputs
+    settles most of it; either way, write into `docs/factory.md`'s "The
+    build (every session)":
+    - **where derived files live**, apart from what's written;
+    - **who writes them:** the build, and nothing else. A unit that wants
+      a different output changes the code or an input and reruns the
+      build; a hand fix is a pipeline step (question 11);
+    - **what the checks read:** what the commit builds, never what this
+      machine happens to hold;
+    - **results derived from a build aren't committed** (a check's
+      report, a listing made from the outputs): the build makes them
+      again, so units don't all rewrite the same generated files.
+
+    The drill (question 11) then tests the build, not the commit: a
+    difference it finds is a step that isn't a function of its inputs, or
+    a copy something other than the build wrote. Report it and file it
+    for whatever wrote it, as drift; it doesn't fail the check of a commit
+    that didn't cause it.
+
+    How to key outputs and check results, and what to do with a step that
+    can't be made a function of its inputs: [docs/pipelines/](pipelines/README.md),
+    "The build is a function of the commit".
 
 ## Several loops in one repo
 
