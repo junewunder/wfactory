@@ -6,7 +6,7 @@
 import { asksHelp, ymdHm } from "./sys.ts";
 import { readTime } from "./when.ts";
 import { trIn } from "./tr.ts";
-import { today } from "../../tracker/src/commands/expect.ts";
+import { today } from "../../tracker/src/text.ts";
 import { readRecords } from "./scorecard-read.ts";
 import { score, pct, type Card, type Line, type PredictionNow } from "./scorecard-figures.ts";
 import { NAMES, knownName } from "./scorecard-names.ts";
@@ -21,9 +21,10 @@ tracker's log, this machine's lanes' run index and events (runs/index.tsv and
 runs/events.log in the checkout and each <checkout>-lane<N> clone beside it), and
 the heavy-job history in the machine's wfactory state folder (jobs/history.json).
 It makes no model call, no network call, and asks nothing of the daemon. The run
-index and events are this machine's, so the session, cost, waiting and lane-time
-figures cover this machine's lanes (the first line says which); units, the review
-and CI come from the tracker's log, every machine's.
+index and events are this machine's, so the session, cost, waiting, lane-time
+and review figures cover this machine's lanes (the first line says which); units
+and CI come from the tracker's log, every machine's. With an origin, the log is
+this checkout's copy of main's, as a tracker command here last fetched it.
 
 Each line says what share of the period's session cost, or of its lane time, it
 accounts for, and the lines are ranked by it, largest first; lines with neither
@@ -43,8 +44,9 @@ A record it doesn't understand is counted under "unknown", and named.
 
 The ledger: \`expect\` records that a change should move a figure by a date (the
 name must be one of --names, the date today or later); the scorecard ends with
-each open prediction and the figure now, and once its date has passed, "held"
-or "missed", until \`settle\` closes it. Both write through the tracker.
+each open prediction and the figure since it was made, and once its date has
+passed, "held" or "missed" by the figure from when it was made to that date,
+until \`settle\` closes it. Both write through the tracker.
   just scorecard expect sessions.no_unit.share '< 0.10' --by 2026-12-01 --why "units are passed over when they can't fit"
   just scorecard settle p1 --note "held: the share fell to 0.06"`;
 
@@ -55,23 +57,23 @@ const shareText = (l: Line) => (l.share === null ? "" : `${pct(l.share)} of ${l.
 export const lineText = (l: Line) => `${shareText(l).padEnd(18)}${l.text.trimStart()}`;
 export const predictionText = (p: PredictionNow) => {
   const now = p.now === null ? "not recorded" : String(p.now);
-  return `${p.id}: ${p.name} ${p.op} ${p.value} by ${p.by}: ${p.state === "open" ? `open; now ${now}` : `${p.state.toUpperCase()} (${now})`} (${p.why})`;
+  return `${p.why} (${p.id}): ${p.name} ${p.op} ${p.value} by ${p.by}: ${p.state === "open" ? `open; ${now} since it was made` : `${p.state.toUpperCase()} (${now} from when it was made to that date)`}`;
 };
-const header = (c: Card, lanes: string[], hostName: string) => {
+const header = (c: Card, lanes: string[], hostName: string, logAge: number | null) => {
   const since = c.since === null ? "everything recorded" : `since ${ymdHm(new Date(c.since * 1000))}`;
   const f = c.figures;
-  return `This machine's lanes (${hostName}: ${lanes.join(", ") || "none"}), ${since}: ${f["sessions.count"]} sessions, $${(f["sessions.cost"] ?? 0).toFixed(2)}, ${f["lane.minutes"]} min of lane time. Units, the review and CI read the tracker's log: every machine.`;
+  return `This machine's lanes (${hostName}: ${lanes.join(", ") || "none"}), ${since}: ${f["sessions.count"]} sessions, $${(f["sessions.cost"] ?? 0).toFixed(2)}, ${f["lane.minutes"]} min of lane time. Units and CI read the tracker's log: every machine.${logAge === null ? "" : ` The log is this checkout's copy of main's, fetched ${logAge < 120 ? "just now" : `${Math.round(logAge / 60)} min ago`} (a tracker command here, \`just status\`, fetches it).`}`;
 };
 
 // The card for the checkout in cwd: null and why, if --since can't be read.
-export function card(env: NodeJS.ProcessEnv, cwd: string, sinceText?: string): { c: Card; lanes: string[]; host: string } | { why: string } {
+export function card(env: NodeJS.ProcessEnv, cwd: string, sinceText?: string): { c: Card; lanes: string[]; host: string; logAge: number | null } | { why: string } {
   let since: number | null = null;
   if (sinceText !== undefined) {
     since = readTime(sinceText);
     if (since === null) return { why: `scorecard: --since needs a time (got '${sinceText}')` };
   }
   const R = readRecords(env, cwd);
-  return { c: score(R, since), lanes: R.lanes, host: R.host };
+  return { c: score(R, since), lanes: R.lanes, host: R.host, logAge: R.logAge };
 }
 
 // The three worst lines and the predictions that came due, for `fleet summary`'s end.
@@ -114,7 +116,7 @@ export function scorecardCli(args: string[], env: NodeJS.ProcessEnv = process.en
     return 0;
   }
   if (c.empty) { say("nothing recorded yet"); return 0; }
-  say(header(c, r.lanes, r.host));
+  say(header(c, r.lanes, r.host, r.logAge));
   for (const l of c.lines) say(lineText(l));
   if (c.predictions.length) {
     say("Predictions:");

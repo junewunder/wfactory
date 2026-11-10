@@ -46,53 +46,56 @@ function run(args: string[], env: NodeJS.ProcessEnv, cwd: string) {
 //   s09 Stuck        blocked on a refused permission         $0.50   10 min
 //   s10 Fine         done, landed                            $4.00   40 min   finished
 //   s11 Landed unrev done, landed without the review         $4.50   50 min   finished
-// Two CI runs (Alpha failed at test, Beta passed: 20 and 15 min), a usage pause of 30 min (12:00 to
-// 12:30) and an idle event between s10's end (13:50) and s11's start (14:50): lane time
-// 250 + 35 + 30 + 60 = 375 min.
+// Two CI runs (Alpha failed at test, Beta passed: 20 and 15 min); a usage pause of 30 min (12:00 to
+// 12:30); an idle event between s09's end (11:20) and the first CI run (12:30), 70 min less the
+// pause within it, and one between s10's end (13:50) and s11's start (14:50), 60 min: lane time
+// 250 + 35 + 30 + 100 = 415 min. The heavy-job history has build's passing runs at 100 and 130 s
+// (dated), and two older undated ones at 110 and 120; test's at 280.
 const FIGURES = {
-  "sessions.count": 11, "sessions.cost": 20, "lane.minutes": 375,
+  "sessions.count": 11, "sessions.cost": 20, "lane.minutes": 415, "sessions.unknown.count": 0,
   "sessions.no_unit.count": 9, "sessions.no_unit.share": 0.8182, "sessions.no_unit.cost": 11.5, "sessions.no_unit.cost_share": 0.575,
   ...Object.fromEntries(([
     ["unstarted", 1, 0.1], ["handed_back", 1, 2], ["interrupted", 1, 1], ["blocked", 1, 0.5], ["asked", 1, 0.4],
-    ["sent_back", 2, 5], ["oom", 1, 1.5], ["silent", 1, 1], ["unknown", 0, 0],
+    ["sent_back", 2, 5], ["oom", 1, 1.5], ["silent", 1, 1],
   ] as [string, number, number][]).flatMap(([k, n, c]) => [
     [`sessions.no_unit.${k}.count`, n], [`sessions.no_unit.${k}.share`, Math.round(n / 11 * 1e4) / 1e4],
     [`sessions.no_unit.${k}.cost`, c], [`sessions.no_unit.${k}.cost_share`, c / 20],
   ])),
-  "units.reclaimed.count": 1, "units.claims.max": 4,
+  "units.reclaimed.count": 2, "units.claims.max": 4,
   "review.landed.count": 2, "review.reviewed.count": 3, "review.sent_back.count": 2, "review.sent_back.rate": 0.6667,
   "review.sent_back_twice.count": 1, "review.unreviewed.count": 1,
-  "wait.usage.minutes": 30, "wait.usage.share": 0.08, "wait.nothing_workable.minutes": 60, "wait.nothing_workable.share": 0.16,
+  "wait.usage.minutes": 30, "wait.usage.share": 0.0723, "wait.nothing_workable.minutes": 100, "wait.nothing_workable.share": 0.241,
   "wait.resource.minutes": null, "wait.memory.minutes": null, "wait.in_flight.minutes": null,
-  "ci.runs": 2, "ci.failed.count": 1, "ci.failed.rate": 0.5, "ci.minutes": 35, "ci.share": 0.0933,
+  "ci.runs": 2, "ci.failed.count": 1, "ci.failed.rate": 0.5, "ci.minutes": 35, "ci.share": 0.0843,
   "ci.step.build.runs": 2, "ci.step.build.failed": 0, "ci.step.build.fail_rate": 0, "ci.step.build.secs": 115,
-  "ci.step.test.runs": 2, "ci.step.test.failed": 1, "ci.step.test.fail_rate": 0.5, "ci.step.test.secs": 300,
+  "ci.step.test.runs": 2, "ci.step.test.failed": 1, "ci.step.test.fail_rate": 0.5, "ci.step.test.secs": 280,
   "unit_cost.count": 2, "unit_cost.median": 4.25, "unit_cost.total": 8.5, "unit_cost.flagged.count": 0,
   "unit_cost.group.alpha.count": 1, "unit_cost.group.alpha.median": 4.5, "unit_cost.group.alpha.total": 4.5,
   "unit_cost.group.beta.count": 1, "unit_cost.group.beta.median": 4, "unit_cost.group.beta.total": 4,
   "unknown.count": 0,
 };
 // The plain output: by share of cost or lane time, largest first; then the rest in their order.
-const PLAIN = `This machine's lanes (fxhost: checkout), everything recorded: 11 sessions, $20.00, 375 min of lane time. Units, the review and CI read the tracker's log: every machine.
+const PLAIN = `This machine's lanes (fxhost: checkout), everything recorded: 11 sessions, $20.00, 415 min of lane time. Units and CI read the tracker's log: every machine.
 57% of cost       Sessions that finished no unit: 9 of 11 (82%), $11.50
 25% of cost       Sessions that had their unit sent back by the review: 2 (18% of sessions), $5.00
+25% of cost       Sent back (alpha/sent): claimed twice since it was last done or added: 2 sent back by the review; $5.00 here
+24% of lane time  Waiting with nothing workable: 1 h 40 min (what for isn't recorded: below)
 21% of cost       Four tries (alpha/four): claimed 4 times since it was last done or added: 1 given back unstarted, 1 interrupted or cut off, 1 handed back with its work kept, 1 silent; $4.10 here
-16% of lane time  Waiting with nothing workable: 1 h (what for isn't recorded: below)
 10% of cost       Sessions that handed their unit back, work kept: 1 (9% of sessions), $2.00
-9% of lane time   Group CI: 2 runs, 1 failed (50%); 35 min of this machine's lane time
-8% of lane time   Waiting in the usage pause: 30 min
+8% of lane time   Group CI: 2 runs, 1 failed (50%); 35 min of this machine's lane time
 8% of cost        Sessions that were killed over memory: 1 (9% of sessions), $1.50
+7% of lane time   Waiting in the usage pause: 30 min
 5% of cost        Sessions that were interrupted or cut off: 1 (9% of sessions), $1.00
 5% of cost        Sessions that were ended for going silent: 1 (9% of sessions), $1.00
 3% of cost        Sessions that left their unit stuck: 1 (9% of sessions), $0.50
 2% of cost        Sessions that asked the owner: 1 (9% of sessions), $0.40
 1% of cost        Sessions that gave their unit back unstarted: 1 (9% of sessions), $0.10
-                  The review: 3 branches reviewed, 2 sent back for fixes (67%), 1 of them a second time; 2 landed, 1 without a review
+                  The review, of this machine's landings: 3 branches reviewed, 2 sent back for fixes (67%), 1 of them a second time; 2 landed, 1 without a review
                   Waiting for a resource: not recorded (the loop would have to record each wait as it ends: the resource, and the minutes)
                   Waiting for the memory budget: not recorded (the heavy-job queue would have to record each wait as it ends: the job, and the minutes)
                   Waiting for work in flight elsewhere: not recorded (the loop would have to record why it waited (the units in progress elsewhere), and the minutes)
-                  CI step build: 2 runs, 0 failed (0%); takes about 2 min (the heavy-job history's last runs)
-                  CI step test: 2 runs, 1 failed (50%); takes about 5 min (the heavy-job history's last runs)
+                  CI step build: 2 runs, 0 failed (0%); takes about 2 min (the median of 4 passing runs in the heavy-job history)
+                  CI step test: 2 runs, 1 failed (50%); takes about 5 min (the median of 1 passing run in the heavy-job history)
                   Cost of a finished unit: median $4.25, $8.50 for 2 units
                   Alpha (alpha): median $4.50, $4.50 for 1
                   Beta (beta): median $4.00, $4.00 for 1
@@ -111,12 +114,16 @@ describe("the fixture factory's figures", () => {
   });
   test("  the lines in the same order, each with its share", () => {
     const j = JSON.parse(run(["--json"], env, d).out);
-    assert.deepEqual(j.lines.slice(0, 3).map((l: { share: number; of: string }) => [l.share, l.of]), [[0.575, "session cost"], [0.25, "session cost"], [0.205, "session cost"]]);
+    assert.deepEqual(j.lines.slice(0, 3).map((l: { share: number; of: string }) => [l.share, l.of]), [[0.575, "session cost"], [0.25, "session cost"], [0.25, "session cost"]]);
     assert.equal(j.lines.length, PLAIN.split("\n").length - 2);
   });
+  // (A done the review sent back doesn't count as done: the unit sent back twice was claimed twice.)
   test("  the unit claimed four times, and how each claim ended", () => {
     const j = JSON.parse(run(["--json"], env, d).out);
-    assert.deepEqual(j.units, [{ id: "alpha/four", title: "Four tries", claims: 4, endings: { unstarted: 1, interrupted: 1, handed_back: 1, silent: 1 }, cost: 4.1 }]);
+    assert.deepEqual(j.units, [
+      { id: "alpha/four", title: "Four tries", claims: 4, endings: { unstarted: 1, interrupted: 1, handed_back: 1, silent: 1 }, cost: 4.1 },
+      { id: "alpha/sent", title: "Sent back", claims: 2, endings: { sent_back: 2 }, cost: 5 },
+    ]);
   });
   test("  what isn't recorded says what would have to be", () => {
     const j = JSON.parse(run(["--json"], env, d).out);
@@ -126,6 +133,8 @@ describe("the fixture factory's figures", () => {
     const j = JSON.parse(run(["--json", "--since", "2026-11-01 13:00"], env, d).out);
     assert.equal(j.figures["sessions.count"], 2);
     assert.equal(j.figures["sessions.no_unit.count"], 0);
+    // (CI step time by its runs' dates: none since then; the undated ones only for everything.)
+    assert.equal(j.figures["ci.step.build.secs"], null);
   });
   test("--since that isn't a time: refused", () => {
     const r = run(["--since", "whenever"], env, d);
@@ -159,41 +168,45 @@ describe("a record it doesn't understand", () => {
   test("  and the rest is as before", () => { assert.equal(JSON.parse(run(["--json"], env, d).out).figures["sessions.count"], 11); });
 });
 
+// Each prediction is judged on the records from when it was made to the end of its date, whatever
+// period the card is for: p1 and p2 are made before the fixture's day, p3 after it.
 describe("the ledger of predictions", () => {
   const { d, env } = fixture();
   const at = (iso: string) => mock.timers.enable({ apis: ["Date"], now: new Date(iso) });
+  const expect = (...a: string[]) => run(["expect", ...a], env, d);
   test("expect refuses a name that isn't a figure", () => {
-    at("2026-11-02T09:00:00Z");
+    at("2026-10-31T09:00:00Z");
     try {
-      const r = run(["expect", "sessions.no_unit.bogus.count", "< 0.1", "--by", "2026-11-10", "--why", "a change"], env, d);
+      const r = expect("sessions.no_unit.bogus.count", "< 0.1", "--by", "2026-11-10", "--why", "a change");
       assert.equal(r.code, 2);
       has(r.err, `"sessions.no_unit.bogus.count" isn't one of the scorecard's figures`);
     } finally { mock.timers.reset(); }
   });
   test("  and a date in the past", () => {
-    at("2026-11-02T09:00:00Z");
+    at("2026-10-31T09:00:00Z");
     try {
-      const r = run(["expect", "sessions.no_unit.share", "< 0.1", "--by", "2026-11-01", "--why", "a change"], env, d);
+      const r = expect("sessions.no_unit.share", "< 0.1", "--by", "2026-10-30", "--why", "a change");
       assert.equal(r.code, 2);
-      has(r.err, "--by 2026-11-01 is in the past (today is 2026-11-02)");
+      has(r.err, "--by 2026-10-30 is in the past (today is 2026-10-31)");
     } finally { mock.timers.reset(); }
   });
   test("  and records one that is, through the tracker", () => {
-    at("2026-11-02T09:00:00Z");
+    at("2026-10-31T09:00:00Z");
     try {
-      const a = run(["expect", "sessions.no_unit.share", "< 0.1", "--by", "2026-11-10", "--why", "units are passed over when they can't fit"], env, d);
+      const a = expect("sessions.no_unit.share", "< 0.1", "--by", "2026-11-10", "--why", "units are passed over when they can't fit");
       assert.equal(a.code, 0, a.err);
       has(a.out, "p1: sessions.no_unit.share < 0.1 by 2026-11-10");
-      const b = run(["expect", "review.sent_back.rate", "> 0.5", "--by", "2026-11-10", "--why", "the review is strict"], env, d);
-      has(b.out, "p2: review.sent_back.rate > 0.5 by 2026-11-10");
+      has(expect("review.sent_back.rate", "> 0.5", "--by", "2026-11-10", "--why", "the review is strict").out, "p2: review.sent_back.rate > 0.5 by 2026-11-10");
       has(fs.readFileSync(path.join(d, "tracker/log.jsonl"), "utf8"), '"cmd":"expect"');
     } finally { mock.timers.reset(); }
+    at("2026-11-05T09:00:00Z");
+    try { has(expect("sessions.count", "< 1", "--by", "2026-11-10", "--why", "the lanes rest this week").out, "p3: sessions.count < 1 by 2026-11-10"); } finally { mock.timers.reset(); }
   });
-  test("open before its date, with the figure now", () => {
+  test("open before its date, with the figure since it was made", () => {
     at("2026-11-10T20:00:00Z");
     try {
       const r = run([], env, d);
-      has(r.out, "Predictions:\n  p1: sessions.no_unit.share < 0.1 by 2026-11-10: open; now 0.8182 (units are passed over when they can't fit)\n  p2: review.sent_back.rate > 0.5 by 2026-11-10: open; now 0.6667");
+      has(r.out, "Predictions:\n  units are passed over when they can't fit (p1): sessions.no_unit.share < 0.1 by 2026-11-10: open; 0.8182 since it was made\n  the review is strict (p2): review.sent_back.rate > 0.5 by 2026-11-10: open; 0.6667 since it was made\n  the lanes rest this week (p3): sessions.count < 1 by 2026-11-10: open; 0 since it was made");
       assert.deepEqual(summaryLines(env, d, "2026-11-01").filter((l) => l.includes("prediction")), []);
     } finally { mock.timers.reset(); }
   });
@@ -201,18 +214,24 @@ describe("the ledger of predictions", () => {
     at("2026-11-11T08:00:00Z");
     try {
       const r = run([], env, d);
-      has(r.out, "p1: sessions.no_unit.share < 0.1 by 2026-11-10: MISSED (0.8182)");
-      has(r.out, "p2: review.sent_back.rate > 0.5 by 2026-11-10: HELD (0.6667)");
-      assert.deepEqual(JSON.parse(run(["--json"], env, d).out).predictions.map((p: { state: string }) => p.state), ["missed", "held"]);
+      has(r.out, "(p1): sessions.no_unit.share < 0.1 by 2026-11-10: MISSED (0.8182 from when it was made to that date)");
+      has(r.out, "(p2): review.sent_back.rate > 0.5 by 2026-11-10: HELD (0.6667 from when it was made to that date)");
+      has(r.out, "(p3): sessions.count < 1 by 2026-11-10: HELD (0 from when it was made to that date)");
+      assert.deepEqual(JSON.parse(run(["--json"], env, d).out).predictions.map((p: { state: string }) => p.state), ["missed", "held", "held"]);
     } finally { mock.timers.reset(); }
   });
-  test("  and so in fleet summary's lines", () => {
+  test("  whatever period the card is for", () => {
     at("2026-11-11T08:00:00Z");
-    try { has(summaryLines(env, d, "2026-11-01").join("\n"), "  prediction p1: sessions.no_unit.share < 0.1 by 2026-11-10: MISSED (0.8182)"); } finally { mock.timers.reset(); }
+    try { has(run(["--since", "2026-11-01 13:00"], env, d).out, "(p1): sessions.no_unit.share < 0.1 by 2026-11-10: MISSED (0.8182"); } finally { mock.timers.reset(); }
   });
-  test("  and still, a week on", () => {
+  test("  and so in fleet summary's lines, from its own start", () => {
+    at("2026-11-11T08:00:00Z");
+    try { has(summaryLines(env, d, "2026-11-01 13:00").join("\n"), "  prediction units are passed over when they can't fit (p1): sessions.no_unit.share < 0.1 by 2026-11-10: MISSED (0.8182"); } finally { mock.timers.reset(); }
+  });
+  test("  and still, a week on, after more records", () => {
+    fs.appendFileSync(path.join(d, "runs/index.tsv"), "20261115-090000\ts20\t\tFour tries (alpha/four)\t\t1\t9.00\t5\n");
     at("2026-11-18T08:00:00Z");
-    try { has(run([], env, d).out, "p1: sessions.no_unit.share < 0.1 by 2026-11-10: MISSED"); } finally { mock.timers.reset(); }
+    try { has(run([], env, d).out, "(p3): sessions.count < 1 by 2026-11-10: HELD (0 from"); } finally { mock.timers.reset(); }
   });
   test("until settled", () => {
     at("2026-11-18T08:00:00Z");
@@ -220,8 +239,8 @@ describe("the ledger of predictions", () => {
       const s = run(["settle", "p1", "--note", "missed: the share stayed high"], env, d);
       assert.equal(s.code, 0, s.err);
       const r = run([], env, d);
-      hasnt(r.out, "p1:");
-      has(r.out, "p2: review.sent_back.rate > 0.5");
+      hasnt(r.out, "(p1)");
+      has(r.out, "(p2): review.sent_back.rate > 0.5");
     } finally { mock.timers.reset(); }
   });
   test("a figure's name with a part: a step or a group, any; an ending, only one of them", () => {
@@ -254,7 +273,7 @@ describe("one read of the tracker's log", () => {
     try { r = run(["--json"], env, d); } finally { m.mock.restore(); }
     assert.equal(r.code, 0, r.err);
     assert.deepEqual(reads, [path.join(d, "tracker", "log.jsonl")]);
-    assert.equal(JSON.parse(r.out).figures["units.reclaimed.count"], 1);
+    assert.equal(JSON.parse(r.out).figures["units.reclaimed.count"], 2);
   });
 });
 
@@ -266,7 +285,7 @@ describe("the lists of what it understands are whole", () => {
     assert.deepEqual([...cmds].filter((c) => !LOG_CMDS.has(c)), []);
   });
   test("every kind of event the runtime writes", () => {
-    const kinds = new Set([...src("runtime/src").matchAll(/\bevent\("([a-z-]+)"/g)].map((m) => m[1]));
+    const kinds = new Set([...src("runtime/src").matchAll(/\b(?:event\(|laneEvent\([^,]+, )"([a-z-]+)"/g)].map((m) => m[1]));
     assert.ok(kinds.size > 30);
     assert.deepEqual([...kinds].filter((k) => !EVENT_KINDS.has(k)), []);
   });

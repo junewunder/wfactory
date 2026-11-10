@@ -480,5 +480,8 @@ the worst; `fleet summary` ends with those.
   decisions, so the scorecard can say "held" or "missed" once the date has
   passed, on any machine, until someone reads it and settles it.
 - **This machine's lanes.** The run index and events stay in each lane's
-  clone, so the session, cost and waiting figures cover the machine it
-  runs on; units, the review and CI come from the log, every machine's.
+  clone, so the session, cost, waiting and review figures cover the machine
+  it runs on; units and CI come from the log, every machine's.
+- **A prediction is judged on its own period**, from when it was made to
+  the end of its date, not on the card's: a figure taken over everything
+  recorded would mostly be the time before the change.

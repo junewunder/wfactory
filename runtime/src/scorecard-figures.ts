@@ -5,12 +5,12 @@
 import type { LogEntry } from "../../tracker/src/types.ts";
 import { gaveBackLine } from "../../tracker/src/sessions.ts";
 import { fill } from "../../tracker/src/templates.ts";
-import { today } from "../../tracker/src/commands/expect.ts";
-import type { Records, Row } from "./scorecard-read.ts";
+import { today } from "../../tracker/src/text.ts";
+import { startedAt, type Records, type Row } from "./scorecard-read.ts";
 import { ENDINGS, type Ending } from "./scorecard-names.ts";
 
 // What the tracker writes for these (tracker/src/commands/loop.ts review-fix, probes.ts); a test
-// runs the tracker's own commands and reads them back, so a change there shows.
+// checks the tracker's source still writes them, so a change there shows.
 const SENT_BACK = /: back to ready: the loop's review asked for fixes$/;
 const SENT_BACK_TWICE = /: stuck: the loop's review asked for fixes a second time$/;
 const CHECK_DONE = /: now done \(its check passes\)$/;
@@ -44,8 +44,11 @@ const times = (n: number) => (n === 1 ? "once" : n === 2 ? "twice" : `${n} times
 // A claim in the tracker's log, and how its session ended.
 interface Claim { tag: string; unit: string; title: string; i: number; at: number; ending: Ending; row?: Row }
 
-export function score(R: Records, since: number | null, now = new Date()): Card {
-  const inP = (t: number) => since === null || t >= since;
+// The card for the period from since (null: the first record) up to until (null: now). A
+// prediction is judged on its own period: from when it was made to the end of its date (until
+// then, to now), whatever period the card is for.
+export function score(R: Records, since: number | null, now = new Date(), until: number | null = null, ledger = true): Card {
+  const inP = (t: number) => (since === null || t >= since) && (until === null || t < until);
   const log = R.log;
   const figures: Record<string, number | null> = {}, notRecorded: Record<string, string> = {};
   const lines: Line[] = [];
@@ -127,17 +130,19 @@ export function score(R: Records, since: number | null, now = new Date()): Card 
   for (const lane of R.lanes) {
     const rs = laneRows.filter((r) => r.lane === lane), evs = R.events.filter((v) => v.lane === lane);
     // The usage pause, by its events' kinds: from a pause to the resume, or the lane's stop.
-    let until = -Infinity;
+    const paused: [number, number][] = [];
     for (const v of evs) {
-      if (!/^usage-(?:.+-)?pause$/.test(v.kind) || v.t < until || !inP(v.t)) continue;
+      if (!/^usage-(?:.+-)?pause$/.test(v.kind) || !inP(v.t) || paused.some(([a, b]) => v.t >= a && v.t < b)) continue;
       const end = evs.find((x) => x.t >= v.t && x !== v && (/^usage-(?:.+-)?resume$/.test(x.kind) || x.kind === "lane-stop" || x.kind === "usage-stop"))?.t
         ?? rs.find((r) => r.started > v.t)?.started;
       if (end === undefined) continue;
-      usage += (end - v.t) / 60; until = end;
+      paused.push([v.t, end]);
+      usage += (end - v.t) / 60;
     }
     // Nothing workable: the gap between two iterations that holds an idle event, ending at the
     // lane's stop if it stopped first, and starting at the iteration before unless the lane
-    // stopped between (then at the event: when it started again isn't recorded).
+    // stopped between (then at the event: when it started again isn't recorded); less any usage
+    // pause within it (the idle wait goes on through one), which is counted as that.
     const seen = new Set<number>();
     for (const v of evs) {
       if (v.kind !== "idle" || !inP(v.t)) continue;
@@ -149,7 +154,8 @@ export function score(R: Records, since: number | null, now = new Date()): Card 
       const start = prev !== undefined && !stoppedBefore ? Math.min(prev, v.t) : v.t;
       if (seen.has(start)) continue;
       seen.add(start);
-      idle += Math.max(0, end - start) / 60;
+      const overlap = paused.reduce((s, [a, b]) => s + Math.max(0, Math.min(b, end) - Math.max(a, start)), 0);
+      idle += Math.max(0, end - start - overlap) / 60;
     }
   }
   usage = Math.round(usage); idle = Math.round(idle);
@@ -158,7 +164,9 @@ export function score(R: Records, since: number | null, now = new Date()): Card 
   figures["lane.minutes"] = laneMin;
 
   // ------------------------------------------------ 1. sessions that finished no unit
-  const noUnit = sessions.filter((r) => endingOf(r) !== "finished");
+  // (A session whose claim isn't in the log isn't counted either way: it's unknown, named below.)
+  const noUnit = sessions.filter((r) => !["finished", "unknown"].includes(endingOf(r)));
+  figures["sessions.unknown.count"] = sessions.filter((r) => endingOf(r) === "unknown").length;
   figures["sessions.no_unit.count"] = noUnit.length;
   figures["sessions.no_unit.share"] = share(noUnit.length, N);
   figures["sessions.no_unit.cost"] = cost(noUnit);
@@ -177,7 +185,8 @@ export function score(R: Records, since: number | null, now = new Date()): Card 
   const open = new Map<string, Claim[]>();
   log.forEach((e, i) => {
     if (!e.id) return;
-    if (e.cmd === "add-unit" || e.cmd === "done" || (e.cmd === "check" && CHECK_DONE.test(e.text))) open.set(e.id, []);
+    // (Not at a done the review sent back: the unit wasn't done.)
+    if (e.cmd === "add-unit" || ((e.cmd === "done" || (e.cmd === "check" && CHECK_DONE.test(e.text))) && !sentBackAfter(e.id, i))) open.set(e.id, []);
     else if (e.cmd === "claim" && claimAt.has(i)) (open.get(e.id) ?? open.set(e.id, []).get(e.id)!).push(claimAt.get(i)!);
   });
   const units: UnitClaims[] = [];
@@ -199,9 +208,12 @@ export function score(R: Records, since: number | null, now = new Date()): Card 
   }
 
   // ------------------------------------------------ 3. the review
-  const landed = new Set(log.filter((e) => e.cmd === "merged" && inP(atOf(e))).map((e) => `${e.at}|${e.tag ?? ""}|${e.host ?? ""}`)).size;
-  const first = log.filter((e) => e.cmd === "reopen" && SENT_BACK.test(e.text) && inP(atOf(e))).length;
-  const twice = log.filter((e) => e.cmd === "block" && SENT_BACK_TWICE.test(e.text) && inP(atOf(e))).length;
+  // This machine's landings (a log line's host is the machine that wrote it: the one landing the
+  // branch, whose events say which went without the review).
+  const here = (e: LogEntry) => e.host === R.host && inP(atOf(e));
+  const landed = new Set(log.filter((e) => e.cmd === "merged" && here(e)).map((e) => `${e.at}|${e.tag ?? ""}`)).size;
+  const first = log.filter((e) => e.cmd === "reopen" && SENT_BACK.test(e.text) && here(e)).length;
+  const twice = log.filter((e) => e.cmd === "block" && SENT_BACK_TWICE.test(e.text) && here(e)).length;
   const unrev = R.events.filter((v) => v.kind === "review-skipped" && inP(v.t)).length;
   const reviewed = Math.max(0, landed - unrev) + first + twice;
   figures["review.landed.count"] = landed;
@@ -210,7 +222,7 @@ export function score(R: Records, since: number | null, now = new Date()): Card 
   figures["review.sent_back.rate"] = share(first + twice, reviewed);
   figures["review.sent_back_twice.count"] = twice;
   figures["review.unreviewed.count"] = unrev;
-  if (landed || reviewed || unrev) lines.push({ section: 3, of: null, share: null, text: `The review: ${reviewed} branch${reviewed === 1 ? "" : "es"} reviewed, ${first + twice} sent back for fixes (${pct(share(first + twice, reviewed))}), ${twice} of them a second time; ${landed} landed, ${unrev} without a review` });
+  if (landed || reviewed || unrev) lines.push({ section: 3, of: null, share: null, text: `The review, of this machine's landings: ${reviewed} branch${reviewed === 1 ? "" : "es"} reviewed, ${first + twice} sent back for fixes (${pct(share(first + twice, reviewed))}), ${twice} of them a second time; ${landed} landed, ${unrev} without a review` });
 
   // ------------------------------------------------ 4. waiting, and CI
   figures["wait.usage.minutes"] = usage;
@@ -263,17 +275,26 @@ export function score(R: Records, since: number | null, now = new Date()): Card 
   if (runs || ciMinutes) lines.push({ section: 4, of: "lane", share: share(ciMinutes, laneMin), text: `Group CI: ${runs} run${runs === 1 ? "" : "s"}, ${failed} failed (${pct(share(failed, runs))}); ${minutes(ciMinutes)} of this machine's lane time` });
   for (const s of [...new Set([...stepNames, ...reach.keys()])]) {
     const def = R.ciSteps[s]?.cmd;
+    // The history keeps a CI step's run under a key of its own, which names the run's log and so
+    // its start ("… ci-step runs/ci-20261025-000714-<group>-<step>.log.secs timeout … bash -c
+    // <cmd>"), each run's seconds if it passed; older keys name only the command, with no date, and
+    // count only for a card of everything recorded.
     const secs: number[] = [];
     if (def) for (const g of R.groups) {
       const cmd = fill(def, { ...g.params, group: g.id });
-      for (const [k, v] of Object.entries(R.history)) if ((k === cmd || k.endsWith(` bash -c ${cmd}`)) && Array.isArray(v.secs)) secs.push(...v.secs.filter((x) => typeof x === "number"));
+      for (const [k, v] of Object.entries(R.history)) {
+        if (!(k === cmd || k.endsWith(` bash -c ${cmd}`)) || !Array.isArray(v.secs)) continue;
+        const m = / runs\/ci-(\d{8}-\d{6})-\S*\.log\.secs /.exec(k), t = m ? startedAt(m[1]) : null;
+        if (t === null ? since !== null || until !== null : !inP(t)) continue;
+        secs.push(...v.secs.filter((x) => typeof x === "number"));
+      }
     }
     const n = reach.get(s) ?? 0, f = fail.get(s) ?? 0;
     figures[`ci.step.${s}.runs`] = n;
     figures[`ci.step.${s}.failed`] = f;
     figures[`ci.step.${s}.fail_rate`] = share(f, n);
     figures[`ci.step.${s}.secs`] = secs.length ? median(secs) : null;
-    if (n || secs.length) lines.push({ section: 4, of: null, share: null, text: `CI step ${s}: ${n} run${n === 1 ? "" : "s"}, ${f} failed (${pct(share(f, n))}); ${secs.length ? `takes about ${minutes(median(secs) / 60)} (the heavy-job history's last runs)` : "its time isn't in the heavy-job history"}` });
+    if (n || secs.length) lines.push({ section: 4, of: null, share: null, text: `CI step ${s}: ${n} run${n === 1 ? "" : "s"}, ${f} failed (${pct(share(f, n))}); ${secs.length ? `takes about ${minutes(median(secs) / 60)} (the median of ${secs.length} passing run${secs.length === 1 ? "" : "s"} in the heavy-job history)` : "no passing run in the heavy-job history"}` });
   }
 
   // ------------------------------------------------ 5. cost of a finished unit (this machine's sessions)
@@ -332,10 +353,12 @@ export function score(R: Records, since: number | null, now = new Date()): Card 
 
   // The ledger: each open prediction and the figure now; past its date, held or missed.
   const day = today(now);
-  const predictions: PredictionNow[] = R.predictions.filter((p) => !p.settled).map((p) => {
-    const v = figures[p.name] ?? null;
+  const endOf = (d: string) => { const [y, m, dd] = d.split("-").map(Number); return Math.floor(new Date(y, m - 1, dd + 1).getTime() / 1000); };
+  const predictions: PredictionNow[] = !ledger ? [] : R.predictions.filter((p) => !p.settled).map((p) => {
+    const due = day > p.by;
+    const v = score(R, atOf(p as unknown as LogEntry), now, due ? endOf(p.by) : null, false).figures[p.name] ?? null;
     const ok = v !== null && ({ "<": v < p.value, "<=": v <= p.value, ">": v > p.value, ">=": v >= p.value, "=": v === p.value } as Record<string, boolean>)[p.op];
-    return { id: p.id, name: p.name, op: p.op, value: p.value, by: p.by, why: p.why, now: v, state: day <= p.by ? "open" : ok ? "held" : "missed" };
+    return { id: p.id, name: p.name, op: p.op, value: p.value, by: p.by, why: p.why, now: v, state: !due ? "open" : ok ? "held" : "missed" };
   });
 
   const empty = !R.rows.length && !log.some((e) => e.cmd === "claim");

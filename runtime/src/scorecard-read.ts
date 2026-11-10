@@ -32,6 +32,7 @@ export interface Records {
   groups: Group[];
   predictions: Prediction[];
   unknown: Unknown[];
+  logAge: number | null;   // seconds since the copy of main's log was fetched; null: the checkout's own
 }
 
 // Every command the tracker writes to its log (tracker/src: log(T, "<cmd>", …)), and two older
@@ -66,6 +67,9 @@ export function readRecords(env: NodeJS.ProcessEnv, cwd: string): Records {
   const c = makeContext(env, "scorecard", cwd);
   const own = path.join(c.ROOT, "tracker");
   const tdir = fs.existsSync(path.join(c.TDIR, "project.json")) ? c.TDIR : own;
+  // (Not fetched here: no network. How old the copy is goes in the header.)
+  let logAge: number | null = null;
+  if (tdir !== own) { try { logAge = Math.max(0, Math.round((Date.now() - fs.statSync(path.join(c.SDIR, ".git", "FETCH_HEAD")).mtimeMs) / 1000)); } catch {} }
   const project = parse<{ ci?: { steps?: Record<string, { cmd?: string }> }; events?: { wake?: unknown; summary?: unknown } }>(read(path.join(tdir, "project.json"))) ?? {};
   const kinds = new Set([...EVENT_KINDS, ...[project.events?.wake, project.events?.summary].flatMap((x) => Array.isArray(x) ? x.map(String) : [])]);
 
@@ -127,5 +131,5 @@ export function readRecords(env: NodeJS.ProcessEnv, cwd: string): Records {
     }
   } catch {}
   const predictions = parse<{ predictions?: Prediction[] }>(read(path.join(tdir, "predictions.json")))?.predictions ?? [];
-  return { host: hostOf(env), root, lanes, log, rows, events, history, ciSteps: project.ci?.steps ?? {}, groups, predictions, unknown };
+  return { host: hostOf(env), root, lanes, log, rows, events, history, ciSteps: project.ci?.steps ?? {}, groups, predictions, unknown, logAge };
 }

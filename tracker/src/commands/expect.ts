@@ -4,7 +4,7 @@
 // shows it until expect-settle closes it with a note.
 import { load, log, mutate } from "../store.ts";
 import { ctx } from "../ctx.ts";
-import { die, now, parseArgs, str } from "../text.ts";
+import { die, now, parseArgs, str, today } from "../text.ts";
 import { C } from "./registry.ts";
 import type { Prediction } from "../types.ts";
 
@@ -14,8 +14,6 @@ export function parseTest(s: string): { op: Prediction["op"]; value: number } | 
   const m = /^\s*(<=|>=|<|>|=)\s*(-?[0-9]+(?:\.[0-9]+)?)\s*$/.exec(s);
   return m ? { op: m[1] as Prediction["op"], value: Number(m[2]) } : null;
 }
-// Today's date here, as YYYY-MM-DD (the date a prediction is due by is a local one).
-export const today = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const realDate = (s: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); if (!m) return false; const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])); return d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3]); };
 
 // expect <name> --test "<op> <value>" --by YYYY-MM-DD --why "…": a new prediction; prints its id.
