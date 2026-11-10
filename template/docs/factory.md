@@ -168,6 +168,24 @@ without judgement calls, it belongs in git.
   otherwise the overseer files a drill unit each run and after pipeline
   changes>
 
+## The build (every session)
+
+What's derived is a function of the commit and the fetched inputs: the
+checks judge what the commit builds, not what this machine holds.
+
+- **Where derived files live:** <fill: the folders, apart from what's
+  written, and how each output's place is keyed by what made it>
+- **Who writes them:** the build, and nothing else. To change an output,
+  change the code or an input and rerun the build (`<fill: the command>`);
+  a hand fix is a pipeline step (What must never be lost).
+- **What the checks read:** what the commit builds, rebuilt or fetched by
+  its key: <fill: how `just check` gets it>
+- **Not committed:** results derived from a build (a check's report, a
+  listing made from the outputs); the build makes them again.
+- **Steps that aren't a function of their inputs:** <fill: each one (a GUI
+  tool that holds state, an export that differs in bytes each run) and
+  what stands in for it (a masked hash, a pinned output), or "none">
+
 ## Done and stopping
 
 - **The factory is done when:** <fill: the satisfied line (Goal), as a

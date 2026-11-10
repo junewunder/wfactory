@@ -2,7 +2,7 @@
 
 The pipeline is the code a factory's units build on: what turns the inputs
 into the outputs the oracle judges. Read this when designing a factory
-([design question 13](../design-questions.md)), at every ramp review, whenever the code starts
+([design question 13](../design-questions.md)), when settling whether the build is a function of the commit (14), at every ramp review, whenever the code starts
 to repeat itself, when a problem found on one case might be every case's,
 and when a shared fix has to reach the cases already done.
 
@@ -116,6 +116,35 @@ from every shape:
 Decide what's stale by content (a hash of the inputs and of the step's
 command or code), never by file times: a copy or a checkout changes times
 without changing a byte.
+
+## The build is a function of the commit
+
+A factory whose derived files live in one folder per machine, written in
+place by units, side scripts and hand edits alike, has checks that judge
+whatever that machine holds: one commit passes here and fails there, and
+CI fills with copies drifting apart (design question 14). Three habits keep
+the build a function of the commit:
+
+- **Store an output under a key of everything that made it:** a hash of
+  its inputs, of the step's code and command, and of the keys of the
+  outputs it reads. Two versions of an output then never share a place,
+  and any machine that holds the key holds the same bytes. Keep the
+  history of a key's misses (what changed), so a step that reruns more
+  than its code changes shows up.
+- **Key a check's result the same way:** the check's own code plus the
+  keys of what it read. An unchanged check on unchanged outputs isn't run
+  again; its stored result stands. Such results are derived, so they live
+  beside the outputs, not in git.
+- **Name the steps that can't be keyed.** A GUI tool that holds state
+  between runs, an export that differs in bytes every run (a timestamp, a
+  generated ID): say so in the spec ("The build"), and name what stands in,
+  such as a hash of the output with the varying bytes masked (the rebuild
+  contract's third point), or an output pinned by its hash and rebuilt
+  only on purpose.
+
+A build tool that already keys outputs by their inputs does all of this;
+most shapes above can sit on one. Writing one by hand, one incident at a
+time, is the cost of finding this late.
 
 ## Libraries to learn from
 

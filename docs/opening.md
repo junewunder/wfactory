@@ -46,7 +46,9 @@ overseer and the owner read the queue's state from the file.
      names; anything it doesn't name waits for the owner. This one has no
      default to take: if they're away, nothing is consented to yet. Don't
      ask what the profile's Machines table already says; machines it
-     doesn't settle are one of the owner's design calls (below).
+     doesn't settle are one of the owner's design calls (below);
+   - **what they allow on their own copies and accounts** (below). This
+     one has no default either.
 
    Step 2 doesn't wait for the answers: research that doesn't need
    them starts as the brief goes out.
@@ -119,6 +121,34 @@ overseer and the owner read the queue's state from the file.
    there that cites their decision. At the probe and the trials, ask over
    the same output which differences they'd keep: each one kept is a
    departure. The oracle reads the page (step 4).
+
+   **What the owner allows on their own copies and accounts.** A session
+   that doesn't know where the owner stands is careful even about work
+   that harms nobody: it argues them out of taking apart software they
+   bought, and the lanes ask leave case by case ("may I run this, build
+   that"), the same question many times over. Ask once, as options that
+   say what each opens up for the work, and take any number of them:
+   - **take apart software they bought:** reverse-engineer it, decompile
+     it, read the code it ships under its own names. This is often where
+     the biggest prior work is (step 2);
+   - **modify it,** even where its terms forbid that;
+   - **read its files and its memory** while it runs;
+   - **script their own accounts and saves.**
+
+   Record the answer, in the owner's words, as a decision on every unit,
+   so each card carries it and no lane asks again:
+
+   ```bash
+   just decide --by owner --scope '*' \
+     --title "What the owner allows on their own copies and accounts: <what they picked>" \
+     --why "<their answer, as they gave it>"
+   ```
+
+   It has **no default**: if they're away, nothing here is opened up until
+   they answer, and the list of defaults taken says this one is still
+   waiting. Whatever they pick, harm to others stays out, and the question
+   says so as it's asked: sharing copies with anyone, cheating against
+   other people, and other people's accounts are never opened up.
 2. **Prior work, first, and every kind of it.** A research issue before
    anything is built. It's done when what it has to fill in, below, is
    filled in, not after some length of time. Look for each kind, in a
@@ -150,6 +180,17 @@ overseer and the owner read the queue's state from the file.
    searched (queries, sites, repos) and what turned up, or "none found". A
    blank row, or a risk with no search beside it, means the research isn't
    done. Prior work found mid-run costs everything built in its place.
+
+   **The owner's allowance decides some of the kinds.** Before the
+   decision "What the owner allows on their own copies and accounts"
+   exists (`just decisions own copies`), the research stays within what
+   needs no answer: other people's tools, output and notes, the vendor's
+   published tooling, and what the target offers on its own (a scripting
+   interface, a test mode). A row that only the answer could open (the
+   target's code by decompiling, its files or memory) reads "waits on what
+   the owner allows" rather than "none found". When the decision is
+   recorded, the research goes back over each kind it opens, in a pass of
+   its own, and fills in those rows.
 3. **Can it be done at all?** The smallest probe that shows the target can
    be reached (one case end to end, by hand if need be), with the result
    that would mean "stop" written down before it runs. A no here costs a
@@ -217,7 +258,8 @@ design questions, only a few are the owner's: the goal's two lines (with
 done and kill, question 4), which differences from the reference are bugs
 (the kind and its two layers, question 2), where they want to look (gates, question 5),
 how the scope grows (question 12), and machines or lanes the profile
-doesn't settle (question 9). Ask them in the brief or as the trials answer
+doesn't settle (question 9). What they allow on their own copies and
+accounts is theirs too, asked in the brief. Ask them in the brief or as the trials answer
 them, so that passing the gate means the factory is ready to start, and
 not that a design round comes next. The rest of the questions are
 mechanics the trials and the skill answer; the owner hears how they were
