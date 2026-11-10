@@ -186,6 +186,12 @@ that calls a model.
       report, a listing made from the outputs): the build makes them
       again, so units don't all rewrite the same generated files.
 
+    The drill (question 11) then tests the build, not the commit: a
+    difference it finds is a step that isn't a function of its inputs, or
+    a copy something other than the build wrote. Report it and file it
+    for whatever wrote it, as drift; it doesn't fail the check of a commit
+    that didn't cause it.
+
     How to key outputs and check results, and what to do with a step that
     can't be made a function of its inputs: [docs/pipelines/](pipelines/README.md),
     "The build is a function of the commit".

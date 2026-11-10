@@ -2,7 +2,8 @@
 
 The pipeline is the code a factory's units build on: what turns the inputs
 into the outputs the oracle judges. Read this when designing a factory
-([design question 13](../design-questions.md)), when settling whether the build is a function of the commit (14), at every ramp review, whenever the code starts
+([design question 13](../design-questions.md)), when settling whether the build is a function of
+the commit (design question 14), at every ramp review, whenever the code starts
 to repeat itself, when a problem found on one case might be every case's,
 and when a shared fix has to reach the cases already done.
 

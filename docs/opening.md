@@ -47,8 +47,10 @@ overseer and the owner read the queue's state from the file.
      default to take: if they're away, nothing is consented to yet. Don't
      ask what the profile's Machines table already says; machines it
      doesn't settle are one of the owner's design calls (below);
-   - **what they allow on their own copies and accounts** (below). This
-     one has no default either.
+   - **what they allow on their own copies and accounts** (below): not
+     what the work may fetch or touch, as above, but what it may do to
+     software and accounts that are theirs. This one has no default
+     either.
 
    Step 2 doesn't wait for the answers: research that doesn't need
    them starts as the brief goes out.
@@ -190,7 +192,8 @@ overseer and the owner read the queue's state from the file.
    target's code by decompiling, its files or memory) reads "waits on what
    the owner allows" rather than "none found". When the decision is
    recorded, the research goes back over each kind it opens, in a pass of
-   its own, and fills in those rows.
+   its own, and fills in those rows; a row the answer leaves closed reads
+   "not allowed by the owner".
 3. **Can it be done at all?** The smallest probe that shows the target can
    be reached (one case end to end, by hand if need be), with the result
    that would mean "stop" written down before it runs. A no here costs a

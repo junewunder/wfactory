@@ -612,21 +612,22 @@ edits all wrote it, and a unit could change its character's folder while
 its code was still on a branch. The checks read that folder, not what the
 commit builds, so one commit passed on one laptop and failed on the
 other. The checks' results were committed, so every unit rewrote the same
-generated files. Over two weeks, 114 of 271 CI runs failed, and 4 of the
-114 were a test catching a broken character. About 58 were copies older
-than the drill's rules, about 20 copies ahead of git, 20 main not
-rebuilding after a shared change, and 12 the upload. The owner then ruled
-that CI publishes what main builds, and the factory grew its own build
+generated files. Over two weeks, 114 of 271 CI runs failed, and only 4 of
+the 114 were the tests failing (one of those on a parser, not a
+character). About 58 were copies older than the drill's rules, about 20
+copies ahead of git, 20 main not rebuilding after a shared change, and 12
+the upload. The owner then ruled that CI publishes what main builds and
+reports drift without going red, and the factory grew its own build
 system one incident at a time: keys per stage, then masking the bytes an
 export changes every run, then keys that count only the code a stage can
 reach (lesson 31 was another of these). The recompiler factory, whose
 build tool already keys outputs by their inputs, had none of this.
 
-**What it cost.** 16.5 of 287 lane session-hours went to sessions
-fixing CI. In the last six days the five characters were red between a
-fifth and half of the time, and a red meant drift far more often than a
-broken character, so a real failure looked like the rest. Then weeks building by hand what a
-build tool keyed by inputs gives on day one.
+**What it cost.** 16.5 of 287 lane session-hours went to sessions fixing
+CI. In the last six days the five characters were red from under a fifth
+to nearly half of the time, and a red meant drift far more often than a
+broken character, so a real failure looked like the rest. Then weeks
+building by hand what a build tool keyed by inputs gives on day one.
 
 **The rule.** Design question 14 settles whether the build is a function
 of the commit. The spec's "The build", which every session gets, says
@@ -634,7 +635,9 @@ where derived files live, that only the build writes them, that the checks
 read what the commit builds, and that results derived from a build aren't
 committed. Outputs and check results are stored under a key of everything
 that made them, and a step that can't be keyed is named in the spec with
-what stands in for it ([docs/pipelines/](pipelines/README.md)).
+what stands in for it ([docs/pipelines/](pipelines/README.md)). Drift the
+drill finds is filed for whatever wrote it, not a red check for the commit
+that ran it.
 
 ## The owner's part
 
