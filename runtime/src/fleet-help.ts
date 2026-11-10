@@ -59,7 +59,9 @@ Usage:
                                           now and its newest note (what became of it); then the rest of the morning-summary events and the
                                           CI that passed; since T ("09:00", "-24 hours"; default:
                                           since this checkout's last fleet start), then the check-in
-                                          offer when one is due (tracker prune --due); with --done,
+                                          offer when one is due (tracker prune --due), and last the
+                                          scorecard's three worst lines and any prediction that came
+                                          due (just scorecard, this machine's lanes); with --done,
                                           how many units were done since then
   factory/fleet.sh beat                   one heartbeat line: lanes busy, waiting, stopped; what each
                                           busy one works on, for how long, and when its session's

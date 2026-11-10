@@ -31,6 +31,7 @@ tracker/
   questions.json      open and answered questions
   decisions.json      every decision, the owner's and agents'
   leases.json         which machine holds which group's data
+  predictions.json    changes expected to move a scorecard figure, by a date
   log.jsonl           append-only events
 .tracker/             gitignored: the computed cache, the viewer, the state clone
 ```
@@ -453,3 +454,31 @@ of context, which makes review the cheap place for a project's standards
 - **Not a turn in the memory budget.** The lane runs the review in place
   of a session, never beside one, and sessions take no turn either; a
   turn would reserve 4G for a process a fraction of that (#116).
+
+## The scorecard
+
+`just scorecard` (`runtime/src/scorecard*.ts`) says where a run's sessions
+and time went: sessions that finished no unit and how they ended, units
+claimed over and over, the review, waiting and CI, and the cost of a
+finished unit. Each line carries the share of the period's session cost or
+lane time it accounts for, and they're ranked by it, so the first three are
+the worst; `fleet summary` ends with those.
+
+- **From the records only.** It reads the tracker's log, the lanes' run
+  index and events and the heavy-job history, and nothing else: no model,
+  no network, no daemon. The retros that paid off each began by tallying
+  these records by hand. A figure has to be cheap and the same every time
+  it's taken before anything can propose a fix, or say afterwards whether
+  the fix moved it. A model's reading of the transcripts would be neither.
+- **What isn't recorded says so.** It prints "not recorded" and what the
+  loop would have to record, rather than guess from text (what a lane
+  waited for is in a log line's words only, so it isn't counted). A record
+  it doesn't understand is counted as unknown and named, so a new kind of
+  event shows up instead of vanishing from the figures.
+- **Predictions are tracker data.** A change states the figure it should
+  move, by when and why (`just scorecard expect`), on main beside the
+  decisions, so the scorecard can say "held" or "missed" once the date has
+  passed, on any machine, until someone reads it and settles it.
+- **This machine's lanes.** The run index and events stay in each lane's
+  clone, so the session, cost and waiting figures cover the machine it
+  runs on; units, the review and CI come from the log, every machine's.

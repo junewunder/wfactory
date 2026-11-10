@@ -470,6 +470,12 @@ end-of-run report sums them up in one line.
        the night), with the numbers;
      - what's waiting on the owner: the questions and gates (`just
        questions`), and what `just next` would do once they answer.
+   - Where the run's sessions and time went: `just fleet summary` ends
+     with the scorecard's three worst lines (each with its share of the
+     session cost or lane time), and any prediction that came due, held or
+     missed, with its figure. Give them as they are; `just scorecard
+     --since <start>` has the rest, from the records alone. A missed
+     prediction says a change didn't do what it was for: name the change.
    - Then what got done: `just fleet summary --done` for the count, never
      a count of your own; `just log --since <start>` for what; and the CI
      that passed and published (the end of `just fleet summary`);

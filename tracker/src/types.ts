@@ -360,19 +360,35 @@ export interface Derived {
 // The thread overseeing the factory (leases.json "overseer"): the newest to attach wins.
 export interface Overseer { id: string; host: string; at: string }
 
+// A prediction that a change moves a scorecard figure (`just scorecard expect`): the figure's
+// name, the test it should pass by its date ("< 0.10"), and why. settled: closed by hand once its
+// result is read (`just scorecard settle`), so the scorecard stops showing it.
+export interface Prediction {
+  id: string;
+  name: string;
+  op: "<" | "<=" | ">" | ">=" | "=";
+  value: number;
+  by: string;       // the date it's judged on, YYYY-MM-DD
+  why: string;
+  at: string;
+  who: string;      // the session (tag) that made it
+  settled?: { at: string; note: string };
+}
+
 // Everything a command works on: the files' contents, with indexes, and what it changed.
 export interface State {
   project: Project;
   groups: Group[];
   questions: Question[];
   decisions: Decision[];
+  predictions: Prediction[];
   leases: Lease[];
   hosts: Record<string, string>;
   overseer: Overseer | null;
   byId: Map<string, Unit>;
   groupOf: Map<string, Group>;
   groupById: Map<string, Group>;
-  // What to write: "project", "questions", "decisions", "leases", "group:<id>".
+  // What to write: "project", "questions", "decisions", "predictions", "leases", "group:<id>".
   dirty: Set<string>;
   logs: LogEntry[];
   _memo?: Map<string, Derived> | null;

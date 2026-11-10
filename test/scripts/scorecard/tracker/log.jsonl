@@ -1,0 +1,41 @@
+{"at":"2026-11-01T07:00:00Z","actor":"session","tag":"setup","host":"fxhost","cmd":"add-group","text":"new group: Alpha"}
+{"at":"2026-11-01T07:00:01Z","actor":"session","tag":"setup","host":"fxhost","cmd":"add-group","text":"new group: Beta"}
+{"at":"2026-11-01T07:00:02Z","actor":"session","tag":"setup","host":"fxhost","cmd":"add-unit","id":"alpha/four","text":"Four tries: added"}
+{"at":"2026-11-01T07:00:02Z","actor":"session","tag":"setup","host":"fxhost","cmd":"add-unit","id":"alpha/sent","text":"Sent back: added"}
+{"at":"2026-11-01T07:00:02Z","actor":"session","tag":"setup","host":"fxhost","cmd":"add-unit","id":"alpha/ok","text":"Landed unreviewed: added"}
+{"at":"2026-11-01T07:00:02Z","actor":"session","tag":"setup","host":"fxhost","cmd":"add-unit","id":"beta/oom","text":"Out of memory: added"}
+{"at":"2026-11-01T07:00:02Z","actor":"session","tag":"setup","host":"fxhost","cmd":"add-unit","id":"beta/ask","text":"Asks: added"}
+{"at":"2026-11-01T07:00:02Z","actor":"session","tag":"setup","host":"fxhost","cmd":"add-unit","id":"beta/stuck","text":"Stuck: added"}
+{"at":"2026-11-01T07:00:02Z","actor":"session","tag":"setup","host":"fxhost","cmd":"add-unit","id":"beta/fine","text":"Fine: added"}
+{"at":"2026-11-01T08:00:00Z","actor":"loop","tag":"s01","host":"fxhost","cmd":"claim","id":"alpha/four","text":"Four tries: claimed"}
+{"at":"2026-11-01T08:00:30Z","actor":"loop","tag":"s01","host":"fxhost","cmd":"unclaim","id":"alpha/four","text":"Four tries: given back unstarted","unstarted":true}
+{"at":"2026-11-01T08:05:00Z","actor":"loop","tag":"s02","host":"fxhost","cmd":"claim","id":"alpha/four","text":"Four tries: claimed"}
+{"at":"2026-11-01T08:15:10Z","actor":"loop","tag":"s02","host":"fxhost","cmd":"settle","id":"alpha/four","text":"Four tries: session ended mid-unit"}
+{"at":"2026-11-01T08:20:00Z","actor":"loop","tag":"s03","host":"fxhost","cmd":"claim","id":"alpha/four","text":"Four tries: claimed (picking up after s02)"}
+{"at":"2026-11-01T08:39:00Z","actor":"loop","tag":"s03","host":"fxhost","cmd":"unclaim","id":"alpha/four","text":"Four tries: handed back by its session, its work kept (1 commit on its branch); ready"}
+{"at":"2026-11-01T08:45:00Z","actor":"loop","tag":"s04","host":"fxhost","cmd":"claim","id":"alpha/four","text":"Four tries: claimed (picking up after s03)"}
+{"at":"2026-11-01T09:15:20Z","actor":"loop","tag":"s04","host":"fxhost","cmd":"settle","id":"alpha/four","text":"Four tries: session ended mid-unit"}
+{"at":"2026-11-01T09:20:00Z","actor":"loop","tag":"s05","host":"fxhost","cmd":"claim","id":"alpha/sent","text":"Sent back: claimed"}
+{"at":"2026-11-01T09:58:00Z","actor":"loop","tag":"s05","host":"fxhost","cmd":"done","id":"alpha/sent","text":"Sent back: done"}
+{"at":"2026-11-01T10:02:00Z","actor":"loop","tag":"manual","host":"fxhost","cmd":"reopen","id":"alpha/sent","text":"Sent back: back to ready: the loop's review asked for fixes"}
+{"at":"2026-11-01T10:05:00Z","actor":"loop","tag":"s06","host":"fxhost","cmd":"claim","id":"alpha/sent","text":"Sent back: claimed"}
+{"at":"2026-11-01T10:34:00Z","actor":"loop","tag":"s06","host":"fxhost","cmd":"done","id":"alpha/sent","text":"Sent back: done"}
+{"at":"2026-11-01T10:37:00Z","actor":"loop","tag":"manual","host":"fxhost","cmd":"block","id":"alpha/sent","text":"Sent back: stuck: the loop's review asked for fixes a second time"}
+{"at":"2026-11-01T10:40:00Z","actor":"loop","tag":"s07","host":"fxhost","cmd":"claim","id":"beta/oom","text":"Out of memory: claimed"}
+{"at":"2026-11-01T10:55:30Z","actor":"loop","tag":"s07","host":"fxhost","cmd":"settle","id":"beta/oom","text":"Out of memory: session ended mid-unit"}
+{"at":"2026-11-01T11:00:00Z","actor":"loop","tag":"s08","host":"fxhost","cmd":"claim","id":"beta/ask","text":"Asks: claimed"}
+{"at":"2026-11-01T11:03:00Z","actor":"loop","tag":"s08","host":"fxhost","cmd":"ask","text":"asked the owner: Which way?","q":"q/which-way"}
+{"at":"2026-11-01T11:04:00Z","actor":"loop","tag":"s08","host":"fxhost","cmd":"block","id":"beta/ask","text":"Asks: waiting on the owner's answer to \"Which way?\""}
+{"at":"2026-11-01T11:10:00Z","actor":"loop","tag":"s09","host":"fxhost","cmd":"claim","id":"beta/stuck","text":"Stuck: claimed"}
+{"at":"2026-11-01T11:19:00Z","actor":"loop","tag":"s09","host":"fxhost","cmd":"block","id":"beta/stuck","text":"Stuck: stuck: a permission was refused"}
+{"at":"2026-11-01T12:30:05Z","actor":"loop","tag":"c01","host":"fxhost","cmd":"ci-start","text":"Alpha: CI started (build, test)"}
+{"at":"2026-11-01T12:49:50Z","actor":"loop","tag":"c01","host":"fxhost","cmd":"ci-fail","text":"Alpha: CI failed: test failed (exit 1, tried 1 time): 2 tests failed"}
+{"at":"2026-11-01T12:52:05Z","actor":"loop","tag":"c02","host":"fxhost","cmd":"ci-start","text":"Beta: CI started (build, test)"}
+{"at":"2026-11-01T13:06:50Z","actor":"loop","tag":"c02","host":"fxhost","cmd":"ci-pass","text":"Beta: CI passed (build, test)"}
+{"at":"2026-11-01T13:10:00Z","actor":"loop","tag":"s10","host":"fxhost","cmd":"claim","id":"beta/fine","text":"Fine: claimed"}
+{"at":"2026-11-01T13:49:00Z","actor":"loop","tag":"s10","host":"fxhost","cmd":"done","id":"beta/fine","text":"Fine: done"}
+{"at":"2026-11-01T13:52:00Z","actor":"loop","tag":"manual","host":"fxhost","cmd":"merged","id":"beta/fine","text":"Fine: on main"}
+{"at":"2026-11-01T14:50:00Z","actor":"loop","tag":"s11","host":"fxhost","cmd":"claim","id":"alpha/ok","text":"Landed unreviewed: claimed"}
+{"at":"2026-11-01T15:39:00Z","actor":"loop","tag":"s11","host":"fxhost","cmd":"done","id":"alpha/ok","text":"Landed unreviewed: done"}
+{"at":"2026-11-01T15:42:00Z","actor":"loop","tag":"manual","host":"fxhost","cmd":"merged","id":"alpha/ok","text":"Landed unreviewed: on main"}
+{"at":"2026-11-01T16:00:00Z","actor":"loop","tag":"manual","host":"fxhost","cmd":"lanes-stopped","text":"fxhost: the last lane stopped and tidied up; the machine may sleep now"}

@@ -1,0 +1,14 @@
+started	tag	loop	unit	result	turns	cost_usd	minutes
+20261101-080000	s01		Four tries (alpha/four)	Gave it back unstarted.	3	0.10	0
+20261101-080500	s02		Four tries (alpha/four)	Ran out of time.	20	1.00	10
+20261101-082000	s03		Four tries (alpha/four)	Handed it back with a commit.	30	2.00	20
+20261101-084500	s04		Four tries (alpha/four)		25	1.00	30
+20261101-092000	s05		Sent back (alpha/sent)	Done.	50	3.00	40
+20261101-100500	s06		Sent back (alpha/sent)	Done again.	40	2.00	30
+20261101-104000	s07		Out of memory (beta/oom)		10	1.50	15
+20261101-110000	s08		Asks (beta/ask)	Asked which way.	8	0.40	5
+20261101-111000	s09		Stuck (beta/stuck)	Blocked.	9	0.50	10
+20261101-123000	c01		Alpha CI (alpha)	CI failed: test			20
+20261101-125200	c02		Beta CI (beta)	CI passed			15
+20261101-131000	s10		Fine (beta/fine)	Done.	45	4.00	40
+20261101-145000	s11		Landed unreviewed (alpha/ok)	Done.	55	4.50	50

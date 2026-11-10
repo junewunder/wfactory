@@ -1,0 +1,10 @@
+{
+  "id": "alpha",
+  "title": "Alpha",
+  "ci": { "steps": ["build", "test"] },
+  "units": [
+    { "id": "alpha/four", "title": "Four tries" },
+    { "id": "alpha/sent", "title": "Sent back" },
+    { "id": "alpha/ok", "title": "Landed unreviewed" }
+  ]
+}

@@ -1,0 +1,1 @@
+{"fx\ttimeout 600 bash -c make build alpha":{"peaks":[1000],"secs":[100,120,110]},"fx\ttimeout 600 bash -c make build beta":{"peaks":[1000],"secs":[130]},"fx\ttimeout 600 bash -c make test alpha":{"peaks":[1000],"secs":[300]},"other\ttimeout 600 bash -c make build alpha":{"peaks":[1],"secs":[9999]}}
