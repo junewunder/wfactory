@@ -1,0 +1,8 @@
+2026-11-01 09:15	fxhost	1	silent	Four tries (alpha/four) wrote nothing for 30 min with no tool call open, so it was ended
+2026-11-01 10:55	fxhost	1	oom-kill	session s07 on Out of memory (beta/oom) was killed: out of memory at 8G	beta/oom
+2026-11-01 11:55	fxhost	1	idle	lane 1 on fxhost has had nothing to do for 30 min: nothing workable: 1 unit in progress elsewhere
+2026-11-01 12:00	fxhost	1	usage-pause	under 8% of the 5-hour window left; lanes resume at 12:30
+2026-11-01 12:30	fxhost	1	usage-resume	the 5-hour window reset at 12:30
+2026-11-01 14:20	fxhost	1	idle	lane 1 on fxhost has had nothing to do for 30 min: nothing workable: 1 unit waiting for a resource
+2026-11-01 15:42	fxhost	1	review-skipped	Landed unreviewed (alpha/ok) landed without the loop's review: the review's CLI failed
+2026-11-01 16:00	fxhost	1	lane-stop	out of time

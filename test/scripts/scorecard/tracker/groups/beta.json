@@ -1,0 +1,11 @@
+{
+  "id": "beta",
+  "title": "Beta",
+  "ci": { "steps": ["build", "test"] },
+  "units": [
+    { "id": "beta/oom", "title": "Out of memory" },
+    { "id": "beta/ask", "title": "Asks" },
+    { "id": "beta/stuck", "title": "Stuck" },
+    { "id": "beta/fine", "title": "Fine" }
+  ]
+}

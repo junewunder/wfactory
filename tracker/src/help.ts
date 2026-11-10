@@ -11,6 +11,7 @@ State lives in the repo's tracker/ folder as JSON, written only by this CLI:
   tracker/templates/<t>.json  unit templates ("add lexer" makes its units)
   tracker/questions.json      questions for the owner, open and answered
   tracker/decisions.json      the owner's answers and agents' judgement calls
+  tracker/predictions.json    changes expected to move a scorecard figure (just scorecard expect)
   tracker/leases.json         which machine leases which group's data, and each machine's heartbeat
   tracker/log.jsonl           one line per write (merge=union)
   .tracker/                   gitignored: probe cache, view.html, lock, and
@@ -108,6 +109,8 @@ Setting up:
   data <group> | --unit <id> | --all    where a group's data lives (factory/store.sh)
   rebuilt [add <glob> --why "…"]        files a pipeline step rebuilds: a copy down doesn't keep them
   state <id> [--branch|--by|--host]     one unit's status key, for scripts
+  expect <name> --test "< 0.1" --by D --why "…"   just scorecard expect: a figure a change should move
+  expect-settle <id> --note "…"         just scorecard settle: a prediction read and closed
   aside-set <id> <set> | --clear        store.sh: where its unfinished outputs were set aside
   busy [--except <id>] [--live]         groups with outputs here not on main yet (checks skip them)
   dir                                   where the state's tracker/ folder is
@@ -183,6 +186,12 @@ const UNIT_FLAGS = `Unit flags: --title "…" (60 characters at most) --detail "
   --data <group>|none|default (whose data it works on; default: its own group's, if that has data)
   --reads input:part,…|none|default (the read-only inputs it needs copied down; default: store.reads)`;
 export const HELP: Record<string, string> = {
+  expect: `expect <name> --test "<op> <value>" --by YYYY-MM-DD --why "…"
+A prediction that a change moves a scorecard figure: the figure's name, the test it should pass
+(op one of < <= > >= =), the date it's judged on (today or later) and why. Prints its id. Use
+\`just scorecard expect\`, which checks the name is one of the scorecard's figures first.`,
+  "expect-settle": `expect-settle <id> --note "…"
+Close a prediction once its result is read: the scorecard stops showing it. Use \`just scorecard settle\`.`,
   next: `next [--claim] [--group G] [--skip-uses resource,…] [--skip-groups group,…] [--skip-units id,…] [--time-left S]
   [--last-call-in S --last-call-groups group,… --last-call-uses resource,…] [--json]
 The unit to work now, with its card. --claim claims it for this session.

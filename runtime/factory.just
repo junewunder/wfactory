@@ -188,6 +188,12 @@ usage:
 runs *args:
     @"${FACTORY_NODE:-node}" "{{source_directory()}}/main.mjs" runs "$@"
 
+# Where a run's sessions and time went, from the records alone (just scorecard [--since <when>] [--json]; --names lists the figures; just scorecard expect <name> '<op> <value>' --by <date> --why "…" records a prediction, just scorecard settle <id> --note "…" closes one).
+[positional-arguments]
+[no-exit-message]
+scorecard *args:
+    @"${FACTORY_NODE:-node}" "{{source_directory()}}/main.mjs" scorecard "$@"
+
 # Run a command in a memory-capped scope, with its share of the machine's memory budget (FACTORY_MEM=12G just capped … to say how much; else its past peaks), so a runaway child can't take the session down. A kill says so and reaches the overseer (the skill's runtime/capped.sh, beside this file).
 [positional-arguments]
 [no-exit-message]

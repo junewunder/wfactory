@@ -28,6 +28,7 @@ const USAGE = `main.ts <command> [args]: the runtime's commands (<command> --hel
   to-stubs   switch a factory from copies of the loop's scripts to the stubs (scripts/to-stubs.sh)
   smoke      the install's smoke test: a toy factory worked by one lane (scripts/smoke.sh)
   runs       the last loop iterations on this machine (just runs)
+  scorecard  where a run's sessions and time went, from the records (just scorecard)
   prompt     the loop's worker prompt, then the project's own rules (just prompt)
   oversee-guide  the overseer's card, or with --full its guide, then the project's additions (just oversee-guide)
   until      wait up to some seconds for a check to pass, or that long (just until)
@@ -54,6 +55,7 @@ const commands: Record<string, () => Promise<number>> = {
   "to-stubs": async () => (await import("./src/stubs.ts")).toStubsCli(args),
   smoke: async () => (await import("./src/smoke.ts")).smokeCli(args),
   runs: async () => (await import("./src/recipes.ts")).runsCli(args),
+  scorecard: async () => (await import("./src/scorecard.ts")).scorecardCli(args),
   prompt: async () => (await import("./src/recipes.ts")).promptCli(args),
   "oversee-guide": async () => (await import("./src/recipes.ts")).overseeGuideCli(args),
   until: async () => (await import("./src/recipes.ts")).untilCli(args),

@@ -7,6 +7,7 @@ import { cat, chomp, dateHm, lines, say } from "./fleet-util.ts";
 import { EVENTS_OF_A_UNIT, EVENTS_PROBLEM } from "./fleet-help.ts";
 import { JOURNAL } from "./fleet-scripts.ts";
 import type { Fleet } from "./fleet-ctx.ts";
+import { summaryLines } from "./scorecard.ts";
 
 // fleet attach [--as <id>]: this thread oversees the factory now, and what happened since the last one.
 export function attach(f: Fleet, args: string[]): number {
@@ -148,6 +149,9 @@ export function summary(f: Fleet, args: string[]): number {
   byKind(rest);
   if (c.ok.length) { say("  Group CI:"); for (const l of c.ok) say(`  ${l}`); }
   checkin();
+  // Last, the scorecard's three worst lines since then and any prediction that came due (this
+  // machine's lanes; scorecard.ts), so the end-of-run report carries them.
+  for (const l of summaryLines(env, process.cwd(), since)) say(l);
   return 0;
 }
 

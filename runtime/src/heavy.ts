@@ -97,7 +97,7 @@ const dir = (env: NodeJS.ProcessEnv) => {
   fs.mkdirSync(d, { recursive: true });
   return d;
 };
-const jobsHome = (env: NodeJS.ProcessEnv) =>
+export const jobsHome = (env: NodeJS.ProcessEnv) =>
   env.FACTORY_JOBS_HOME || path.join(env.XDG_STATE_HOME || path.join(os.homedir(), ".local", "state"), "wfactory", "jobs");
 // The project, the same in each of its lanes' clones (<checkout>-lane<N>).
 const project = (env: NodeJS.ProcessEnv) => path.basename(pwd(env)).replace(/-lane[0-9]+$/, "");

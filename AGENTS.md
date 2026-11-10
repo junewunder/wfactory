@@ -24,7 +24,8 @@ everything else is the code those two run.
   `src/session.ts`, branches and landing in `src/landing.ts`, and the
   tracker run in the loop's own process (`src/tr.ts`). The loop, the store
   and the fleet keep their parts in modules beside them (`loop-*.ts`,
-  `store-*.ts`, `fleet-*.ts`), one job each; each one's header comment
+  `store-*.ts`, `fleet-*.ts`), one job each, as does the scorecard
+  (`scorecard*.ts`, `just scorecard`: figures from the records alone); each one's header comment
   lists where its parts are. Each ported script
   that something runs by path keeps its `.sh` as a one-line launcher that
   runs its command through `main.mjs`, which finds Node 26 (`launch.mjs`,
@@ -52,7 +53,7 @@ everything else is the code those two run.
   temp repo, running a command, the tracker in-process, a machine to run
   the skill's scripts and recipes on, a factory on a local bare origin with
   lane clones, the branches suite's fake `claude`, systemd
-  reads), `scripts/`, the suite for `scripts/` and the recipes, `branches/`,
+  reads), `scripts/`, the suite for `scripts/` and the recipes (the scorecard's hand-written factory in `scripts/scorecard/`), `branches/`,
   lanes racing on one origin, `store/`, group data on a local store moved by
   lease between laptops, and `loop/`, the loop, lanes, fleet, long jobs and
   the daemon, each a file per area. In `loop/`, `factory.ts` has the loop's
@@ -99,7 +100,7 @@ Or one suite at a time:
 
 ```bash
 node --test tracker/test/       # the tracker CLI, about 13 seconds
-node --test test/scripts/       # init, the profile, factory-diff, to-stubs, the recipes, about 6 seconds
+node --test test/scripts/       # init, the profile, factory-diff, to-stubs, the recipes, the scorecard, about 6 seconds
 node --test test/branches/      # lanes racing on a local bare origin, about 12 seconds
 node --test test/store/         # group data on a local store, moved by lease, about 24 seconds
 node --test test/loop/          # the loop, lanes, fleet, long jobs, the daemon, with a fake claude, about 38 seconds

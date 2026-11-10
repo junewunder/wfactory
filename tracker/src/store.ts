@@ -6,6 +6,7 @@
 //   tracker/templates/<t>.json  unit templates ("add Milo" makes his units)
 //   tracker/questions.json      questions for the owner, open and answered
 //   tracker/decisions.json      the owner's answers and agents' judgement calls
+//   tracker/predictions.json    what changes are expected to move on the scorecard (just scorecard expect)
 //   tracker/leases.json         which machine leases which group's data, and each machine's heartbeat
 //   tracker/log.jsonl           one line per write (merge=union)
 //   .tracker/                   gitignored: probe cache, view.html, lock, and main/
@@ -18,7 +19,7 @@ import { spawnSync } from "node:child_process";
 import { ctx, git } from "./ctx.ts";
 import { procStart } from "./proc.ts";
 import { LockBusy, NetError, die, now, writeAtomic } from "./text.ts";
-import type { Decision, Group, LogEntry, Project, Question, State, Unit, Lease, Overseer } from "./types.ts";
+import type { Decision, Group, LogEntry, Prediction, Project, Question, State, Unit, Lease, Overseer } from "./types.ts";
 
 export const SCHEMA = 1;
 // How priorities rank (urgentToPriority): 2 = a unit by the higher of its own and its group's.
@@ -33,6 +34,7 @@ function files() {
     templates: path.join(TDIR, "templates"),
     questions: path.join(TDIR, "questions.json"),
     decisions: path.join(TDIR, "decisions.json"),
+    predictions: path.join(TDIR, "predictions.json"),
     leases: path.join(TDIR, "leases.json"),
     log: path.join(TDIR, "log.jsonl"),
     cache: path.join(CDIR, "cache.json"),
@@ -143,6 +145,7 @@ export function load(): State {
     project, groups,
     questions: readJSON<{ questions: Question[] }>(P.questions, { questions: [] }).questions,
     decisions: readJSON<{ decisions: Decision[] }>(P.decisions, { decisions: [] }).decisions,
+    predictions: readJSON<{ predictions: Prediction[] }>(P.predictions, { predictions: [] }).predictions,
     leases: L.leases || [], hosts: L.hosts || {}, overseer: L.overseer || null,
     byId: new Map(), groupOf: new Map(), groupById: new Map(), dirty: new Set(), logs: [],
   };
@@ -207,6 +210,7 @@ function save(T: State) {
   if (d.has("project")) writeAtomic(P.project, pretty(T.project) + "\n");
   if (d.has("questions")) writeAtomic(P.questions, pretty({ questions: T.questions }) + "\n");
   if (d.has("decisions")) writeAtomic(P.decisions, pretty({ decisions: T.decisions }) + "\n");
+  if (d.has("predictions")) writeAtomic(P.predictions, pretty({ predictions: T.predictions }) + "\n");
   if (d.has("leases")) writeAtomic(P.leases, pretty({ leases: T.leases, ...(Object.keys(T.hosts).length ? { hosts: T.hosts } : {}), ...(T.overseer ? { overseer: T.overseer } : {}) }) + "\n");
   for (const g of T.groups) {
     if (!d.has("group:" + g.id)) continue;

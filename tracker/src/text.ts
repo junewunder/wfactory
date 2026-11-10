@@ -14,6 +14,8 @@ export const BUSY = 75;
 export const die = (msg: string): never => { throw new UsageError(msg); };
 
 export const now = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
+// Today's date here, as YYYY-MM-DD (a prediction's date is a local one: commands/expect.ts).
+export const today = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export const slugify = (s: string, max = 40) => {
   let out = s.toLowerCase().normalize("NFKD").replace(/[^\w\s.-]/g, " ").replace(/[_\s]+/g, "-")

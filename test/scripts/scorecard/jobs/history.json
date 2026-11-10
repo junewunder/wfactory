@@ -1,0 +1,43 @@
+{
+ "fx\tbash -c f=$1; shift; SECONDS=0; \"$@\"; rc=$?; echo \"$SECONDS\" > \"$f\"; exit $rc ci-step runs/ci-20261101-123005-alpha-build.log.secs timeout 600 bash -c make build alpha": {
+  "peaks": [
+   1000
+  ],
+  "secs": [
+   100
+  ]
+ },
+ "fx\tbash -c f=$1; shift; SECONDS=0; \"$@\"; rc=$?; echo \"$SECONDS\" > \"$f\"; exit $rc ci-step runs/ci-20261101-125205-beta-build.log.secs timeout 600 bash -c make build beta": {
+  "peaks": [
+   1000
+  ],
+  "secs": [
+   130
+  ]
+ },
+ "fx\tbash -c f=$1; shift; SECONDS=0; \"$@\"; rc=$?; echo \"$SECONDS\" > \"$f\"; exit $rc ci-step runs/ci-20261101-125205-beta-test.log.secs timeout 600 bash -c make test beta": {
+  "peaks": [
+   1000
+  ],
+  "secs": [
+   280
+  ]
+ },
+ "fx\ttimeout 600 bash -c make build alpha": {
+  "peaks": [
+   1000
+  ],
+  "secs": [
+   110,
+   120
+  ]
+ },
+ "other\tbash -c f=$1; shift; SECONDS=0; \"$@\"; rc=$?; echo \"$SECONDS\" > \"$f\"; exit $rc ci-step runs/ci-20261101-123005-alpha-build.log.secs timeout 600 bash -c make build alpha": {
+  "peaks": [
+   1
+  ],
+  "secs": [
+   9999
+  ]
+ }
+}

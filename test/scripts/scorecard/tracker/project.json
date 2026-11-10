@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "name": "fx",
+  "ranking": 2,
+  "ci": {
+    "steps": {
+      "build": { "cmd": "make build {group}" },
+      "test": { "cmd": "make test {group}" }
+    }
+  }
+}
