@@ -2,7 +2,7 @@
 // `loop.sh --help`). This is the run, from start to its exit steps; its parts are its own modules:
 // how it starts (loop-start.ts), its clock (loop-clock.ts), what it takes next (loop-claim.ts), a
 // unit's session (loop-unit.ts), the review before a branch lands (review.ts), group CI (loop-ci.ts), out-of-memory kills (loop-oom.ts), its
-// locks (loop-locks.ts), its heartbeat (loop-beat.ts), the ci.affected hook (loop-affected.ts) and restarting on a newer copy (loop-restart.ts). Branches and landing are
+// locks (loop-locks.ts), its heartbeat (loop-beat.ts), the usage pause (loop-usage.ts), the ci.affected hook (loop-affected.ts) and restarting on a newer copy (loop-restart.ts). Branches and landing are
 // landing.ts's; one session is session.ts's; the tracker runs in this process (tr.ts).
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -19,7 +19,7 @@ import { measured } from "./capped.ts";
 import { platform } from "./os.ts";
 import { dropRecord } from "./daemon.ts";
 import { tr, trOut, trWait } from "./tr.ts";
-import { readUsage, usageCheck } from "./usage.ts";
+import { usagePause } from "./loop-usage.ts";
 import { HELP } from "./loop-help.ts";
 import { Clock } from "./loop-clock.ts";
 import { look, type Waiting } from "./loop-claim.ts";
@@ -31,7 +31,7 @@ import { configure, dryRun, options, runClock, sessionPrompt, takeCheckout, type
 import { sessionAdd, sessionBase, workUnit } from "./loop-unit.ts";
 import { affectedLines, ciAffected } from "./loop-affected.ts";
 import { runReview } from "./review.ts";
-import { exe, exists, hmAt, isInt, killTree, probeCmd, rm } from "./loop-util.ts";
+import { exe, exists, hmAt, killTree, probeCmd, rm } from "./loop-util.ts";
 
 export { HELP };
 const HERE = path.dirname(path.dirname(fileURLToPath(import.meta.url)));   // the skill's runtime/, as deployed
@@ -363,18 +363,8 @@ export class Loop {
       }
       if (this.mainRed()) break;
 
-      // ---- usage: pause between units near the 5-hour limit
-      const root = env.FACTORY_ROOT!, lm = [...root.matchAll(/-lane[0-9]/g)].pop();
-      const uc = usageCheck(readUsage(lm ? root.slice(0, lm.index) : root), env);
-      const slack = Number(env.FACTORY_USAGE_SLACK || 60);
-      if (uc.code === 4 && isInt(uc.out)) {
-        const at = hmAt(Number(uc.out));
-        log(`usage pause: under ${env.FACTORY_USAGE_PAUSE_LEFT || 8}% of the 5-hour window left; resuming at ${at}`);
-        this.event("usage-pause", `under ${env.FACTORY_USAGE_PAUSE_LEFT || 8}% of the 5-hour window left; lanes resume at ${at}`);
-        if (!(await this.nap(Number(uc.out) - epoch() + slack))) continue;
-        log("usage resume: the 5-hour window reset"); this.event("usage-resume", `the 5-hour window reset at ${at}`);
-        continue;
-      }
+      // ---- usage: pause between units near the 5-hour limit, or ahead of the week's line (loop-usage.ts)
+      if (await usagePause(this)) continue;
 
       const next = await look(this);
       if (next.kind === "again") continue;

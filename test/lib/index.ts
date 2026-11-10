@@ -250,6 +250,9 @@ export function workspace() {
     // The heavy jobs' budget, slots and history are the test's own, on a made-up machine with
     // memory to spare (/proc/meminfo's format), never this machine's.
     FACTORY_CPU_LOCKS: at("cpu"), FACTORY_JOBS_HOME: at("jobs"), FACTORY_MEMINFO: at("meminfo"),
+    // The machine's one usage reading, which every factory's lanes on it act on, is the test's
+    // own too: never this machine's (its real lanes would act on a test's made-up reading).
+    FACTORY_USAGE_FILE: at("usage.json"),
   });
   fs.mkdirSync(at("bin"));
   fs.writeFileSync(at("meminfo"), "MemTotal:       268435456 kB\nMemAvailable:   268435456 kB\n");

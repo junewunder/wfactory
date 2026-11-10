@@ -91,8 +91,9 @@ Usage:
                                           a headless desktop), and remove lane clones past
                                           docs/machines.md's count that hold nothing origin
                                           lacks. The overseer's last step.
-  factory/fleet.sh usage                  how much of the plan is left, as each machine's
-                                          transcripts last saw it; trust the newest
+  factory/fleet.sh usage                  how much of the plan is left, where the week's line is
+                                          and until when the lanes pause for it, as each
+                                          machine's transcripts last saw it; trust the newest
   factory/fleet.sh run <machine> <command…>   run a command in that machine's checkout
 
 Examples:

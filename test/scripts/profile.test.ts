@@ -46,6 +46,32 @@ describe("get and machines", () => {
   test("asks which", () => { has(pfAll("get").stdout, "which setting?"); });
 });
 
+// "stop below" was the fixed floor under the week's usage; the row is "keep back" now.
+describe("a row under its old name", () => {
+  let full = "", r = { code: -1, stdout: "", stderr: "" }, both = "";
+  test("profile.sh check: a profile with \"stop below\" is complete still", () => {
+    full = fs.readFileSync(P, "utf8");
+    fs.writeFileSync(P, full.replace("| keep back | 15 |", "| stop below | 20 |"));
+    r = pf("check");
+    fs.writeFileSync(P, full.replace("| keep back | 15 |", "| keep back | 15 |\n| stop below | 20 |"));
+    both = pf("check").stderr;
+    assert.equal(r.code, 0);
+    assert.equal(chomp(r.stdout), `profile: ${P} is complete`);
+  });
+  test("  and says to rename it", () => { has(r.stderr, `has a "stop below" row: rename it to "keep back"`); });
+  test("  or to remove it, beside a \"keep back\" row", () => { has(both, `has a "stop below" row beside its "keep back" row: remove it`); });
+  test("  its value still parses", () => {
+    fs.writeFileSync(P, full.replace("| keep back | 15 |", "| stop below | 20 |"));
+    assert.equal(out("get", "stop below"), "20");
+  });
+  test("a profile without it: check says nothing more", () => {
+    fs.writeFileSync(P, full);
+    assert.equal(pf("check").stderr, "");
+  });
+  test("the template's row is keep back, 15", () => { assert.equal(out("get", "keep back"), "15"); });
+  after(() => { if (full) fs.writeFileSync(P, full); });
+});
+
 describe("no machines", () => {
   let full = "";
   test("profile.sh check: no machines, exit 2", () => {

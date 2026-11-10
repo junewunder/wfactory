@@ -181,10 +181,34 @@ one machine.
 transcript carries `rate_limit_event` lines with the share used and the
 reset time, for the 5-hour window and the week. Under the profile's "pause
 below" of the 5-hour window, every lane pauses between units and resumes at
-the reset. Nothing acts on the week's figure: a fixed floor under it
-(stop with 15% left) ended weeks early and left their last share unused,
-and its replacement isn't settled yet. Each
-machine only knows what its own last session saw, so readings carry their
+the reset.
+
+The week is paced against a line. A fixed floor under the week's figure
+(stop with 15% left) ended weeks early and left their last share unused, and
+with nothing in its place a week either ran out before its reset, the lanes
+sitting until someone noticed, or ended with a share unused, so the owner
+paced by hand. The line: at any moment the lanes may have used the share of
+the week that has gone by, times what's left once the owner's share is kept
+back (the profile's "keep back", 15% by default; the week began 7 days before
+its reset). Ahead of the line, every lane pauses between units until the
+moment the line reaches what's used; on it or behind it, they carry on. That
+moment is worked out from the reading and the clock when the lane pauses, so
+a paused lane resumes without a new session to produce a reading. Lanes on
+the line reach the reset with the share kept back left and nothing else
+(with 0 kept back, nothing at all), which is what the floor got wrong; the
+unit tests run such a week to its end. A lane that could work faster than the
+line pauses after most units, for about as long as the unit's share of the
+week takes to go by.
+
+The plan is shared by every factory on a machine, and a factory reads only
+its own lanes' transcripts. So each lane writes the newest reading it sees
+to one file in the machine's wfactory state folder, and every factory's
+lanes there act on the newest in it, for both windows. Nothing keeps a list
+of the factories. The owner's interactive sessions leave no reading on disk
+(their transcripts carry no `rate_limit_event`; the CLI shows the figures
+only to a status line command), so what they use is seen at the next
+headless session's reading, on any factory there. Across machines each one
+still knows only what its own last session saw, so readings carry their
 time, and `just fleet usage` points at the newest.
 
 **The session's shell.** A session's Bash runs `runtime/lane-bash.sh`

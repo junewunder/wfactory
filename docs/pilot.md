@@ -73,8 +73,10 @@ loop then runs the unit's check itself if it has one. One running loop is a
   (after the current unit) or `just pause --now` (the running session ends
   and its unit shows as interrupted), or when time runs out;
 - pauses between units with under the profile's "pause below" (8%) of the
-  5-hour usage window left and resumes at the reset (`factory/usage.sh`
-  reads the transcripts' `rate_limit_event` lines);
+  5-hour usage window left and resumes at the reset, and while the week's
+  usage is ahead of its line (the share of the week gone by, less the
+  profile's "keep back", 15%) until the line reaches what's used
+  (`factory/usage.sh` reads the transcripts' `rate_limit_event` lines);
 - sleeps through usage limits;
 - gives each session an inbox (`runtime/inbox.sh`, a PostToolUse hook): after
   a tool call it passes on notes added to the session's unit, decisions

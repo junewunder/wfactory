@@ -393,9 +393,10 @@ can't (marked) need care and a note in the commit.
   recipe added here can never break a factory's `just` (LESSONS 20).
 - Every rsync has an I/O timeout, every ssh a keepalive and BatchMode, so a
   sleeping machine can't hang a lane. *(Not testable without real ssh.)*
-- Usage: lanes pause under the 5-hour threshold, from the transcripts' own
-  numbers. *(Not testable without a real
-  plan.)*
+- Usage: lanes pause under the 5-hour threshold, and ahead of the week's
+  line, from the transcripts' own numbers. *(The pauses are tested on made-up
+  readings; that a real plan's readings carry them isn't testable without a
+  real plan.)*
 - `pkill -f` and `pgrep -f` take `-A`; in TypeScript, never match the
   calling process when finding processes by command line.
 
