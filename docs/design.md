@@ -196,9 +196,10 @@ moment is worked out from the reading and the clock when the lane pauses, so
 a paused lane resumes without a new session to produce a reading. Lanes on
 the line reach the reset with the share kept back left and nothing else
 (with 0 kept back, nothing at all), which is what the floor got wrong; the
-unit tests run such a week to its end. A lane that could work faster than the
-line pauses after most units, for about as long as the unit's share of the
-week takes to go by.
+unit tests run such a week to its end. Readings come in whole percents of
+the week, so lanes that could work faster than the line pause each time the
+reading passes it, for as long as the line takes to reach it (up to about 2
+hours a percent, with 15 kept back).
 
 The plan is shared by every factory on a machine, and a factory reads only
 its own lanes' transcripts. So each lane writes the newest reading it sees

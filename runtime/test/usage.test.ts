@@ -7,8 +7,8 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { tempDir } from "../../test/lib/index.ts";
-import { WEEK_S, keepBack, lineAt, lineReaches, newest, sharedFile, usageCheck, usageJson } from "../src/usage.ts";
+import { has, tempDir } from "../../test/lib/index.ts";
+import { WEEK_S, keepBack, lineAt, lineReaches, newest, sharedFile, usageCheck, usageJson, usageShow } from "../src/usage.ts";
 
 const tmp = tempDir("usage-");
 // No profile: every setting takes its default, but what a test sets.
@@ -30,6 +30,37 @@ describe("the week's line", () => {
   test("on the line is not ahead of it; a second before it is", () => {
     const at = lineReaches(0.5, RESET, 15);
     assert.deepEqual([paused(0.5, at, 15)?.until, paused(0.5, at - 1, 15)?.until], [undefined, at]);
+  });
+});
+
+describe("what the pause says", () => {
+  const HALF = START + WEEK_S / 2;
+  const both = (five: number, fiveAt: number, week: number) => {
+    const ev = { type: "rate_limit_event", at: START, rate_limit_info: { unifiedWindows: { five_hour: { utilization: five, resetsAt: fiveAt }, seven_day: { utilization: week, resetsAt: RESET } } } };
+    return usageCheck({ ev, json: usageJson(ev, HALF, 15), now: HALF }, env());
+  };
+  test("both windows due: the one the lanes are back from later, here the week", () => {
+    const p = both(0.95, HALF + 3600, 0.5).pause;
+    assert.deepEqual([p?.window, p?.until, p?.reset], ["week", lineReaches(0.5, RESET, 15), false]);
+  });
+  test("  here the 5-hour window, its reset the later", () => {
+    const p = both(0.95, HALF + 18000, 0.43).pause;
+    assert.deepEqual([p?.window, p?.until, p?.reset], ["5-hour", HALF + 18000, true]);
+  });
+  test("  check prints that time, then why", () => {
+    assert.equal(both(0.5, HALF + 3600, 0.5).out, `${lineReaches(0.5, RESET, 15)}\nthe week is ahead of its line (50% used, the line is at 42.5%)`);
+  });
+  test("past all the lanes may use, the week's reset is when they're back", () => {
+    const p = both(0.1, HALF + 3600, 0.9).pause;
+    assert.deepEqual([p?.until, p?.reset, p?.back], [RESET, true, "the week reset"]);
+  });
+  // 0.07 × 100 is 7.000000000000001 as a float: rounded up as it stood, it read 8%.
+  const shown = (used: number) => /week (\d+)% used/.exec(usageShow({ ev: reading(used), json: usageJson(reading(used), HALF, 15), now: HALF }))?.[1];
+  test("a whole percent reads as itself", () => { assert.deepEqual([0.07, 0.14, 0.28, 0.55, 0.56, 0.42].map(shown), ["7", "14", "28", "55", "56", "42"]); });
+  test("  a part of one rounds up", () => { assert.equal(shown(0.925), "93"); });
+  test("the line reads to a tenth, rounded down, so a line not reached never looks reached", () => {
+    const show = (now: number) => usageShow({ ev: reading(0.43), json: usageJson(reading(0.43), now, 15), now });
+    has(show(HALF + 3000), "week 43% used, the line is at 42.9%: lanes pause until");
   });
 });
 
@@ -84,20 +115,30 @@ describe("one reading per machine", () => {
   };
   const week = (ev: ReturnType<typeof newest>) => (usageJson(ev, START).seven_day as { used: number }).used;
   const one = factory("one", 0.3, START + 100), two = factory("two", 0.6, START + 200);
+  const NOW = START + 300;   // (the readings' times are made up: now is given, not the clock's)
   test("a factory's own reading becomes the machine's (its folder made)", () => {
-    assert.equal(week(newest(one, e)), 0.3);
+    assert.equal(week(newest(one, e, NOW)), 0.3);
     assert.equal(JSON.parse(fs.readFileSync(sharedFile(e), "utf8")).from, one);
   });
   test("a newer one, read by another factory's lanes, replaces it", () => {
-    assert.equal(week(newest(two, e)), 0.6);
+    assert.equal(week(newest(two, e, NOW)), 0.6);
     assert.equal(JSON.parse(fs.readFileSync(sharedFile(e), "utf8")).from, two);
   });
-  test("  and is the first factory's reading too, its own being older", () => { assert.equal(week(newest(one, e)), 0.6); });
+  test("  and is the first factory's reading too, its own being older", () => { assert.equal(week(newest(one, e, NOW)), 0.6); });
   test("  the machine's file is left as it was", () => { assert.equal(JSON.parse(fs.readFileSync(sharedFile(e), "utf8")).from, two); });
-  test("a factory with no reading of its own has the machine's", () => { assert.equal(week(newest(path.join(tmp, "none"), e)), 0.6); });
+  test("a factory with no reading of its own has the machine's", () => { assert.equal(week(newest(path.join(tmp, "none"), e, NOW)), 0.6); });
   test("a machine's file that isn't a reading is as none", () => {
     fs.writeFileSync(sharedFile(e), "{half");
-    assert.equal(week(newest(one, e)), 0.3);
+    assert.equal(week(newest(one, e, NOW)), 0.3);
+  });
+  // The clock set back, or a file that's wrong: it would be the newest until its date came.
+  test("a machine's reading dated well past now is as none", () => {
+    fs.writeFileSync(sharedFile(e), JSON.stringify({ ...reading(0.99, START + 30 * 86400), from: two }));
+    assert.equal(week(newest(one, e, NOW)), 0.3);
+  });
+  test("  one a few minutes past it (another clock's seconds) stands", () => {
+    fs.writeFileSync(sharedFile(e), JSON.stringify({ ...reading(0.99, START + 500), from: two }));
+    assert.equal(week(newest(one, e, NOW)), 0.99);
   });
   test("the default file is in the machine's wfactory state folder", () => {
     assert.equal(sharedFile({ XDG_STATE_HOME: "/state" }), "/state/wfactory/usage.json");

@@ -656,12 +656,12 @@ either of two reasons. The event says which, and when the lanes are back.
 Each pause and resume shows up in `just fleet wait` as news. Tell the owner
 one line at each pause ("Usage: lanes paused at 92% of the 5-hour window;
 back at 14:00", "Usage: the week is at 62% with its line at 58%; lanes back
-Thu 14:00") and one at each resume. Lanes that work faster than the line
-pause after most units, each time for about as long as that unit's share of
-the week takes to go by: that's the pacing working, and several in a row are
-one line to the owner, not one each. A paused lane looks at the reading
-again each minute: a newer one with more used moves its time (a new pause
-event once it has moved half an hour, with no resume in between), and one
+Thu 14:00") and one at each resume. Readings come in whole percents of the
+week, so lanes that work faster than the line pause each time the reading
+passes it, for as long as the line takes to reach it (up to about 2 hours a
+percent, with 15 kept back): that's the pacing working, not a fault. A
+paused lane looks at the reading again each minute: a newer one with more
+used moves its time (a new pause event, with no resume in between), and one
 that no longer has it ahead resumes it.
 
 The reading is one per machine: every factory's lanes there write the newest

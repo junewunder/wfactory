@@ -123,9 +123,12 @@ function shared(env: NodeJS.ProcessEnv): Obj | null {
   try { const j: unknown = JSON.parse(fs.readFileSync(sharedFile(env), "utf8")); return isObj(j) && j.type === "rate_limit_event" ? j : null; } catch { return null; }
 }
 // The newer of this factory's own reading and the machine's; its own, when newer, becomes the
-// machine's (written whole, then renamed: a reader never sees half of one).
-export function newest(root: string, env: NodeJS.ProcessEnv = process.env): Obj | null {
-  const own = latest(root), theirs = shared(env);
+// machine's (written whole, then renamed: a reader never sees half of one). A machine's reading
+// dated past now (by more than AHEAD_S: the clock was set back, or the file is wrong) is as
+// none, or it would be the newest until its date came.
+const AHEAD_S = 300;
+export function newest(root: string, env: NodeJS.ProcessEnv = process.env, now = epoch()): Obj | null {
+  const own = latest(root), file = shared(env), theirs = at(file) > now + AHEAD_S ? null : file;
   if (own === null || at(theirs) > at(own)) return theirs ?? own;
   if (at(own) > at(theirs)) {
     try {
@@ -196,12 +199,16 @@ export interface Usage { ev: Obj | null; json: Obj; now: number }
 // What's known now: the machine's newest reading (newest(), which writes this factory's there
 // when it's the newer), as numbers.
 export function readUsage(root: string, env: NodeJS.ProcessEnv = process.env): Usage {
-  const ev = newest(root, env), now = epoch();
+  const now = epoch(), ev = newest(root, env, now);
   return { ev, json: usageJson(ev, now, keepBack(env)), now };
 }
 
-// Percent, rounded up, so 92.5% used counts as under 8% left; null if not known.
-const up = (x: Json | undefined) => typeof x === "number" ? Math.ceil(x * 100) : null;
+// Percent, rounded up, so 92.5% used counts as under 8% left; null if not known. (Rounded to a
+// millionth first: 0.07 × 100 is a hair over 7 as a float, and isn't 8%.)
+const up = (x: Json | undefined) => typeof x === "number" ? Math.ceil(Math.round(x * 1e6) / 1e4) : null;
+// The line's percent, to a tenth, rounded down: readings come in whole percents, so a lane
+// paused at 43% used reads "the line is at 42.6%", never a line that looks reached.
+const tenth = (x: Json | undefined) => typeof x === "number" ? (Math.floor(Math.round(x * 1e6) / 1e3) / 10).toFixed(1) : "";
 const pct = (u: Usage, k: string) => { const w = u.json[k]; return up(isObj(w) ? w.used : null); };
 // How long before now an epoch was: "40 min ago", "5h ago", "3 days ago".
 function ago(u: Usage, t: number) {
@@ -213,11 +220,10 @@ function resets(u: Usage, k: string, fmt: (d: Date) => string) {
   return typeof t === "number" ? fmt(new Date(t * 1000)) : "";
 }
 export const dayHmAt = (t: number) => dayHm(new Date(t * 1000));
-// Where the week is against its line: "62% used, the line is at 58%" (both rounded up, so the
-// two never read the wrong way round); "" with no line.
+// Where the week is against its line: "62% used, the line is at 58.3%"; "" with no line.
 function against(u: Usage) {
   const l = u.json.line;
-  return isObj(l) ? `${pct(u, "seven_day") ?? ""}% used, the line is at ${up(l.allowed) ?? ""}%` : "";
+  return isObj(l) ? `${pct(u, "seven_day") ?? ""}% used, the line is at ${tenth(l.allowed)}%` : "";
 }
 
 export function usageShow(u: Usage, root = "") {
