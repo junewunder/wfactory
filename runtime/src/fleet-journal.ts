@@ -119,8 +119,9 @@ export function summary(f: Fleet, args: string[]): number {
     all += r.out;
     if (r.status === 255) console.error(`(${m} is unreachable over ssh: its events aren't here)`);
   }
-  // Each question once (every lane logs it: fleet-util.ts, firstQuestions).
-  const fresh = firstQuestions(lines(all).filter((l) => l.split("\t")[0] >= since).sort());
+  // Each question once (every lane logs it: fleet-util.ts, firstQuestions), and only if its
+  // first line is since then: a lane logging an older one again isn't tonight's.
+  const fresh = firstQuestions(lines(all).sort()).filter((l) => l.split("\t")[0] >= since);
   const kind = (l: string) => l.split("\t")[3] ?? "";
   const outcome = unitOutcome(env);
   // Grouped by kind, so a night's republishes read as one list. With outcomes: under each event,

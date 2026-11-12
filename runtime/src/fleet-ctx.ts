@@ -154,9 +154,14 @@ export function openFleet(env: NodeJS.ProcessEnv, floop: string) {
   // The questions this checkout's overseers were told of (fleet-util.ts, firstQuestions), a line
   // each: what fleet wait drops when another lane logs one again. fleet attach adds every one the
   // lanes' logs have, so an overseer that takes over on another machine isn't told them again.
-  const TOLD_FILE = `runs/.fleet-questions${floop ? `-${floop}` : ""}`;
+  // One file for every loop, as the questions are the tracker's, which the loops share. Added to,
+  // never written over: a replaced overseer's wait ends after the new one's attach.
+  const TOLD_FILE = "runs/.fleet-questions";
   const told = () => new Set(lines(cat(TOLD_FILE)));
-  const tell = (qs: Set<string>) => { fs.mkdirSync("runs", { recursive: true }); fs.writeFileSync(TOLD_FILE, [...qs].slice(-1000).map((q) => q + "\n").join("")); };
+  const tell = (qs: Set<string>) => {
+    fs.mkdirSync("runs", { recursive: true });
+    fs.writeFileSync(TOLD_FILE, [...new Set([...told(), ...qs])].slice(-1000).map((q) => q + "\n").join(""));
+  };
   const overrides = () => new Map(lines(cat(LANES_FILE)).map((l) => l.split(" ")).filter((f) => known(f[0]) && /^[0-9]+$/.test(f[1] ?? "")).map((f) => [f[0], Number(f[1])]));
   const setOverride = (m: string, n: number | null) => {
     const o = overrides();

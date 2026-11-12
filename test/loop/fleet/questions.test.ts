@@ -15,12 +15,16 @@ import { fleetFactory, readNext } from "./helpers.ts";
 const f = fleetFactory("fquest", { lanes: 3 });
 const { F, fleet, setup, hold, lane, bg } = f;
 const out = (args: string[]) => fleet(args).stdout;
-// A `question` line in lane n's runs/events.log, as the loop logs one (loop-unit.ts).
-const asked = (n: number, title: string, id: string) => {
-  const d = new Date(), p2 = (x: number) => String(x).padStart(2, "0");
+// A `question` line, as the loop logs one (loop-unit.ts), dated `ago` minutes back; asked() puts
+// it in lane n's runs/events.log.
+const qline = (n: number, title: string, id: string, ago = 0) => {
+  const d = new Date(Date.now() - ago * 60000), p2 = (x: number) => String(x).padStart(2, "0");
   const at = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  return `${at}\t${HOST}\t${n}\tquestion\t${title} (${id})\n`;
+};
+const asked = (n: number, title: string, id: string, ago = 0) => {
   fs.mkdirSync(path.join(lane(n), "runs"), { recursive: true });
-  fs.appendFileSync(path.join(lane(n), "runs/events.log"), `${at}\t${HOST}\t${n}\tquestion\t${title} (${id})\n`);
+  fs.appendFileSync(path.join(lane(n), "runs/events.log"), qline(n, title, id, ago));
 };
 // fleet wait in the background, once its first look has read lane n's events.
 async function waitFor(minutes: string, n: number) {
@@ -57,15 +61,15 @@ describe("one question, three lanes: the overseer hears it once", () => {
   test("  each lane's line is still in its log", () => {
     for (const n of [1, 2, 3]) has(readOr(path.join(lane(n), "runs/events.log")), "(q/raise-bar)");
   });
-  test("two lanes logging a new one in the same wait: one wake, one line", async () => {
+  // (Both lines in one write to lane 1's log, so the daemon's one answer has them both.)
+  test("two lines for a new one in the same wait: one wake, one line", async () => {
     const b = await waitFor("1", 1);
-    asked(1, "Land the step without the fall?", "q/land-step");
-    asked(2, "Land the step without the fall?", "q/land-step");
+    fs.appendFileSync(path.join(lane(1), "runs/events.log"), qline(1, "Land the step without the fall?", "q/land-step") + qline(2, "Land the step without the fall?", "q/land-step"));
     o = (await b.end()).stdout;
     has(o, "woke: news: question\n");
     assert.equal(owner(o).length, 1);
   });
-  test("  (the lane whose line came second is told it at the next wait, and doesn't wake it)", async () => {
+  test("  and a third lane logging it at a later wait doesn't wake that one", async () => {
     const b = await waitFor("0.1", 3);
     asked(3, "Land the step without the fall?", "q/land-step");
     has((await b.end()).stdout, "woke: time");
@@ -89,6 +93,25 @@ describe("one question, three lanes: the overseer hears it once", () => {
     fs.writeFileSync(pj, was);
     has(s, "  question (2):\n");
     assert.equal(s.split("(q/raise-bar)").length - 1, 1, s);
+  });
+  test("  nor one told before the summary's start and logged again since", () => {
+    asked(1, "An old question?", "q/old", 120);
+    asked(2, "An old question?", "q/old");
+    const pj = path.join(F, "tracker/project.json"), was = readOr(pj);
+    fs.writeFileSync(pj, JSON.stringify({ ...JSON.parse(was), events: { summary: ["question"] } }, null, 2) + "\n");
+    const s = out(["summary", "--since", "-60 minutes"]);
+    fs.writeFileSync(pj, was);
+    hasnt(s, "(q/old)");
+  });
+  // A replaced overseer's wait ends after the new one has attached: it adds what it told, and
+  // keeps what the attach recorded.
+  test("a wait that ends after an attach keeps what the attach recorded", async () => {
+    const tf = path.join(F, "runs/.fleet-questions");
+    fs.rmSync(tf, { force: true });
+    const b = await waitFor("0.1", 1);
+    out(["attach", "--as", "ovR"]);
+    await b.end();
+    has(readOr(tf), "q/raise-bar\n");
   });
   test("a question in a lane's log isn't another question's repeat", async () => {
     const b = await waitFor("1", 3);
