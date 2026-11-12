@@ -38,8 +38,14 @@ latest main into its branch, settles any conflict and runs the checks. Then
 the loop merges the branch into main and pushes (fetch, merge, check again
 and retry if someone pushed first), and deletes the branch: finished branches
 never leave the laptop. A branch the loop can't merge becomes a "Merge main
-on <host> lane <n>" unit that only this lane takes, and the lane takes
-nothing else until it's settled. A unit that stops unfinished (pause asap, a
+on <host> lane <n>" unit that only this lane takes, before anything else.
+While it can't move (it waits on the owner, say), the lane takes other work
+meanwhile, and waits for it once there's none. One that won't fit before the
+stop (as for any unit, \`next --time-left\`: a merge unit with nothing to go
+by needs tracker/project.json "min_unit_minutes", default 45, since it runs
+the project's check) or that a session of this lane gave back isn't taken
+again this run: the lane takes what fits meanwhile, or stops, its branch
+pushed, and the next run takes the merge first. A unit that stops unfinished (pause asap, a
 session that died, a question for the owner) has its work committed to its branch
 and pushed, so whoever claims it next, on either machine, carries on from it.
 Without an origin, sessions commit on the checkout's branch as they are.

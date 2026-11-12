@@ -165,8 +165,15 @@ copy pushed after the unit was finished. An unfinished unit's branch (pause asap
 session, a question) is pushed, so either machine can carry on from it. A
 branch the loop can't merge becomes a "Merge main" unit that only that lane
 takes, before anything else; while it can't move (it waits on the owner,
-say) the lane takes other work meanwhile. After three failures it's stuck,
-for the overseer.
+say) the lane takes other work meanwhile. It goes through the same claim as
+any unit: one that won't fit before the stop, or that this lane's session
+gave back, isn't taken again that run (a lane's merge, filed 17 minutes
+before the stop and needing the project's whole check, was claimed seven
+times in 18 minutes, each session cut off after a minute or two). A merge
+unit with no sessions to go by needs `min_unit_minutes`, and a session cut
+off at the stop doesn't count toward any unit's usual length: it says only
+that the unit takes longer. After three failures it's stuck, for the
+overseer.
 When main itself fails `just check`, no merge unit is filed: finished
 branches wait, pushed, and the lane that found it stops taking units, since
 nothing it worked could land. The overseer hears at once, stops the other

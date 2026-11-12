@@ -115,16 +115,26 @@ export async function look(l: Loop): Promise<Look> {
   // (Something there that isn't a time: no new lease, as the bash's failed test had it.)
   const nr = cat(l.noroom);
   const nolease = nr !== null && (!isInt(nr) || epoch() < Number(nr));
+  const k = l.clock;
+  // What every claim passes over, this lane's merge too: a unit this lane's sessions gave back
+  // unstarted this run, and one whose usual session won't fit before the stop (#141: a lane claimed
+  // and gave back the same unit every few seconds; its merge, filed 17 minutes before the stop and
+  // needing the project's whole check, was claimed seven times in 18 minutes).
+  const notNow = [...(l.gaveBack.size ? ["--skip-units", [...l.gaveBack].join(",")] : []), "--time-left", String(Math.max(0, k.deadline - epoch()))];
   // This lane's merge first. While it can't (blocked, parked, waiting on a question), the lane takes
   // CI and other units meanwhile, as if it had none, and the merge comes first again once it can.
-  let merge: Json | null = null, mergeWhy = "";
+  // One that won't fit before the stop, or that a session of this lane gave back, can't this run:
+  // the lane takes what does fit meanwhile, but doesn't wait for it, and the next run takes it first
+  // (its branch is pushed, and it stays on this lane's list).
+  let merge: Json | null = null, mergeWhy = "", mergeHeld = "", mergeNotNow = false;
   if (mu !== null) {
-    const r = tr(["next", "--claim", "--json", "--group", "merge"], claimEnv(nolease));
+    const r = tr(["next", "--claim", "--json", "--group", "merge", ...notNow], claimEnv(nolease));
     if (r.code === 0) { merge = json(r.out); l.mergeTold = ""; }
     else if (r.code === TR_BUSY) { unclaim(); log("the tracker is locked by another command (.tracker/lock); looking again"); await l.pause(5); return { kind: "again" }; }
     else if (r.code !== 1 && r.code !== 3) { unclaim(); l.stop("tracker error"); process.stdout.write(r.out); process.stderr.write(r.err); return { kind: "error" }; }
     else {
-      const w0 = json(r.out)?.why;
+      const j0 = json(r.out), w0 = j0?.why;
+      mergeNotNow = Number(j0?.late) > 0 || mus.some((x) => l.gaveBack.has(x)); mergeHeld = w0 ? String(w0) : "";
       mergeWhy = `this lane's merge${mus.length > 1 ? "s" : ""} (${mu}) can't move yet${w0 ? `: ${String(w0)}` : ""}`;
       if (mergeWhy !== l.mergeTold) { log(`${mergeWhy}; taking other work meanwhile`); l.mergeTold = mergeWhy; }
     }
@@ -149,7 +159,6 @@ export async function look(l: Loop): Promise<Look> {
     if (civ?.wait === true) { ciwait = String(civ.why ?? ""); ciuses = list(civ.uses); cistart = list(civ.start); }
   }
   let skipg: string[] = [], skipr: string[] = [];
-  const k = l.clock;
   // Last call: no unit starts that would make CI here run again (of a group whose CI runs here, or
   // on its data), nor one using what CI still to run here needs. Everything else does, but for
   // `just fleet last-call` ("wrap up and publish": the owner ends the night there) and a red main.
@@ -172,8 +181,7 @@ export async function look(l: Loop): Promise<Look> {
     const h = ciHeld();
     if (h.groups.length || h.uses.length) lcArgs = ["--last-call-in", String(Math.max(0, k.lcAt() - epoch())), ...(h.groups.length ? ["--last-call-groups", h.groups.join(",")] : []), ...(h.uses.length ? ["--last-call-uses", h.uses.join(",")] : [])];
   }
-  const skipu = [...(skipg.length ? ["--skip-groups", skipg.join(",")] : []), ...(skipr.length ? ["--skip-uses", skipr.join(",")] : []),
-    ...(l.gaveBack.size ? ["--skip-units", [...l.gaveBack].join(",")] : []), "--time-left", String(Math.max(0, k.deadline - epoch())), ...lcArgs];
+  const skipu = [...(skipg.length ? ["--skip-groups", skipg.join(",")] : []), ...(skipr.length ? ["--skip-uses", skipr.join(",")] : []), ...notNow, ...lcArgs];
   let code: number, nxt: Json | null;
   if (merge) { code = 0; nxt = merge; }
   else if (lcNone) { code = 1; nxt = { why: lcNone }; }
@@ -211,8 +219,11 @@ export async function look(l: Loop): Promise<Look> {
     const w0 = nxt?.why;
     let why = w0 === undefined || w0 === null || w0 === false ? "nothing workable" : String(w0);
     // This lane's merge waits (on the owner, say) and nothing else is left: the lane waits for it,
-    // since no other lane takes it.
-    if (mergeWhy) { code = 1; why = `${mergeWhy}, and nothing else to take: ${why}`; nxt = { wait: true }; }
+    // since no other lane takes it. One that can't this run (no time for it, or given back) isn't
+    // waited for: waiting won't make it fit, and the lane stops as it would for any such unit.
+    // (What held it back, said once when the other claim says the same.)
+    if (mergeWhy && mergeNotNow) { code = 1; why = why === mergeHeld ? mergeWhy : `${mergeWhy}, and nothing else to take: ${why}`; }
+    else if (mergeWhy) { code = 1; why = `${mergeWhy}, and nothing else to take: ${why}`; nxt = { wait: true }; }
     // CI due here waits for a resource: the lane waits for it too.
     if (ciwait) { code = 1; why = `${why}; ${ciwait}`; nxt = { wait: true }; }
     // Nothing fits in the time left, and nothing else is moving that might: the lane stops, saying so.

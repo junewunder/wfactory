@@ -204,8 +204,10 @@ due or stale.
 --skip-units: take none of these units (the loop: ones its sessions gave back unstarted this run).
 --time-left: S seconds are left before the lane's stop; take no unit whose usual session is
 longer: the unit's --min-minutes, else the median of its own latest sessions in the log, else
-of its template's units', else of the units using the same resources (a session that gave its
-unit back unstarted doesn't count).
+of its template's units', else (a merge unit) of the merge units', else of the units using the
+same resources; a merge unit with none of these needs "min_unit_minutes" (below), since it runs
+the project's check. A session that gave its unit back unstarted doesn't count, nor one cut off
+(the loop's settle: how long it ran says only that the unit takes longer).
 Neither counts as moving; with --json, "late" counts the units --time-left passed over.
 --last-call-in: S seconds are left before the lane's last call, which will hold back units of
 --last-call-groups (or on their data) and units using --last-call-uses; take none of those whose

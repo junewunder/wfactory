@@ -35,7 +35,11 @@ can push to; on one machine, a bare repo on the same disk). Then:
   A finished branch that couldn't land yet is pushed, and any lane on its
   machine lands it once the lane that worked it is gone. A branch the loop can't merge
   becomes a "Merge main on <machine> lane <n>" unit that only that lane
-  takes, before anything else it can take. An unfinished unit (pause asap, a session
+  takes, before anything else it can take, once it fits before the stop
+  (with nothing to go by it needs `"min_unit_minutes"`, 45 by default: it
+  runs the project's check) and unless a session of that lane gave it back
+  this run. Until then the lane takes what fits, or stops, and the next run
+  takes the merge first. An unfinished unit (pause asap, a session
   that died, a question for the owner) is pushed as its branch, and whoever
   claims it next, on any machine, carries on from it.
 - **Every lane runs in its own plain clone** beside the checkout
