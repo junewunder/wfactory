@@ -36,9 +36,25 @@ describe("a session cut off doesn't count toward a unit's usual session", () => 
   });
 });
 
+describe("a session cut off is the least the unit's usual session can be", () => {
+  test("setup: a unit whose one session was cut off after two hours", () => {
+    setup(["drop", "g/x", "--why", "test"]);
+    setup(["add-unit", "g/y", "--title", "Two-hour unit"]);
+    session("c1", "g/y", 8, 6, true);
+  });
+  test("  with 30 min left, it's passed over", () => {
+    const j = next(["--time-left", "1800"]);
+    assert.equal(j.late, 1, JSON.stringify(j));
+    has(j.why, "usual session (120 min)");
+  });
+  test("  with three hours left, it's taken", () => {
+    assert.equal(next(["--time-left", String(3 * 3600)]).id, "g/y");
+  });
+});
+
 describe("a lane's merge unit", () => {
   test("setup: a merge unit with no sessions, and nothing else", () => {
-    setup(["drop", "g/x", "--why", "test"]);
+    setup(["drop", "g/y", "--why", "test"]);
     setup(["add-group", "merge", "--title", "Merges the loop couldn't do by itself", "--priority", "1000"]);
     setup(["add-unit", "merge/one", "--title", "Merge main on testhost lane 1", "--check", "recorded"]);
   });

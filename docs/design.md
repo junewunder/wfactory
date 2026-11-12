@@ -171,8 +171,8 @@ gave back, isn't taken again that run (a lane's merge, filed 17 minutes
 before the stop and needing the project's whole check, was claimed seven
 times in 18 minutes, each session cut off after a minute or two). A merge
 unit with no sessions to go by needs `min_unit_minutes`, and a session cut
-off at the stop doesn't count toward any unit's usual length: it says only
-that the unit takes longer. After three failures it's stuck, for the
+off (at the stop, or otherwise) isn't in any unit's median: its length is
+only the least the unit needs. After three failures it's stuck, for the
 overseer.
 When main itself fails `just check`, no merge unit is filed: finished
 branches wait, pushed, and the lane that found it stops taking units, since

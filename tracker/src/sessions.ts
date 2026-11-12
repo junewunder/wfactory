@@ -16,10 +16,9 @@ const memo = new WeakMap<State, Session[]>();
 
 // The sessions the log shows, oldest first: from a claim to the last line its tag wrote about
 // that unit (its record, a note, the loop's settle after it; not the landing, which waits on
-// other things). One that gave its unit back unstarted did no work, so it isn't counted. Nor is one
-// cut off (the loop's settle: it ended without recording its unit, at the stop or otherwise): how
-// long it ran says only that the unit takes longer (a lane's merge cut off at the stop seven times
-// in 18 minutes made a merge that runs the project's whole check look like a 2-minute job).
+// other things). One that gave its unit back unstarted did no work, so it isn't counted. One cut off
+// (the loop's settle: it ended without recording its unit, at the stop or otherwise) is marked cut:
+// how long it ran says only that the unit takes at least that long.
 function sessions(T: State): Session[] {
   const m = memo.get(T);
   if (m) return m;
@@ -34,7 +33,7 @@ function sessions(T: State): Session[] {
     if (gaveBackLine(l)) s.unstarted = true;
     if (l.cmd === "settle") s.cut = true;
   }
-  const out = all.filter((s) => !s.unstarted && !s.cut && s.to > s.from);
+  const out = all.filter((s) => !s.unstarted && s.to > s.from);
   memo.set(T, out);
   return out;
 }
@@ -47,9 +46,14 @@ const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); retu
 // resources (an editor unit's, for one using the editor). A merge unit (a lane's "Merge main", group
 // merge) goes by the other merge units' after its own, since each does the same job (merge main,
 // run the project's check), and with none to go by needs the project's min_unit_minutes: it always
-// runs that check. null: nothing to go by.
+// runs that check. A session cut off isn't in the median (a lane's merge cut off at the stop seven
+// times in 18 minutes made a merge that runs the project's whole check look like a 2-minute job);
+// the longest of u's own latest ones is the least its usual session can be (one cut off after two
+// hours of work needs at least those two hours). null: nothing to go by.
 export function usualSecs(T: State, u: Unit): number | null {
-  const ss = sessions(T);
+  const all = sessions(T), ss = all.filter((s) => !s.cut);
+  const cut = all.filter((s) => s.cut && s.id === u.id).slice(-LATEST).map((s) => Math.round((s.to - s.from) / 1000));
+  const floor = (n: number | null) => (cut.length ? Math.max(n ?? 0, ...cut) : n);
   const merge = isMerge(T, u);
   const like = [
     (x: Unit) => x === u,
@@ -59,9 +63,9 @@ export function usualSecs(T: State, u: Unit): number | null {
   ];
   for (const f of like) {
     const xs = ss.filter((s) => { const x = T.byId.get(s.id); return !!x && f(x); }).slice(-LATEST);
-    if (xs.length) return Math.round(median(xs.map((s) => (s.to - s.from) / 1000)));
+    if (xs.length) return floor(Math.round(median(xs.map((s) => (s.to - s.from) / 1000))));
   }
-  return merge ? minUnitSecs(T) : null;
+  return floor(merge ? minUnitSecs(T) : null);
 }
 const isMerge = (T: State, u: Unit) => T.groupOf.get(u.id)?.id === "merge";
 

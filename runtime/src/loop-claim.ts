@@ -134,7 +134,8 @@ export async function look(l: Loop): Promise<Look> {
     else if (r.code !== 1 && r.code !== 3) { unclaim(); l.stop("tracker error"); process.stdout.write(r.out); process.stderr.write(r.err); return { kind: "error" }; }
     else {
       const j0 = json(r.out), w0 = j0?.why;
-      mergeNotNow = Number(j0?.late) > 0 || mus.some((x) => l.gaveBack.has(x)); mergeHeld = w0 ? String(w0) : "";
+      // (Every one of them: one waiting on the owner while another doesn't fit is still waited for.)
+      mergeNotNow = Number(j0?.late) + mus.filter((x) => l.gaveBack.has(x)).length >= mus.length; mergeHeld = w0 ? String(w0) : "";
       mergeWhy = `this lane's merge${mus.length > 1 ? "s" : ""} (${mu}) can't move yet${w0 ? `: ${String(w0)}` : ""}`;
       if (mergeWhy !== l.mergeTold) { log(`${mergeWhy}; taking other work meanwhile`); l.mergeTold = mergeWhy; }
     }

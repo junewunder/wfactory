@@ -260,7 +260,7 @@ group's CI. The tracker works out when it's due, and lanes run due CI before
 any unit. An hour before the stop time comes **last call**: no new units,
 work in flight lands, and every group whose CI is stale runs it.
 
-### 37. A lane's merge skipped the checks every unit goes through (the recompiler factory)
+### 37. A lane's merge skipped the checks every unit goes through (the recompiler factory, November)
 
 **What happened.** The recompiler factory ran four lanes until a 09:00 stop. At 08:43 a
 finished, reviewed unit's branch conflicted with main, so the loop filed
@@ -281,8 +281,8 @@ land that night; it was landed by hand the next day.
 too, which comes first only once it fits before the stop and wasn't given
 back this run. Until then the lane takes what fits or stops, its branch
 pushed, and the next run takes the merge first. A session cut off says
-only that its unit takes longer, so it doesn't count toward a unit's usual
-session; a merge unit with nothing to go by needs `min_unit_minutes`, since
+only that its unit takes at least that long, so it sets a floor on the
+unit's usual session but isn't in its median; a merge unit with nothing to go by needs `min_unit_minutes`, since
 it always runs the project's check.
 
 ## The overseer

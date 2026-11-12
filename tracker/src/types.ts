@@ -256,7 +256,8 @@ export interface Project {
   ci_every?: number;
   // The least minutes a unit's session needs, when neither the unit (minMinutes) nor its past
   // sessions say (default 45): before last call, a unit last call holds back isn't taken with less
-  // left before it.
+  // left before it; and a merge unit (it runs the project's check) isn't taken with less left
+  // before the stop.
   min_unit_minutes?: number;
   publish?: string;
   // Check-ins with the owner (prune --checked-in): when the last was, every how many days of runs

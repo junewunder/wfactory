@@ -83,3 +83,22 @@ describe("a lane's merge unit given back unstarted isn't taken again this run", 
     assert.equal(iterations(o, "Later unit"), 0, o);
   });
 });
+
+describe("with one merge that doesn't fit and another waiting on the owner, the lane waits", () => {
+  let out = "";
+  test("setup: two merge units of this lane's, one needing an hour, one blocked by a question", () => {
+    for (const x of ["ma", "mb"]) setup("add-unit", `merge/a-lane1-${x}`, "--title", `Merge ${x} on a lane 1`, "--branch", "unit/g/fin", "--lane", "a/1", "--check", "recorded");
+    setup("edit", "merge/a-lane1-ma", "--min-minutes", "60");
+    setup("ask", "--title", "Keep which side?", "--context", "test", "--option", "a | keep | keep it", "--option", "b | drop | drop it", "--default", "a", "--blocks", "merge/a-lane1-mb", "--id", "mb-side");
+    fs.writeFileSync(a.at("runs/.merge-unit"), "merge/a-lane1-ma\nmerge/a-lane1-mb\n");
+  });
+  test("with 15 minutes left, the lane waits (the answer may come) rather than stopping", async () => {
+    const r = loop(["--hours", "0.25"]);
+    await r.until("loop: waiting:");
+    await r.at(901);
+    out = (await r.end()).out;
+    hasnt(out, "nothing fits before the stop");
+    has(out, "out of time");
+    assert.equal(iterations(out, "Merge m[ab] on a lane 1"), 0, out);
+  });
+});
