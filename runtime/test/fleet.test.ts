@@ -3,6 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { QUIET_MINUTES, dur, forYou, stake } from "../src/fleet.ts";
+import { firstQuestions, questionOf } from "../src/fleet-util.ts";
 
 const MIRA = "Pilot character: Mira: Rerun Mira's states stage (mira/restamp-states) merging on wren";
 const LC = (m: string, n: number, what = MIRA) => `${m} lane ${n} waiting: no CI due; last call: CI comes due here once work in flight lands (${what}); looking again every 4 min`;
@@ -92,4 +93,21 @@ test("  without it, the options are as they were; a bad time, or --hours too, is
   assert.match(takeUntil(["--until", "soonish"], now) as string, /needs a time/);
   assert.match(takeUntil(["--until"], now) as string, /needs a time/);
   assert.match(takeUntil(["--until", "yesterday"], now) as string, /in the past/);
+});
+
+// Each question once (fleet-util.ts): every lane logs a question it finds new, so the overseer
+// drops the repeats.
+const qline = (lane: number, id: string, at = "2026-11-12 03:31") => `${at}\tbox\t${lane}\tquestion\tShould it land (as it is)? (${id})`;
+test("a question's repeats from other lanes are dropped, the first kept", () => {
+  const ls = [qline(4, "q/land"), qline(3, "q/land", "2026-11-12 03:39"), "2026-11-12 03:40\tbox\t2\tstuck\tUnit (g/u): stuck"];
+  assert.deepEqual(firstQuestions(ls), [ls[0], ls[2]]);
+});
+test("one told before is dropped, and the ones kept are added to what's told", () => {
+  const told = new Set(["q/land"]);
+  assert.deepEqual(firstQuestions([qline(1, "q/land"), qline(1, "q/raise")], told), [qline(1, "q/raise")]);
+  assert.deepEqual([...told], ["q/land", "q/raise"]);
+});
+test("the question is the ID its line ends with, not a parenthesis in its title", () => {
+  assert.equal(questionOf(qline(1, "q/land")), "q/land");
+  assert.equal(questionOf("2026-11-12 03:40\tbox\t2\tstuck\tUnit (g/u): stuck"), null);
 });

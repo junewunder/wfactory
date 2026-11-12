@@ -85,7 +85,9 @@ loop then runs the unit's check itself if it has one. One running loop is a
 - keeps the machine awake (a `systemd-inhibit` lock, lid switch included);
 - writes what the overseer must hear about (a new question, a lane idle 30
   minutes, a usage pause) to `runs/events.log`, where `just capped` and
-  long jobs also note a kill over their memory cap (`oom-kill`);
+  long jobs also note a kill over their memory cap (`oom-kill`); every lane
+  logs a new question, as the questions are main's, and `fleet wait` tells
+  the overseer once, from the first lane's line;
 - on a session killed over its memory cap, writes what used the memory just
   before (pid, RSS, command line, from a look every few seconds) to its
   `.err`, a note on the unit and an `oom-kill` event, and goes on: the unit

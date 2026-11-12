@@ -313,7 +313,10 @@ export async function workUnit(l: Loop, u: Claimed): Promise<"next" | "stop"> {
   }
   let marks: string[] = []; try { marks = fs.readdirSync("work/.store/groups"); } catch {}
   if (dg || marks.some((n) => n.endsWith(".unsent") || n.includes(".unmerged."))) l.releaseIdle();
-  // A new question for the owner: the overseer posts it now, not at the end of the run.
+  // A new question for the owner: the overseer posts it now, not at the end of the run. The
+  // questions file is main's, so every lane finds a question new after its unit, whoever asked it
+  // (this lane's session, another lane's, the owner): each logs it, and the overseer's side drops
+  // the repeats (fleet-util.ts, firstQuestions), so the first lane to see it is the one that tells.
   const qs = new Set(u.qsBefore);
   for (const q of openQuestions(c.tdir).filter((x) => !qs.has(x))) {
     const qj = json(read(`${c.tdir}/questions.json`));

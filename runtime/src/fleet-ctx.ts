@@ -151,6 +151,17 @@ export function openFleet(env: NodeJS.ProcessEnv, floop: string) {
   // without it, or the next run.
   const LANES_FILE = `runs/.fleet-lanes${floop ? `-${floop}` : ""}`;
   const MEM_FILE = `runs/.fleet-memory${floop ? `-${floop}` : ""}`;
+  // The questions this checkout's overseers were told of (fleet-util.ts, firstQuestions), a line
+  // each: what fleet wait drops when another lane logs one again. fleet attach adds every one the
+  // lanes' logs have, so an overseer that takes over on another machine isn't told them again.
+  // One file for every loop, as the questions are the tracker's, which the loops share. Added to,
+  // never written over: a replaced overseer's wait ends after the new one's attach.
+  const TOLD_FILE = "runs/.fleet-questions";
+  const told = () => new Set(lines(cat(TOLD_FILE)));
+  const tell = (qs: Set<string>) => {
+    fs.mkdirSync("runs", { recursive: true });
+    fs.writeFileSync(TOLD_FILE, [...new Set([...told(), ...qs])].slice(-1000).map((q) => q + "\n").join(""));
+  };
   const overrides = () => new Map(lines(cat(LANES_FILE)).map((l) => l.split(" ")).filter((f) => known(f[0]) && /^[0-9]+$/.test(f[1] ?? "")).map((f) => [f[0], Number(f[1])]));
   const setOverride = (m: string, n: number | null) => {
     const o = overrides();
@@ -201,6 +212,6 @@ export function openFleet(env: NodeJS.ProcessEnv, floop: string) {
   const loopNames = ["", ...Object.keys((project().loops ?? {}) as object)];
 
   return { env, floop, PWD, ME, NAMES, hasOrigin, known, field, checkout, lanes, loopArg, fromDeploy, deployed, takeMachines,
-    on, sh, note, watchOn, updateSkill, tier, onlyTier, service, laneState, LANES_FILE, MEM_FILE, overrides, setOverride,
+    on, sh, note, watchOn, updateSkill, tier, onlyTier, service, laneState, LANES_FILE, MEM_FILE, told, tell, overrides, setOverride,
     runLanes, laneDir, allLanes, each, memOf, floorOf, loopNames };
 }

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { ymdHm } from "./sys.ts";
 import { beat } from "./fleet-beat.ts";
-import { cat, chomp, dateHm, lines, say } from "./fleet-util.ts";
+import { cat, chomp, dateHm, firstQuestions, lines, say } from "./fleet-util.ts";
 import { EVENTS_OF_A_UNIT, EVENTS_PROBLEM } from "./fleet-help.ts";
 import { JOURNAL } from "./fleet-scripts.ts";
 import type { Fleet } from "./fleet-ctx.ts";
@@ -11,7 +11,7 @@ import { summaryLines } from "./scorecard.ts";
 
 // fleet attach [--as <id>]: this thread oversees the factory now, and what happened since the last one.
 export function attach(f: Fleet, args: string[]): number {
-  const { env, ME, NAMES, checkout, sh, note, onlyTier, allLanes } = f;
+  const { env, ME, NAMES, checkout, sh, note, onlyTier, allLanes, told, tell } = f;
   // This thread oversees the factory now: the record on main says so (the newest wins), and
   // the overseer before it is told at its next wait. Then what happened since that one's last
   // note, from every machine's journal it can reach.
@@ -32,7 +32,14 @@ export function attach(f: Fleet, args: string[]): number {
   let start = ""; try { start = chomp(fs.readFileSync("runs/.fleet-start", "utf8")); } catch {}
   const since = lastOf ?? (was ? ymdHm(new Date(Date.parse(was.at))) : start || (dateHm("-24 hours") ?? ""));
   const fresh = (l: string) => l.split("\t")[0] >= since;
-  const wake = onlyTier("wake", evs.filter(fresh).join("\n")), summary = onlyTier("summary", evs.filter(fresh).join("\n"));
+  // Each question once (every lane logs it: fleet-util.ts, firstQuestions), the first lane's line.
+  // Every question the logs have counts as told from now on, so this overseer's waits don't wake
+  // for a lane that logs one again.
+  const toldQs = told(), seen = new Set<string>();
+  const once = firstQuestions(evs.sort(), seen).filter(fresh).join("\n");
+  for (const q of seen) toldQs.add(q);
+  tell(toldQs);
+  const wake = onlyTier("wake", once), summary = onlyTier("summary", once);
   const ns = notes.filter(fresh);
   say(`--- since ${since}${lastOf ? " (the last overseer's last note)" : was ? " (when the last overseer attached)" : ""}:`);
   const merged = [...wake.map((l) => { const f = l.split("\t"); return [f[0], [...f.slice(0, 2), ...f.slice(3, 5)].join(" · ")]; }),
@@ -112,7 +119,9 @@ export function summary(f: Fleet, args: string[]): number {
     all += r.out;
     if (r.status === 255) console.error(`(${m} is unreachable over ssh: its events aren't here)`);
   }
-  const fresh = lines(all).filter((l) => l.split("\t")[0] >= since);
+  // Each question once (every lane logs it: fleet-util.ts, firstQuestions), and only if its
+  // first line is since then: a lane logging an older one again isn't tonight's.
+  const fresh = firstQuestions(lines(all).sort()).filter((l) => l.split("\t")[0] >= since);
   const kind = (l: string) => l.split("\t")[3] ?? "";
   const outcome = unitOutcome(env);
   // Grouped by kind, so a night's republishes read as one list. With outcomes: under each event,
