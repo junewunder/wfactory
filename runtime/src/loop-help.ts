@@ -202,7 +202,9 @@ or from the loop.
 What the overseer must hear about (a new question, a lane idle 30 minutes,
 a usage pause or resume, a unit a session left stuck, CI, the lane stopping)
 goes to runs/events.log, which \`just fleet wait\` watches. Which kinds wake the
-overseer and which wait for the morning summary is fleet.sh's list (Events).
+overseer and which wait for the morning summary is fleet.sh's list (Events). A
+question is logged by every lane that finds it new after its unit, whoever asked
+it; the overseer hears it once, from the first (fleet.sh, Events).
 
 Usage:
   factory/loop.sh [<loop>] [--max N] [--hours H] [--model M] [--effort E] [--mem SIZE]

@@ -300,6 +300,29 @@ to add a "Now" section, because moving rows was the only way to change what
 **The rule.** Priorities, never row order. The tracker's JSON is written
 only by its CLI.
 
+### 36. One question woke the overseer once per lane (the recompiler factory, November)
+
+**What happened.** The recompiler factory ran four lanes overnight. Two questions were
+asked, each by one session, and each woke the overseer four times, minutes
+apart: every lane logged a `question` event when its own unit ended. A lane
+logged any question open after its session that wasn't open before it, and
+the questions are main's, shared by every lane, so a question asked by one
+lane's session was new to all four. The overseer noted the repeats as a bug
+in the night's journal.
+
+**What it cost.** Six wakes for nothing in one night, each read and
+dismissed, and an overseer left unsure whether the owner had been asked
+twice.
+
+**The rule.** An event a lane works out from main's shared state is seen
+by every lane, so either one place decides who tells it or the reader
+drops the repeats. For questions, the reader does: only the overseer reads
+every lane's log on every machine, while lanes on different machines share
+no lock, and only the asking lane telling would lose a question asked
+outside the lanes or by a lane whose loop died before its unit ended.
+`fleet wait` keeps the questions it told, attach adds every one the logs
+have, and attach and the summary list each once.
+
 ## The code
 
 ### 20. One copy of the loop, deployed

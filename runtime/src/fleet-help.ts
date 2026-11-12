@@ -112,6 +112,10 @@ per event with its kind (loop.sh, store.sh, capped.sh). Each kind is in one of t
   morning summary: collected for \`fleet summary\` and the end-of-run report (EVENTS_SUMMARY)
 A kind in neither list wakes the overseer, so a new kind is never missed. A project moves a
 kind or adds its own in tracker/project.json: "events": {"wake": [...], "summary": [...]}.
+A \`question\` is logged by every lane that finds it open after its unit and not before (the
+questions are main's, so one asked anywhere is new to each lane), and told once: \`fleet wait\`
+wakes for the first lane's line and drops the rest (runs/.fleet-questions has the ones told,
+and \`fleet attach\` adds every one the lanes' logs have); attach and summary list each once.
 
 Memory. \`fleet wait\` also asks each machine's daemon about its memory: an \`oom\` event for
 each process the kernel killed for want of memory (the machine out of it, or a unit at its own

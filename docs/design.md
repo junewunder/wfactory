@@ -279,6 +279,17 @@ lanes' `runs/events.log` and each machine's `runs/oversee.log` (every wake,
 and the overseer's own notes), kept outside git; attaching catches up from
 it since the last overseer's last note.
 
+**A question is told once, by whoever reads.** The questions are main's, so
+a question asked anywhere (a lane's session, an interactive one, the owner's
+`just ask`) is new to every lane when its unit ends, and each logs it. The
+lanes don't settle among themselves which one tells: only the asker's lane
+would lose questions asked outside the lanes, and one whose loop died before
+its unit ended, and lanes on different machines share no lock. The
+overseer reads every lane's log on every machine, so it drops the repeats:
+`fleet wait` keeps the questions told in `runs/.fleet-questions`, `fleet
+attach` adds every one the logs have (an overseer taking over elsewhere
+isn't told them again), and attach and the summary list each once.
+
 ## Group data on a store
 
 - The store holds the true copy of each group's big files. One machine at a

@@ -6,12 +6,12 @@ import { epoch, expandHome, hm, tryLock, ymdHm } from "./sys.ts";
 import type { LaneAsk, MachineAsk, MachineSeen } from "./daemon.ts";
 import { QUIET_MINUTES, beat, beatOf, stake } from "./fleet-beat.ts";
 import { state } from "./fleet-lanes.ts";
-import { cat, chomp, gb, lines, say } from "./fleet-util.ts";
+import { cat, chomp, firstQuestions, gb, lines, say } from "./fleet-util.ts";
 import type { Fleet, Lane } from "./fleet-ctx.ts";
 
 // fleet wait [--minutes N] [--as <id>].
 export async function wait(f: Fleet, args: string[]): Promise<number> {
-  const { env, ME, note, watchOn, tier, onlyTier, service, laneState, MEM_FILE, allLanes, floorOf } = f;
+  const { env, ME, note, watchOn, tier, onlyTier, service, laneState, MEM_FILE, allLanes, floorOf, told, tell } = f;
   let mins = "", as = "";
   for (let i = 0; i < args.length; i += 2) {
     if (args[i] === "--minutes") mins = args[i + 1] ?? "";
@@ -36,6 +36,8 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
   // already told, and whether it was already under the floor (told once, until it recovers).
   let memSeen: Record<string, { since: number; low: boolean }> = {};
   try { memSeen = JSON.parse(cat(MEM_FILE)) ?? {}; } catch {}
+  // The questions already told (every lane logs each one: fleet-util.ts, firstQuestions).
+  const toldQs = told();
   const t0 = epoch();
   const ms = [...new Set(L.map((l) => l.m))];
   for (const m of ms) memSeen[m] ??= { since: t0, low: false };
@@ -108,7 +110,8 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
         if (!now.running) { if (laneState(l.m, l.d) === "stopped") { stopped.push(`${l.m}/lane${l.n}`); was.set(k, false); } else unsure = true; }
         if (s === "-") { seen.set(k, now.count); return; }
         if (now.count > s) {
-          const fresh = now.fresh ?? "";
+          // A question another lane already logged isn't news, nor for the summary.
+          const fresh = firstQuestions(lines(now.fresh ?? ""), toldQs).join("\n");
           news.push(...onlyTier("wake", fresh));
           later += onlyTier("summary", fresh).length;
           seen.set(k, now.count);
@@ -137,6 +140,7 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
   await Promise.all([...ms.map(machineWatch), overseerWatch()]);
   await timer;
   fs.writeFileSync(MEM_FILE, JSON.stringify(memSeen) + "\n");
+  tell(toldQs);
   const r = replaced as { id: string; host: string; at: string } | null;
   // What it found comes first, and why it woke and the heartbeat last, so the end of its output
   // (all a finished background command shows) is enough. Every way of waking exits 0 (a
