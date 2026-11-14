@@ -1,17 +1,18 @@
 // What happened, from the lanes' events and the overseers' journals: attach, note, summary, events.
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
-import { ymdHm } from "./sys.ts";
+import { hm, ymdHm } from "./sys.ts";
 import { beat } from "./fleet-beat.ts";
 import { cat, chomp, dateHm, firstQuestions, lines, say } from "./fleet-util.ts";
 import { EVENTS_OF_A_UNIT, EVENTS_PROBLEM } from "./fleet-help.ts";
 import { JOURNAL } from "./fleet-scripts.ts";
+import { checkFile, laneKey, type Checked } from "./fleet-wait.ts";
 import type { Fleet } from "./fleet-ctx.ts";
 import { summaryLines } from "./scorecard.ts";
 
 // fleet attach [--as <id>]: this thread oversees the factory now, and what happened since the last one.
 export function attach(f: Fleet, args: string[]): number {
-  const { env, ME, NAMES, checkout, sh, note, onlyTier, allLanes, told, tell } = f;
+  const { env, ME, NAMES, checkout, sh, note, onlyTier, allLanes, laneState, told, tell } = f;
   // This thread oversees the factory now: the record on main says so (the newest wins), and
   // the overseer before it is told at its next wait. Then what happened since that one's last
   // note, from every machine's journal it can reach.
@@ -22,10 +23,19 @@ export function attach(f: Fleet, args: string[]): number {
   try { was = JSON.parse(t.stdout).was; } catch {}
   if (was && was.id === id) was = null;
   say(`overseer: ${id} on ${ME}${was ? `, replacing ${was.id} on ${was.host} (its next wait tells it to stop)` : ""}`);
-  say(`wait with: just fleet wait --as ${id}`);
+  say(`wait with: just fleet wait --as ${id} (on a timer's wake instead: just fleet wait --check --as ${id})`);
   // The journal: every lane's events and every machine's overseer notes.
   const evs: string[] = [], notes: string[] = [];
-  for (const { m, d } of allLanes()) evs.push(...lines(sh(m, d, "cat runs/events.log 2>/dev/null || true", { out: "capture", err: "ignore" }).out));
+  // The first check counts from here: each lane's events as read now (a lane that couldn't be
+  // read is left for the check's own first look).
+  const first: Checked = { at: hm(), lanes: {} };
+  for (const l of allLanes()) {
+    const r = sh(l.m, l.d, "cat runs/events.log 2>/dev/null || true", { out: "capture", err: "ignore" });
+    evs.push(...lines(r.out));
+    if (r.status === 0) first.lanes[laneKey(l)] = { running: laneState(l.m, l.d) !== "stopped", count: r.out === "" ? 0 : r.out.split("\n").length - (r.out.endsWith("\n") ? 1 : 0) };
+  }
+  fs.mkdirSync("runs", { recursive: true });
+  fs.writeFileSync(checkFile(id), JSON.stringify(first) + "\n");
   for (const m of NAMES) notes.push(...lines(sh(m, checkout(m), `cat ${JOURNAL} 2>/dev/null || true`, { out: "capture", err: "ignore" }).out).filter((l) => l.split("\t").length >= 4));
   // Since the last overseer's last note, else since it attached, else since this run started.
   const lastOf = was ? notes.filter((l) => l.split("\t")[2] === was!.id).map((l) => l.split("\t")[0]).sort().pop() : undefined;

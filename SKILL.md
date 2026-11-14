@@ -193,7 +193,8 @@ it, reading the whole guide (`just oversee-guide --full`) where the card
 points to it: together they are the whole of overseeing. In short, one overseer runs the whole
 factory: it attaches first (`just fleet attach`), starts the lanes as
 systemd user services that outlive it (`just fleet start --hours N`), and
-sleeps on `just fleet wait` between wake-ups. It never works a unit, never
+sleeps between wake-ups: on a T3 Code timer where there is one (its
+`schedule_task` tool), else on `just fleet wait`. It never works a unit, never
 touches the oracle and never answers the owner's questions for them.
 
 **A brief for another session sets priorities, not a fence.** When you hand

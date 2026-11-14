@@ -52,6 +52,16 @@ Usage:
                                           reads as a failure, and refuses (exit 2) while
                                           another wait for the same overseer runs. Each wake
                                           is noted in the overseer's journal (runs/oversee.log)
+  factory/fleet.sh wait --check [--as ID] the same, at once: what changed since this overseer's
+                                          last check (runs/.check-<ID>.json), for an overseer a
+                                          timer wakes instead of a wait. A lane that was running
+                                          then and has stopped, the wake-now events logged since,
+                                          memory, and a newer overseer, said as a wait says them
+                                          ("woke: time" when nothing changed). The first
+                                          counts from the overseer's attach (or from now,
+                                          with none); a wait moves it on too, so nothing a
+                                          wait told is told again. It shares the wait's lock,
+                                          so it's refused while a wait for that overseer runs
   factory/fleet.sh note [--as ID] <text…> a line in the overseer's journal on this machine
                                           (what it decided, told the owner, waits for)
   factory/fleet.sh summary [--since T] [--done]

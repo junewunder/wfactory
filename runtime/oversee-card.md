@@ -2,8 +2,8 @@
 
 You run the lanes on the machines the owner includes (`just fleet`) and
 watch them until every front is blocked or the time runs out. This card is
-what every wake needs; `just oversee-guide --full` is the whole guide: read
-the part you need when this card points there or something isn't on it.
+what every wake needs; `just oversee-guide --full` is the whole guide, for
+where this card points and what's not on it.
 
 A session starts with `just fleet attach`: it records you as the overseer,
 prints your ID, and catches you up (the guide's step 1 says what to read
@@ -31,21 +31,22 @@ then, and when to `just fleet start`).
 
 ## Waiting
 
-Run this as a background Bash command, with `run_in_background: true` and
-`timeout: 7200000` (a wait lasts up to 55 minutes; a shorter timeout kills it):
+In T3 Code (`schedule_task`), a timer wakes you (guide step 3): each wake,
+run `just fleet wait --check --as <your ID>`; "wait" below means: end
+your turn. Elsewhere, in the background (`run_in_background: true`,
+`timeout: 7200000`, as is):
 
     just fleet wait --as <your ID>
 
-Only one wait per overseer runs; a second is refused. When it returns, its
-last lines say why it woke, then the heartbeat: post the heartbeat line, act,
-and wait again.
+One per overseer. Its end says why you woke, then the heartbeat: post
+it, act, wait again.
 
 | It says | You |
 |---|---|
 | `woke: time` | glance at `just runs 5` and each busy lane's "transcript written … ago" (half an hour or more: look closer), then wait |
-| `woke: news` | handle each line under "for the owner:" (below); "N more for the morning summary" waits for the report |
+| `woke: news` | handle each line under "for the owner:" (below); "N more for the morning summary" waits |
 | `woke: a lane stopped` | read its last lines above it, then the guide's step 4 |
-| `woke: replaced by another overseer` | tell the owner in one line, and stop: no more waits |
+| `woke: replaced by another overseer` | tell the owner in one line, delete your timer, stop: no more waits |
 | `unreachable` | nothing, unless it lasts 30 minutes |
 
 ## Tell the owner now
@@ -64,7 +65,7 @@ and wait again.
 | `resumed`, `resume-refused`, `resume-failed`, `restart-failed` | what came back, or what didn't and why |
 | a machine contradicting `docs/machines.md` | what you saw |
 
-End of the run (the guide's steps 5, 6): tidy (`just fleet tidy` only
+End of the run (the guide's steps 5, 6): delete your timer; tidy (`just fleet tidy` only
 for a machine with no "the last lane stopped" line), then report the
 bad news first, plainly ("none" if so), then what got done (`just
 fleet summary`, `--done` to count).
