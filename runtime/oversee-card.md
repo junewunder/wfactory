@@ -31,14 +31,14 @@ then, and when to `just fleet start`).
 
 ## Waiting
 
-In T3 Code (`schedule_task`), a timer wakes you (guide step 3); each
-wake, run `just fleet wait --check --as <your ID>`. Elsewhere, a background
-Bash command (`run_in_background: true`, `timeout: 7200000`, over the
-wait's 55 minutes):
+In T3 Code (`schedule_task`), a timer wakes you (guide step 3): each wake,
+run `just fleet wait --check --as <your ID>`; "wait" below means: end
+your turn. Elsewhere, in the background (`run_in_background: true`,
+`timeout: 7200000`, as is):
 
     just fleet wait --as <your ID>
 
-One per overseer. The last lines say why you woke, then the heartbeat: post
+One per overseer. Its end says why you woke, then the heartbeat: post
 it, act, wait again.
 
 | It says | You |

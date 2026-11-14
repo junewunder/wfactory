@@ -57,9 +57,11 @@ Usage:
                                           timer wakes instead of a wait. A lane that was running
                                           then and has stopped, the wake-now events logged since,
                                           memory, and a newer overseer, said as a wait says them
-                                          ("woke: time" when nothing changed); a first check
-                                          counts from now. It shares the wait's lock, so it's
-                                          refused while a wait for the same overseer runs
+                                          ("woke: time" when nothing changed). The first
+                                          counts from the overseer's attach (or from now,
+                                          with none); a wait moves it on too, so nothing a
+                                          wait told is told again. It shares the wait's lock,
+                                          so it's refused while a wait for that overseer runs
   factory/fleet.sh note [--as ID] <text…> a line in the overseer's journal on this machine
                                           (what it decided, told the owner, waits for)
   factory/fleet.sh summary [--since T] [--done]

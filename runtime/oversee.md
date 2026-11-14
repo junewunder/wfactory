@@ -344,16 +344,17 @@ end-of-run report sums them up in one line.
        on what it says as the overseer's card says, post the heartbeat
        line, and end your turn.
 
-   Tell the owner its ID and next run time, note the ID (`just fleet note`),
-   and end your turn. Delete it (`delete_scheduled_task`) when you stop. A
-   wake that comes while you're still working is one check, after. A check says
-   what changed since the last one in the same words as a wait, so
-   everything below holds for it, but at once: news waits for the next
-   tick, up to 20 minutes, where a wait wakes you as it comes. What it buys
-   is that you can't forget: an overseer that doesn't start its wait again
-   leaves the lanes unwatched until the owner looks, and a timer fires
-   anyway. Run no `just fleet wait` beside it (a check is refused while
-   one runs).
+   Tell the owner its title and next run time, note its ID (`just fleet
+   note`), and end your turn. Delete it (`delete_scheduled_task`) when you
+   stop. A wake that comes while you're still working is one check, after.
+   A check says what changed since the last one (the first, since you
+   attached) in the same words as a wait, so everything below holds for
+   it, except that "wait again" means end your turn. It hears news at the
+   next tick, up to 20 minutes on, where a wait wakes you as it comes.
+   What it buys is that you can't forget: an overseer that doesn't start
+   its wait again leaves the lanes unwatched until the owner looks, and a
+   timer fires anyway. Run no `just fleet wait` beside it: a check is
+   refused while one runs.
 
    Anywhere else, run `just fleet wait --as <your ID>` as a **background**
    command: the Bash tool with `run_in_background: true` and `timeout:

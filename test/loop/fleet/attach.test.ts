@@ -42,4 +42,11 @@ describe("overseers attach: the newest one wins, and catches up from the journal
   test("  with the last one's notes", () => { has(o, "overseer ovB: told the owner the editor needs a sign-in"); });
   test("  since that one's last note", () => { has(o, "(the last overseer's last note)"); });
   test("  and a heartbeat", () => { has(o, "busy, 0 waiting"); });
+  // Its first check counts from the attach, not from itself (a timer's first wake is a tick later).
+  test("  its first check hears what happened since it attached", () => {
+    ev("stuck", "After attach (g/after): stuck: a test");
+    const c = out(["wait", "--check", "--as", "ovC"]);
+    has(c, "woke: news: stuck");
+    has(c, "After attach (g/after)");
+  });
 });

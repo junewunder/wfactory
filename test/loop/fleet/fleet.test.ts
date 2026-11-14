@@ -249,6 +249,17 @@ describe("fleet wait --check", () => {
     has(r.stdout, "woke: time: nothing to act on");
     has(r.stdout, "(1 more for the morning summary");
   });
+  // A lane that wasn't running at the last check (started again since): its events are news.
+  test("a lane down at the last check: its events since are news, and no stop", () => {
+    const c = JSON.parse(readOr(path.join(F, "runs/.check-ovT.json")));
+    for (const k of Object.keys(c.lanes)) c.lanes[k].running = false;
+    fs.writeFileSync(path.join(F, "runs/.check-ovR.json"), JSON.stringify(c));
+    ev("stuck", "Restarted unit (g/restarted): stuck: a test");
+    const o = fleet(["wait", "--check", "--as", "ovR"]).stdout;
+    has(o, "woke: news: stuck");
+    has(o, "Restarted unit (g/restarted)");
+    hasnt(o, "woke: a lane stopped");
+  });
   test("  it takes no --minutes", () => {
     const x = fleet(["wait", "--check", "--minutes", "1", "--as", "ovT"]);
     assert.equal(x.code, 2);
@@ -351,8 +362,7 @@ describe("fleet wait: one per overseer", () => {
 describe("fleet wait: a lane that stops", () => {
   let r = { code: 0, stdout: "" };
   test("fleet wait returns when a lane stops", async () => {
-    fleet(["wait", "--check", "--as", "ovS"]);
-    const b = await waitFor(["--minutes", "3"]);
+    const b = await waitFor(["--minutes", "3", "--as", "ovS"]);
     seven.go();
     r = await b.end();
     assert.equal(r.code, 0);
@@ -369,12 +379,12 @@ describe("fleet wait: a lane that stops", () => {
   test("  naming it", () => { has(r.stdout, `stopped: ${HOST}/lane1`); });
   test("  with a heartbeat", () => { has(r.stdout, "0 busy, 0 waiting, 1 stopped"); });
   test("  each wake noted in the overseer's journal", () => { has(readOr(path.join(F, "runs/oversee.log")), `wait: woke: a lane stopped: ${HOST}/lane1`); });
-  test("  and the next check says so too", () => {
+  // A wait leaves what a check counts from: the stop it told isn't told again.
+  test("  and the same overseer's check after it doesn't tell it again", () => {
     const c = fleet(["wait", "--check", "--as", "ovS"]).stdout;
-    has(c, `woke: a lane stopped: ${HOST}/lane1`);
-    has(c, `stopped: ${HOST}/lane1`);
+    has(c, "woke: time: nothing to act on since the last check");
+    hasnt(c, "stopped:");
   });
-  test("  once: the check after has nothing to act on", () => { has(fleet(["wait", "--check", "--as", "ovS"]).stdout, "woke: time: nothing to act on"); });
   test("  a lane that stops by itself drops its daemon record", () => { assert.ok(!fs.existsSync(record(LANE))); });
 });
 

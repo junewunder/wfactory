@@ -292,10 +292,12 @@ next one, and overseers forget: the lanes then run unwatched until the
 owner looks. A timer the chat app runs (T3 Code's scheduled tasks) fires
 whether or not the overseer remembers, so where there is one it's the
 default, and each wake runs `fleet wait --check`: the same reading as a
-wait, at once, counted from the last check's `runs/.check-<id>.json`. It
-hears news up to a tick late (20 minutes), which is the price. The check
-and a wait share the wait's lock, so an overseer can't run both and hear
-everything twice.
+wait, at once, counted from `runs/.check-<id>.json`. Attach writes the
+first of those and every check and wait writes the next, so the first
+check hears what happened since the attach, and nothing a wait told is
+told again by a check. It hears news up to a tick late (20 minutes),
+which is the price. A check and a wait share the wait's lock, so the two
+never run at once.
 
 **A question is told once, by whoever reads.** The questions are main's, so
 a question asked anywhere (a lane's session, an interactive one, the owner's

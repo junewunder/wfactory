@@ -11,7 +11,11 @@ import { cat, chomp, firstQuestions, gb, lines, say } from "./fleet-util.ts";
 import type { Fleet, Lane } from "./fleet-ctx.ts";
 
 // What a check left for the next one: each lane's job and event count, keyed as `key` below.
-interface Checked { at: string; lanes: Record<string, { running: boolean; count: number }> }
+// A wait leaves it too, so a check after a wait doesn't tell again what the wait told, and
+// attach leaves the first (fleet-journal.ts), so the first check counts from the attach.
+export interface Checked { at: string; lanes: Record<string, { running: boolean; count: number }> }
+export const checkFile = (as: string) => `runs/.check-${(as || "-").replace(/[^A-Za-z0-9._-]/g, "_")}.json`;
+export const laneKey = (l: Lane) => `${l.m}\t${l.n}\t${l.d}`;
 
 // fleet wait [--minutes N | --check] [--as <id>].
 export async function wait(f: Fleet, args: string[]): Promise<number> {
@@ -36,7 +40,7 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
   fs.ftruncateSync(held, 0); fs.writeSync(held, `${process.pid} ${hm()}\n`);
   const every = Number(env.FACTORY_WAIT_EVERY) > 0 ? Number(env.FACTORY_WAIT_EVERY) : 60;
   const L = allLanes();
-  const key = (l: Lane) => `${l.m}\t${l.n}\t${l.d}`;
+  const key = laneKey;
   const ask = (l: Lane): LaneAsk => ({ unit: service(l.d), dir: l.m === ME ? expandHome(l.d, env) : l.d });
   // What each machine's memory said at the last wait (runs/.fleet-memory): the newest kill
   // already told, and whether it was already under the floor (told once, until it recovers).
@@ -76,13 +80,13 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
     }
   };
   // A lane's look, as the watch below reads it: its stop (checked with the service manager once
-  // more before it's news) and its events since `s`. True when the daemon took it for stopped
-  // but the service manager still runs it.
-  const take = (l: Lane, s: number | "-", now: { running: boolean; count: number; fresh?: string }) => {
+  // more before it's news; not with `stops` false) and its events since `s`. True when the daemon
+  // took it for stopped but the service manager still runs it.
+  const take = (l: Lane, s: number | "-", now: { running: boolean; count: number; fresh?: string }, stops = true) => {
     const k = key(l);
     let unsure = false;
     gone.set(k, false);
-    if (!now.running) { if (laneState(l.m, l.d) === "stopped") { stopped.push(`${l.m}/lane${l.n}`); was.set(k, false); } else unsure = true; }
+    if (!now.running && stops) { if (laneState(l.m, l.d) === "stopped") { stopped.push(`${l.m}/lane${l.n}`); was.set(k, false); } else unsure = true; }
     if (s === "-" || now.count < s) { seen.set(k, now.count); return unsure; }
     if (now.count > s) {
       // A question another lane already logged isn't news, nor for the summary.
@@ -93,9 +97,9 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
     seen.set(k, now.count);
     return unsure;
   };
-  const CHECK_FILE = `runs/.check-${(as || "-").replace(/[^A-Za-z0-9._-]/g, "_")}.json`;
+  const CHECK_FILE = checkFile(as);
   let last: Checked = { at: "", lanes: {} };
-  if (check) { try { last = { ...last, ...JSON.parse(cat(CHECK_FILE)) }; } catch {} }
+  try { last = { ...last, ...JSON.parse(cat(CHECK_FILE)) }; } catch {}
   // A check: each lane the last check saw, as a watch that ends at once (its events since then,
   // and a stop); each lane it didn't, a first look, counted from now.
   if (check) await Promise.all(ms.map(async (m) => {
@@ -111,8 +115,9 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
         old.forEach((l, i) => {
           const before = last.lanes[key(l)];
           const now = r.lanes[i];
-          // A lane that wasn't running at the last check is only counted.
-          if (!before.running) { was.set(key(l), now.running); seen.set(key(l), now.count); return; }
+          // A lane that wasn't running at the last check (one started again since): its events,
+          // but no stop.
+          if (!before.running) { take(l, before.count, now, false); was.set(key(l), now.running); return; }
           if (take(l, before.count, now)) was.set(key(l), true);
         });
         machineNews(m, r.machine);
@@ -185,14 +190,6 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
       const r = spawnSync("factory/tracker", ["overseer", "--json"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
       try { const o = JSON.parse(r.stdout); if (o && o.id && o.id !== as) replaced = o; } catch {}
     }
-    // What the next check counts from; a lane no machine answered for keeps what it had.
-    const next: Checked = { at: hm(), lanes: {} };
-    for (const l of L) {
-      const k = key(l), s = seen.get(k);
-      if (typeof s === "number") next.lanes[k] = { running: was.get(k) ?? true, count: s };
-      else if (last.lanes[k]) next.lanes[k] = last.lanes[k];
-    }
-    fs.writeFileSync(CHECK_FILE, JSON.stringify(next) + "\n");
   } else {
     if (news.length) ac.abort();
     // Until something wakes it, or the time runs out (with no lane running, that's all).
@@ -200,6 +197,14 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
     await Promise.all([...ms.map(machineWatch), overseerWatch()]);
     await timer;
   }
+  // What the next check counts from; a lane no machine answered for keeps what it had.
+  const next: Checked = { at: hm(), lanes: {} };
+  for (const l of L) {
+    const k = key(l), s = seen.get(k);
+    if (typeof s === "number") next.lanes[k] = { running: was.get(k) ?? true, count: s };
+    else if (last.lanes[k]) next.lanes[k] = last.lanes[k];
+  }
+  fs.writeFileSync(CHECK_FILE, JSON.stringify(next) + "\n");
   fs.writeFileSync(MEM_FILE, JSON.stringify(memSeen) + "\n");
   tell(toldQs);
   const r = replaced as { id: string; host: string; at: string } | null;
