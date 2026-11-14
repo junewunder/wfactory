@@ -220,6 +220,48 @@ describe("fleet wait: what wakes it", () => {
   test("  for the owner, with the cap", () => { has(r.stdout, `${HOST} · oom-kill · just capped ${HOG} was killed: out of memory at 20M`); });
 });
 
+// A check (a timer's wake, not a wait): at once, what changed since this overseer's last one.
+describe("fleet wait --check", () => {
+  const check = () => fleet(["wait", "--check", "--as", "ovT"]);
+  let r = { code: 0, stdout: "" };
+  test("a first check counts from now, exit 0", () => {
+    ev("stuck", "Old unit (g/old): stuck: before the first check");
+    r = check();
+    assert.equal(r.code, 0);
+    has(r.stdout, "woke: time: a first check, counting from now");
+    hasnt(r.stdout, "Old unit");
+  });
+  test("  with a heartbeat", () => { has(r.stdout, "1 busy, 0 waiting, 0 stopped"); });
+  test("a wake-now event since the last check is news", () => {
+    ev("stuck", "Checked unit (g/checked): stuck: a test");
+    r = check();
+    has(r.stdout, "woke: news: stuck");
+    has(r.stdout, "stuck · Checked unit (g/checked): stuck: a test");
+  });
+  test("  and only once: the next check has nothing to act on", () => {
+    r = check();
+    has(r.stdout, "woke: time: nothing to act on since the last check (");
+    hasnt(r.stdout, "Checked unit");
+  });
+  test("a summary event since the last check is counted for the morning, not news", () => {
+    ev("store-aside", "set aside at a check");
+    r = check();
+    has(r.stdout, "woke: time: nothing to act on");
+    has(r.stdout, "(1 more for the morning summary");
+  });
+  test("  it takes no --minutes", () => {
+    const x = fleet(["wait", "--check", "--minutes", "1", "--as", "ovT"]);
+    assert.equal(x.code, 2);
+  });
+  test("  and is refused while a wait for the same overseer runs", async () => {
+    const b = await waitFor(["--minutes", "0.1", "--as", "ovT"]);
+    const x = check();
+    await b.end();
+    assert.equal(x.code, 2);
+    has(x.stdout, "a wait for overseer ovT is already running");
+  });
+});
+
 // The machine's memory, as its daemon reads it (stand-ins: test/lib's originFactory).
 describe("fleet wait: a machine short of memory", () => {
   const klog = w.env.FACTORY_KERNEL_LOG!, meminfo = w.env.FACTORY_MEMINFO!;
@@ -309,6 +351,7 @@ describe("fleet wait: one per overseer", () => {
 describe("fleet wait: a lane that stops", () => {
   let r = { code: 0, stdout: "" };
   test("fleet wait returns when a lane stops", async () => {
+    fleet(["wait", "--check", "--as", "ovS"]);
     const b = await waitFor(["--minutes", "3"]);
     seven.go();
     r = await b.end();
@@ -326,6 +369,12 @@ describe("fleet wait: a lane that stops", () => {
   test("  naming it", () => { has(r.stdout, `stopped: ${HOST}/lane1`); });
   test("  with a heartbeat", () => { has(r.stdout, "0 busy, 0 waiting, 1 stopped"); });
   test("  each wake noted in the overseer's journal", () => { has(readOr(path.join(F, "runs/oversee.log")), `wait: woke: a lane stopped: ${HOST}/lane1`); });
+  test("  and the next check says so too", () => {
+    const c = fleet(["wait", "--check", "--as", "ovS"]).stdout;
+    has(c, `woke: a lane stopped: ${HOST}/lane1`);
+    has(c, `stopped: ${HOST}/lane1`);
+  });
+  test("  once: the check after has nothing to act on", () => { has(fleet(["wait", "--check", "--as", "ovS"]).stdout, "woke: time: nothing to act on"); });
   test("  a lane that stops by itself drops its daemon record", () => { assert.ok(!fs.existsSync(record(LANE))); });
 });
 

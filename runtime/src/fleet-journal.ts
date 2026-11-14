@@ -22,7 +22,7 @@ export function attach(f: Fleet, args: string[]): number {
   try { was = JSON.parse(t.stdout).was; } catch {}
   if (was && was.id === id) was = null;
   say(`overseer: ${id} on ${ME}${was ? `, replacing ${was.id} on ${was.host} (its next wait tells it to stop)` : ""}`);
-  say(`wait with: just fleet wait --as ${id}`);
+  say(`wait with: just fleet wait --as ${id} (on a timer's wake instead: just fleet wait --check --as ${id})`);
   // The journal: every lane's events and every machine's overseer notes.
   const evs: string[] = [], notes: string[] = [];
   for (const { m, d } of allLanes()) evs.push(...lines(sh(m, d, "cat runs/events.log 2>/dev/null || true", { out: "capture", err: "ignore" }).out));

@@ -286,6 +286,17 @@ lanes' `runs/events.log` and each machine's `runs/oversee.log` (every wake,
 and the overseer's own notes), kept outside git; attaching catches up from
 it since the last overseer's last note.
 
+**A timer wakes the overseer where it can.** A background `fleet wait`
+keeps the overseer awake only while the overseer remembers to start the
+next one, and overseers forget: the lanes then run unwatched until the
+owner looks. A timer the chat app runs (T3 Code's scheduled tasks) fires
+whether or not the overseer remembers, so where there is one it's the
+default, and each wake runs `fleet wait --check`: the same reading as a
+wait, at once, counted from the last check's `runs/.check-<id>.json`. It
+hears news up to a tick late (20 minutes), which is the price. The check
+and a wait share the wait's lock, so an overseer can't run both and hear
+everything twice.
+
 **A question is told once, by whoever reads.** The questions are main's, so
 a question asked anywhere (a lane's session, an interactive one, the owner's
 `just ask`) is new to every lane when its unit ends, and each logs it. The

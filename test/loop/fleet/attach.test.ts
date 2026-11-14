@@ -26,6 +26,12 @@ describe("overseers attach: the newest one wins, and catches up from the journal
   // the overseer ran \`head\` on the output file at every wake to read the reason).
   test("    saying last that it was replaced", () => { has(lastLine(r.stdout), `woke: replaced by another overseer: ovB on ${HOST}`); });
   test("    and to stop", () => { has(r.stdout, "stop here, and don't wait again"); });
+  test("  as does its next check", () => {
+    const c = fleet(["wait", "--check", "--as", "ovA"]);
+    assert.equal(c.code, 0);
+    has(lastLine(c.stdout), `woke: replaced by another overseer: ovB on ${HOST}`);
+  });
+  test("  saying how a timer's wake checks", () => { has(o, "just fleet wait --check --as ovA"); });
   test("  the newest one waits as usual", () => { has(out(["wait", "--as", "ovB", "--minutes", "0.05"], { FACTORY_WAIT_EVERY: "1" }), "woke: time"); });
   test("a new overseer catches up from the journal", () => {
     fleet(["note", "--as", "ovB", "told the owner the editor needs a sign-in"]);

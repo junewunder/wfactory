@@ -333,7 +333,29 @@ end-of-run report sums them up in one line.
    <this machine>. Want <the others> too?" Don't wait for the answer. Nothing
    runs on a machine the owner hasn't included; on a yes, `just fleet start
    <machine> --until <the deadline>`.
-3. **Wait.** Run `just fleet wait --as <your ID>` as a **background**
+3. **Wait.** In a T3 Code chat (its `schedule_task` tool is defined, perhaps
+   deferred: search for it once), a timer wakes you instead of a wait.
+   Right after attaching, create one interval task with `schedule_task`:
+   `schedule: {type: "interval", everyMs: 1200000}` (20 minutes),
+   `bindToCurrentThread: true`, `freshSession: false` (each wake keeps this
+   session), a title like "Oversee check-in", and this prompt, your ID in it:
+
+       Oversee check-in: run `just fleet wait --check --as <your ID>`, act
+       on what it says as the overseer's card says, post the heartbeat
+       line, and end your turn.
+
+   Tell the owner its ID and next run time, note the ID (`just fleet note`),
+   and end your turn. Delete it (`delete_scheduled_task`) when you stop. A
+   wake that comes while you're still working is one check, after. A check says
+   what changed since the last one in the same words as a wait, so
+   everything below holds for it, but at once: news waits for the next
+   tick, up to 20 minutes, where a wait wakes you as it comes. What it buys
+   is that you can't forget: an overseer that doesn't start its wait again
+   leaves the lanes unwatched until the owner looks, and a timer fires
+   anyway. Run no `just fleet wait` beside it (a check is refused while
+   one runs).
+
+   Anywhere else, run `just fleet wait --as <your ID>` as a **background**
    command: the Bash tool with `run_in_background: true` and `timeout:
    7200000`. The timeout has to be longer than the wait, which lasts up to
    55 minutes: a shorter one kills the wait before it wakes you. You're
@@ -353,7 +375,8 @@ end-of-run report sums them up in one line.
    overseer catches up from if this thread dies.
    - **"woke: replaced by another overseer"**: a newer thread oversees the
      factory now. Tell the owner in one line ("Another thread has taken over
-     overseeing; I've stopped"), and stop: no more waits, no more changes.
+     overseeing; I've stopped"), delete your timer if you have one, and
+     stop: no more waits, no more changes.
    - **"woke: time"**: glance at `just runs 5` (the same unit three
      times running? a cost spike?), `just log --since 1h` and each busy
      lane's "transcript written … ago" in the heartbeat (half an hour or
@@ -373,7 +396,8 @@ end-of-run report sums them up in one line.
      running. Say nothing unless it lasts 30 minutes; then tell the owner.
    - **Something due at a set time** ("check at 5 am", "pause at 7"): note
      the time and do it on the first wake-up after it; they come at least
-     every 55 minutes (30 within the hour of a lane's stop time). Never set
+     every 55 minutes (30 within the hour of a lane's stop time; 20 on a
+     timer). Never set
      a `sleep` timer for it: background commands
      are stopped after 2 hours, so a long one dies silently before it fires.
 4. **Decide** from that lane's last log line (`just fleet state <machine>`):
@@ -433,7 +457,8 @@ end-of-run report sums them up in one line.
      Last call isn't cut short by a red main: it runs to its end, and what
      couldn't land waits on its branch, for the report.
    - **Anything the spec doesn't cover:** tell the owner, and leave that lane down.
-5. **Tidy up**, when every lane is stopped for good. The last lane to stop
+5. **Tidy up**, when every lane is stopped for good. Delete your timer
+   first, if you have one (`delete_scheduled_task`). The last lane to stop
    on a machine tidies it itself (copies its leases back, runs the project's
    `factory/tidy`: the editor, a headless desktop), records that on main and
    only then lets the machine sleep. So read the record first, not the
