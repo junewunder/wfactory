@@ -510,7 +510,7 @@ them.
 | "stop at 9" | `just fleet stop-at 09:00 <machine>` | the lanes stop at 9 (or at their `--hours`, if sooner), with last call half an hour before (plus the CI still to run) | until then |
 | "pick up the fix" (a fix to the skill is pushed) | `just fleet restart <machine>` (`--lane N` for one) | the newest pushed skill is deployed there; each running lane restarts on it when its own unit ends, or at once if it's waiting, without waiting for the others; nothing stops, and the stop time and leases carry on | the length of each lane's running unit |
 | "add / resume <machine>" | `just fleet start <machine> --until <the deadline>` | starts its lanes | a minute |
-| "N lanes on <machine> tonight" | `just fleet start <machine> --lanes N --until <the deadline>` | starts that many lanes for this run; `docs/machines.md` keeps its count, and a later start there without `--lanes` goes back to it | a minute |
+| "N lanes on <machine> tonight" | `just fleet start <machine> --lanes N --until <the deadline>` | starts that many lanes for this run; `docs/machines.md` keeps its count, and a later start there without `--lanes` goes back to it. Lane clones past N that no loop runs in and that hold nothing origin lacks are deleted, so the next bigger start clones and builds them again | a minute |
 
 After "find a good pausing spot", "pause asap" or "wrap up and publish",
 once the lanes have stopped, check that machine's tidy record as in step 5.

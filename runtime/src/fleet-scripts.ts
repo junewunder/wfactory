@@ -69,5 +69,5 @@ export const DROP_CLONE = `${NETGIT}c=$0; cd "$c" || exit 0
   netgit fetch -q origin 2>/dev/null
   u=$(git for-each-ref --format='%(refname:short)' refs/heads | while read -r b; do [ -z "$(git rev-list -n 1 "$b" --not --remotes=origin 2>/dev/null)" ] || printf '%s ' "$b"; done)
   [ -z "$u" ] || { echo "$c: an orphaned lane clone with commits origin lacks (on $u): left alone"; exit 0; }
-  cd .. && rm -rf "$c" && echo "removed $c: an orphaned lane clone (its lane is past docs/machines.md's count)"`;
+  cd .. && rm -rf "$c" && echo "removed $c: an orphaned lane clone (its lane is past this start's count: docs/machines.md's, or --lanes)"`;
 export const TIDY_MACHINE = `if [ -x factory/tidy ]; then timeout 300 factory/tidy && echo "factory/tidy: done"; else echo "(no factory/tidy here)"; fi`;
