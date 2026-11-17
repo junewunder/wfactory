@@ -3,9 +3,9 @@
 wfactory runs AI agents through a backlog of similar work for hours, on
 your own machines, while you're away. Each unit of work gets a fresh
 Claude Code session, and a check you trust (the skill calls it the
-oracle) decides whether the unit is done. The agent that did the work doesn't get
-a say.
-Your part is answering the questions the factory saves up for you.
+oracle) decides whether the unit is done. The agent that did the work
+doesn't get a say. Your part is answering the questions the factory saves
+up for you.
 
 To try it, [Install](#install) is one sentence to Claude Code and a
 15-minute toy factory. The sessions run unattended with broad permissions
@@ -70,9 +70,9 @@ Next: Turn titles into URL slugs (text/slugify)
   Status: broken again: its check passed before and now fails (exit 1)
 ```
 
-Not every rule is held by code. Done-when-the-check-passes, rechecking, and
-"the session that did the work can't sign it off" are enforced by the
-tracker and its tests. Checking the real target, settling noise, and never
+Not every rule is held by code. The tracker and its tests enforce three:
+a unit is done when its check passes, a check is rerun when its inputs
+change, and the session that did the work can't sign it off. Checking the real target, settling noise, and never
 weakening a test to go green are rules in the prompt every session reads,
 backed by a fresh session's review of each branch. The tables under
 [What "done" means](#what-done-means) say which is which, and where each can
@@ -113,9 +113,8 @@ in the closet. Git is the only thing they share. There's no server, database
 or container image to run and keep up, and everything a factory knows is in
 the repo. Start on one machine with one lane, though: lanes on several
 machines are newer and less tried (see [below](#whats-settled-and-whats-moving)).
-The price is a lot of commits: a factory with lanes on two
-machines makes hundreds a night, most of them the tracker's.
-It isn't meant for teams or companies, which hosted platforms serve.
+The price is a lot of commits: a factory with lanes on two machines makes
+hundreds a night, most of them the tracker's. It isn't meant for teams or companies, which hosted platforms serve.
 
 It doesn't fit a handful of one-off tasks, or work nothing can check; the
 skill says so and won't build a factory for it, since a factory without a
@@ -191,6 +190,7 @@ In one factory in October 2026, the check each group of units runs after
 merging (rebuild, test, publish) failed 125 of the 351 times it finished,
 some of those false alarms in the check itself. Each failure held back that
 group's publish.
+
 In the same factory, from 1 October to 17 November 2026, a fresh session
 reviewed 593 finished branches from one machine's lanes before they landed.
 It sent 45 back for fixes. The review fails open (one that times out or
@@ -208,8 +208,9 @@ Game Boy Advance games into native Rust programs. It runs as a factory:
 each unit is a piece of the recompiler or a checkpoint in a game, and its
 check is the emulator mGBA: gbaa's interpreter and the recompiled build both
 have to draw the frame mGBA draws. Pokémon Emerald now plays recompiled,
-its intro frame for frame the same as mGBA. Its tracker is in the repo (473 units, 47 questions to me and 149
-decisions on 14 November 2026, each with its history),
+its intro frame for frame the same as mGBA. Its tracker is in the repo
+(473 units, 47 questions to me and 149 decisions on 14 November 2026, each
+with its history),
 and [its factory spec](https://github.com/junewunder/gbaa/blob/main/docs/factory.md)
 says what its check is and what counts as evidence, so you can see how the
 rules above played out on real work.
