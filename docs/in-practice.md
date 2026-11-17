@@ -36,6 +36,9 @@ fixes, 6 of them a second time. None landed without a review: the review
 fails open (one that times out or can't answer lets the branch land), and
 in that period it never had to.
 
+In the same factory, a finished unit cost a median of $1.68 in
+API-equivalent terms, $1193.60 for 489 units, from one machine's lanes.
+
 In the same factory in October 2026, the check each group of units runs
 after merging (rebuild, test, publish) failed 125 of the 351 times it
 finished, some of those false alarms in the check itself. Each failure held

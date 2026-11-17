@@ -6,11 +6,15 @@ is done. It's an ordinary TypeScript program with no model in it: a
 tracker, a loop and the checks. It installs as a Claude Code skill that
 helps you set a factory up.
 
-A night with it goes like this:
+A night with it goes like this. You start the lanes (a lane runs one
+session at a time; one lane on one machine is the normal setup):
 
 ```
 $ just fleet start --until 07:00
 ```
+
+Or tell your agent "oversee until 7", and a Claude session, the overseer,
+runs them and reports to you.
 
 1. A lane claims the next unit from the tracker.
 2. It starts one headless `claude -p` session on that unit, on its own
@@ -24,10 +28,11 @@ $ just fleet start --until 07:00
    with options and a default, and the lane moves on to other work.
 
 In the morning, `just questions` shows what's waiting on you and `just
-runs` shows every session with its result, cost and transcript.
+runs` lists every session with its result, cost and transcript. In one factory,
+a finished unit cost a median of $1.68 in API-equivalent terms over 489
+units ([docs/in-practice.md](docs/in-practice.md)).
 
-It's early. I use it every day on my own projects, but few other people
-have installed it yet.
+It's early: I use it every day, but few others have installed it yet.
 
 ## Why not write your own loop?
 
@@ -61,8 +66,9 @@ Turn titles into URL slugs (text/slugify): BROKEN AGAIN, its check passed before
 ## The protections
 
 Each line is what goes wrong without it, what wfactory does, and whether
-code holds it (with its test) or only the prompt asks. They stop mistakes,
-not cheating: a session runs as you and could get around them on purpose.
+code holds it (with its test) or only the prompt asks. They're aimed at
+mistakes: a session runs as you, and one that set out to cheat could get
+around them.
 
 - An agent says a unit is done when it isn't. For a unit with a check the
   tracker can run (a command, or an output file it can test), the
@@ -81,9 +87,9 @@ not cheating: a session runs as you and could get around them on purpose.
   them are dropped when it lands. Code (`test/branches/landing.test.ts`),
   but with no git remote there are no branches.
 - The check passes but the change is wrong where the check doesn't look.
-  A fresh read-only session reviews each branch against its card before it
-  lands and can send it back with findings; sent back twice, it waits for
-  you. Code (`test/branches/review.test.ts`). It fails open: a review that
+  A fresh read-only session reviews each branch against the unit's
+  description before it lands and can send it back with findings; sent
+  back twice, it waits for you. Code (`test/branches/review.test.ts`). It fails open: a review that
   times out or gives no verdict lets the branch land, and the overseer is
   told. In one factory it reviewed 593 branches and sent 45 back.
 - Work piles onto a broken main. While main fails its check, finished
@@ -115,8 +121,9 @@ not cheating: a session runs as you and could get around them on purpose.
 - A noisy check marks good work red. It gets a resampling rule first.
   Prompt.
 
-The 3327 tests run real lanes against a fake `claude`, a local bare origin
-and real systemd units, and pass at every commit ([AGENTS.md](AGENTS.md)).
+More than 3,000 tests run real lanes against a fake `claude`, a local bare
+origin and real systemd units. They pass at every commit, on Linux; the
+macOS path is less tested ([AGENTS.md](AGENTS.md)).
 
 None of this is a sandbox. Sessions run with `--permission-mode auto` and
 can reach whatever your user account can, network and credentials
@@ -125,12 +132,12 @@ pause` stops after the running units; `just fleet stop` stops everything now.
 
 ## Who it's for
 
-Many units of the same kind of work, and a way to tell a good unit from a
-bad one without looking yourself: a corpus to convert, a library to port, a
-test suite to make pass one case at a time. One person, one machine or a
-few that share only git, no server. Not a handful of one-off tasks, or work
-nothing can check; the skill says so rather than build a factory that
-produces confident junk overnight.
+It fits many units of the same kind of work, with a way to tell a good unit
+from a bad one without looking yourself: a corpus to convert, a library to
+port, a test suite to make pass one case at a time. It's for one person
+with one machine, or a few that share only git; there's no server. For a
+handful of one-off tasks, or work nothing can check, the skill says so and
+won't build a factory that would produce confident junk overnight.
 
 Lanes don't start on day one. The skill first works with you on the check
 and a few trial units, then pilots two or three with you watching, then
