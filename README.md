@@ -7,6 +7,9 @@ oracle) decides whether the unit is done. The agent that did the work doesn't ge
 a say.
 Your part is answering the questions the factory saves up for you.
 
+To try it, [Install](#install) is one sentence to Claude Code and a
+15-minute toy factory.
+
 > **Early, and developed in the open.** I run this every day on my own
 > projects, but few other people have installed it yet. Expect rough edges
 > and breaking changes, and please open an issue when something goes wrong.
@@ -41,6 +44,36 @@ tracker runs it and records the result, and refuses a session that tries to
 mark the unit done itself ([below](#what-done-means) is where that can
 slip). Models do the work inside the sessions, and the overseer that
 reports to you is a Claude session too.
+
+Here is the tracker with a unit whose check is a test script, and a
+session that says it's finished before the test passes (real output,
+trimmed):
+
+```
+$ just tracker add-unit text/slugify --title "Turn titles into URL slugs" \
+    --probe-cmd "bash test/slugify.sh" --inputs src/slugify.sh,test/slugify.sh
+$ just tracker done text/slugify --evidence "wrote it, looks right"
+Turn titles into URL slugs (text/slugify) is done when its check passes
+(`bash test/slugify.sh` passes). Make it pass, then `just recheck text/slugify`.
+[exit 2]
+  ... the session fixes src/slugify.sh ...
+$ just tracker refresh
+Turn titles into URL slugs (text/slugify): now done (exit 0)
+  ... later, a change to shared code breaks it ...
+$ just tracker refresh
+Turn titles into URL slugs (text/slugify): BROKEN AGAIN, its check passed before (exit 1)
+$ just tracker next
+Next: Turn titles into URL slugs (text/slugify)
+  Status: broken again: its check passed before and now fails (exit 1)
+```
+
+Not every rule is held by code. Done-when-the-check-passes, rechecking, and
+"the session that did the work can't sign it off" are enforced by the
+tracker and its tests. Checking the real target, settling noise, and never
+weakening a test to go green are rules in the prompt every session reads,
+backed by a fresh session's review of each branch. The tables under
+[What "done" means](#what-done-means) say which is which, and where each can
+slip.
 
 It installs as a Claude Code skill: [SKILL.md](SKILL.md) tells your agent
 how to set up a factory, and the runtime runs it. Today it drives Claude
@@ -159,8 +192,8 @@ From the run records of seven factories on one Max 20x plan in October
   usage. The 5-hour window peaked at 20 to 40%.
 
 Those nights include some of my own use of the same account, so treat them
-as rough. Scaled by each plan's share of Max 20x's usage, for units like
-these:
+as rough. The other plans' rows below aren't measured: they're Max 20x's
+figures scaled by each plan's share of its usage, for units like these:
 
 | Plan | A week's usage covers | 300 units take |
 | --- | --- | --- |
@@ -180,14 +213,19 @@ usage the lanes could have had. `just usage` shows where they are.
 
 Every lane starts Claude Code sessions with `--permission-mode auto`. They
 run commands, edit files and commit on your machine with nobody watching.
+A session starts in the factory's folder but isn't confined to it: it can
+reach whatever your user account can, including other files, credentials
+in your environment and the network.
 The guardrails are a memory cap per session, the check, the tracker's rules
 and Claude Code's auto-mode classifier. None of these is a sandbox. Use it
 only in a repo and on an account you'd let an agent loose in.
 
 To stop a night early, tell your agent to stop, or run `just fleet pause`
 (finish the running units) or `just fleet stop` (kill everything now).
-Everything an agent did is a commit: in your checkout if there's no git
-remote, or with one, on a branch per unit that the loop merges and pushes.
+Everything an agent did in the repo is a commit: in your checkout if
+there's no git remote, or with one, on a branch per unit that the loop
+merges into main and pushes, after a fresh session reviews it (a review
+that times out or can't answer lets the branch land).
 `just runs` lists each session with its result, cost and transcript.
 
 ## What's settled and what's moving
