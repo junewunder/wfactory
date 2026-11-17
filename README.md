@@ -111,7 +111,9 @@ make pass one case at a time.
 It's built for one person with a few computers: a laptop, a desktop, a box
 in the closet. Git is the only thing they share. There's no server, database
 or container image to run and keep up, and everything a factory knows is in
-the repo. The price is a lot of commits: a factory with lanes on two
+the repo. Start on one machine with one lane, though: lanes on several
+machines are newer and less tried (see [below](#whats-settled-and-whats-moving)).
+The price is a lot of commits: a factory with lanes on two
 machines makes hundreds a night, most of them the tracker's.
 It isn't meant for teams or companies, which hosted platforms serve.
 
