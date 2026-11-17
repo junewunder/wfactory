@@ -75,6 +75,24 @@ backed by a fresh session's review of each branch. The tables under
 [What "done" means](#what-done-means) say which is which, and where each can
 slip.
 
+The rules assume an agent that makes mistakes, not one that's trying to
+get around them. A session that set out to cheat could: it runs as you,
+so it could edit the tracker's JSON on a machine with no remote, or claim
+another session's name. What the code stops is the ordinary slip, an
+agent sure it's finished when it isn't.
+
+A unit's path through the code, for anyone reading it:
+
+1. A lane's loop (`runtime/src/loop.ts`) asks what to take next
+   (`loop-claim.ts`): its own unfinished merge, then group checks that are
+   due, then the next workable unit, claimed through the tracker.
+2. It starts one headless Claude Code session on the unit, on its own
+   branch (`loop-unit.ts`, `session.ts`), under a memory cap.
+3. The tracker (`tracker/`) runs the unit's check and records the result.
+4. With a git remote, a fresh read-only session reviews the finished
+   branch (`review.ts`), and the loop merges it into main and pushes
+   (`landing.ts`).
+
 It installs as a Claude Code skill: [SKILL.md](SKILL.md) tells your agent
 how to set up a factory, and the runtime runs it. Today it drives Claude
 Code. The agent CLI is a setting in your profile, but anything else would
@@ -195,7 +213,7 @@ Those nights include some of my own use of the same account, so treat them
 as rough. The other plans' rows below aren't measured: they're Max 20x's
 figures scaled by each plan's share of its usage, for units like these:
 
-| Plan | A week's usage covers | 300 units take |
+| Plan (scaled, not measured) | A week's usage covers | 300 units take |
 | --- | --- | --- |
 | Max 20x | 330 to 750 units | under a week |
 | Max 5x | 80 to 190 units | 2 to 4 weeks |
