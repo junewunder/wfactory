@@ -187,6 +187,10 @@ In one factory in October 2026, the check each group of units runs after
 merging (rebuild, test, publish) failed 125 of the 351 times it finished,
 some of those false alarms in the check itself. Each failure held back that
 group's publish.
+In the same factory, from 1 October to 17 November 2026, a fresh session
+reviewed 593 finished branches from one machine's lanes before they landed.
+It sent 45 back for fixes, and none landed without a review. `just
+scorecard` reads these figures from a factory's own records.
 
 [docs/lessons.md](docs/lessons.md) has the thirty-seven incidents the rules came
 from: what happened, what it cost, and the rule it produced.
