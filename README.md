@@ -182,7 +182,7 @@ What holds each rule, and where it can still slip:
 | Rule | Held by | Where it can slip |
 | --- | --- | --- |
 | Done is computed | the tracker refuses `done` for a unit with a check (`tracker/test/probes.test.ts`, "computed can't be marked done"); with a git remote, a unit's branch can't carry tracker edits (`test/branches/landing.test.ts`, "a branch's tracker/ edits never reach main") | on one machine without a remote, a session could edit the tracker's JSON by hand |
-| Status is rechecked | the tracker reruns a check when its inputs change, and the loop refreshes before every claim (`tracker/test/probes.test.ts`, "and then catches it breaking") | a check sees only the inputs it's told about |
+| Status is rechecked | the tracker reruns a check when its inputs change, and the loop refreshes before every claim (`tracker/test/probes.test.ts`, "and then catches it breaking") | a check sees only the inputs it's told about, and notices a change by each file's size and modification time to the second, so a same-size edit within that second can slip past |
 | Independent check | the tracker refuses `done` from the session that worked the unit (`tracker/test/units.test.ts`, "the session that worked it can't record it done") | sessions name themselves, and the tracker trusts the name |
 | Real target, noise, never weaken | the spec and the prompt every session reads; with a remote, a fresh session reviews each branch before it lands, a weakened test among what it looks for | nothing in the code stops an agent from editing a test; the review, or you, has to catch it, and a review that times out or can't answer lets the branch land |
 
