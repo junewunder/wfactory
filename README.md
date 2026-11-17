@@ -8,7 +8,9 @@ a say.
 Your part is answering the questions the factory saves up for you.
 
 To try it, [Install](#install) is one sentence to Claude Code and a
-15-minute toy factory.
+15-minute toy factory. The sessions run unattended with broad permissions
+and no sandbox, so read [the warning](#warning-it-runs-agents-unattended)
+first.
 
 > **Early, and developed in the open.** I run this every day on my own
 > projects, but few other people have installed it yet. Expect rough edges
@@ -141,20 +143,25 @@ isn't. With agents writing the code, soundness and verifiability have become
 more of a spectrum, and most of the skill is rules for staying honest about
 where on it each piece of work sits.
 
-- **Done is computed, not claimed.** Where a check can decide, the tracker
-  runs it and records the result, and agents can't mark the unit done.
-- **Status is rechecked.** The tracker reruns a unit's check when what it
+Each rule below says what holds it: the tracker's code, or the prompt
+every session reads.
+
+- **Done is computed, not claimed** (code). Where a check can decide, the
+  tracker runs it and records the result, and refuses an agent that tries
+  to mark the unit done.
+- **Status is rechecked** (code). The tracker reruns a unit's check when what it
   reads changes, so a unit that passed yesterday and fails today shows up
   as broken again and goes to the front of the queue. Before this, a change
   to shared code could break finished units with nothing saying so.
-- **The check checks the real target.** One factory checked its patches on
+- **The check checks the real target** (prompt). One factory checked its patches on
   its own patched harness; the stock program people actually run showed
   bugs the harness didn't.
-- **Noise is settled before a red mark counts.** A check that samples or
+- **Noise is settled before a red mark counts** (prompt). A check that samples or
   judges gets a resampling rule up front.
-- **Never weaken the check to go green.** Editing a test, a golden file or
-  a baseline is a question for you, never a way to finish a unit.
-- **Judgment gets an independent check.** Agents grade their own work too
+- **Never weaken the check to go green** (prompt, and the review before a
+  branch lands). Editing a test, a golden file or a baseline is a question
+  for you, never a way to finish a unit.
+- **Judgment gets an independent check** (code). Agents grade their own work too
   kindly, so a unit only judgment can settle is verified by a session that
   didn't do the work.
 
@@ -171,7 +178,7 @@ What holds each rule, and where it can still slip:
 
 | Rule | Held by | Where it can slip |
 | --- | --- | --- |
-| Done is computed | the tracker refuses `done` for a unit with a check (`tracker/test/probes.test.ts`, "computed can't be marked done"); with a git remote, a unit's branch can't carry tracker edits (`test/branches/landing.test.ts`) | on one machine without a remote, a session could edit the tracker's JSON by hand |
+| Done is computed | the tracker refuses `done` for a unit with a check (`tracker/test/probes.test.ts`, "computed can't be marked done"); with a git remote, a unit's branch can't carry tracker edits (`test/branches/landing.test.ts`, "a branch's tracker/ edits never reach main") | on one machine without a remote, a session could edit the tracker's JSON by hand |
 | Status is rechecked | the tracker reruns a check when its inputs change, and the loop refreshes before every claim (`tracker/test/probes.test.ts`, "and then catches it breaking") | a check sees only the inputs it's told about |
 | Independent check | the tracker refuses `done` from the session that worked the unit (`tracker/test/units.test.ts`, "the session that worked it can't record it done") | sessions name themselves, and the tracker trusts the name |
 | Real target, noise, never weaken | the spec and the prompt every session reads; with a remote, a fresh session reviews each branch before it lands, a weakened test among what it looks for | nothing in the code stops an agent from editing a test; the review, or you, has to catch it |
@@ -210,14 +217,8 @@ From the run records of seven factories on one Max 20x plan in October
   usage. The 5-hour window peaked at 20 to 40%.
 
 Those nights include some of my own use of the same account, so treat them
-as rough. The other plans' rows below aren't measured: they're Max 20x's
-figures scaled by each plan's share of its usage, for units like these:
-
-| Plan (scaled, not measured) | A week's usage covers | 300 units take |
-| --- | --- | --- |
-| Max 20x | 330 to 750 units | under a week |
-| Max 5x | 80 to 190 units | 2 to 4 weeks |
-| Pro | 15 to 35 units | 2 to 4 months |
+as rough. I've only measured Max 20x. Max 5x and Pro have a smaller share
+of usage, so the same units take longer in proportion.
 
 Your units may be smaller or bigger than mine; the pilot's first few tell
 you. The lanes read your usage as they go and pause below a share of the
