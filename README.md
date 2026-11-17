@@ -1,15 +1,51 @@
 # wfactory
 
+wfactory runs AI agents through a backlog of similar work for hours, on
+your own machines, while you're away. Each unit of work gets a fresh
+Claude Code session, and a check you trust (the skill calls it the
+oracle) decides whether the unit is done. The agent that did the work doesn't get
+a say.
+Your part is answering the questions the factory saves up for you.
+
 > **Early, and developed in the open.** I run this every day on my own
 > projects, but few other people have installed it yet. Expect rough edges
 > and breaking changes, and please open an issue when something goes wrong.
 > I'm still bottling my own judgment into it.
 
-wfactory is a Claude Code skill that sets up a software factory: agents
-working through a backlog of similar units of work for hours, on your own
-machines, while you're away. Each unit gets a fresh session, and a check
-you trust (the skill calls it the oracle) decides whether it's done. Your
-part is answering the questions the factory saves up for you.
+## Why
+
+Writing code got cheap, but reviewing it did not. Nobody can simulate code
+perfectly in their head, not people and not models, so review was always
+the weak step. Competent programmers make mistakes. Agents just made it
+obvious, because now there's far more code than anyone can read.
+
+So in wfactory the check always wins. If a prompt, an agent or I say one
+thing and the check says another, the check is right. My job is working out
+how an agent can know it actually did the work correctly: taking the nuance
+of "done" and encoding it into something that isn't nuance anymore. That is
+the hard part. In one of my factories, a frame-by-frame comparison against
+the original game pushed agents to rebuild the original's rules exactly,
+including ones I didn't want, and the check had to change
+([lesson 34](docs/lessons.md#34-the-reference-was-the-oracle-and-the-owner-wanted-something-else-the-mod-factory-and-the-recompiler-factory)).
+
+Heavy checking used to cost too much, because people had to live with it.
+Rules that programmers hated, agents follow happily: "thank you very much,
+I'll have another." That's why it pays off now.
+
+## What it is
+
+A program, not a prompt. The runtime is ordinary TypeScript with no model in
+it: a tracker of units, a loop that claims the next unit and starts a
+Claude Code session on it, and the checks. Where a check can decide, the
+tracker runs it and records the result, and refuses a session that tries to
+mark the unit done itself ([below](#what-done-means) is where that can
+slip). Models do the work inside the sessions, and the overseer that
+reports to you is a Claude session too.
+
+It installs as a Claude Code skill: [SKILL.md](SKILL.md) tells your agent
+how to set up a factory, and the runtime runs it. Today it drives Claude
+Code. The agent CLI is a setting in your profile, but anything else would
+need a wrapper that takes Claude Code's flags.
 
 ## Who it's for
 
@@ -22,7 +58,7 @@ It's built for one person with a few computers: a laptop, a desktop, a box
 in the closet. Git is the only thing they share. There's no server, database
 or container image to run and keep up, and everything a factory knows is in
 the repo. The price is a lot of commits: a factory with lanes on two
-machines makes 500 to 900 a night, about two thirds of them the tracker's.
+machines makes hundreds a night, most of them the tracker's.
 It isn't meant for teams or companies, which hosted platforms serve.
 
 It doesn't fit a handful of one-off tasks, or work nothing can check; the
@@ -89,12 +125,12 @@ What holds each rule, and where it can still slip:
 | Independent check | the tracker refuses `done` from the session that worked the unit (`tracker/test/units.test.ts`, "the session that worked it can't record it done") | sessions name themselves, and the tracker trusts the name |
 | Real target, noise, never weaken | the spec and the prompt every session reads; with a remote, a fresh session reviews each branch before it lands, a weakened test among what it looks for | nothing in the code stops an agent from editing a test; the review, or you, has to catch it |
 
-In one factory this October, the check each group of units runs after
-merging (rebuild, test, publish) ran 295 times and failed 117, some of
-those false alarms in the check itself. Each failure held back that
+In one factory in October 2026, the check each group of units runs after
+merging (rebuild, test, publish) failed 125 of the 351 times it finished,
+some of those false alarms in the check itself. Each failure held back that
 group's publish.
 
-[docs/lessons.md](docs/lessons.md) has the thirty-three incidents the rules came
+[docs/lessons.md](docs/lessons.md) has the thirty-seven incidents the rules came
 from: what happened, what it cost, and the rule it produced.
 [docs/design.md](docs/design.md) has the reasoning behind the design.
 
@@ -105,9 +141,8 @@ Game Boy Advance games into native Rust programs. It runs as a factory:
 each unit is a piece of the recompiler or a checkpoint in a game, and its
 check is the emulator mGBA: gbaa's interpreter and the recompiled build both
 have to draw the frame mGBA draws. Pokémon Emerald now plays recompiled,
-its intro frame for frame the same as mGBA. Its tracker is in the repo (over
-200 units so far, and about 20 questions to me and 60 decisions, each with
-its history),
+its intro frame for frame the same as mGBA. Its tracker is in the repo (473 units, 47 questions to me and 149
+decisions on 14 November 2026, each with its history),
 and [its factory spec](https://github.com/junewunder/gbaa/blob/main/docs/factory.md)
 says what its check is and what counts as evidence, so you can see how the
 rules above played out on real work.
@@ -214,8 +249,8 @@ work, where the answer is usually a check rather than a proof. More at
 I make the design calls and the rules; Claude writes most of the code and
 the text under my direction.
 
-This README was written by Claude, from my notes, while I am busy writing my
-thesis.
+This README was written by Claude, from my notes and decisions, while I'm
+busy writing my thesis.
 
 ## License
 
