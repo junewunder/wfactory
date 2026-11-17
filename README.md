@@ -21,21 +21,22 @@ first.
 
 Writing code got cheap, but reviewing it did not. Nobody can simulate code
 perfectly in their head, not people and not models, so review was always
-the weak step. Competent programmers make mistakes. Agents just made it
-obvious, because now there's far more code than anyone can read.
+the weak step, and competent programmers make mistakes. Agents just made
+that obvious, because now there's far more code than anyone can read.
 
 So in wfactory the check always wins. If a prompt, an agent or I say one
-thing and the check says another, the check is right. My job is working out
-how an agent can know it actually did the work correctly: taking the nuance
-of "done" and encoding it into something that isn't nuance anymore. That is
-the hard part. In one of my factories, a frame-by-frame comparison against
-the original game pushed agents to rebuild the original's rules exactly,
-including ones I didn't want, and the check had to change
+thing and the check says another, the check wins. That makes the check the
+thing to get right, and it's the hard part. My job is working out how an
+agent can know it actually did the work correctly: encoding the nuance of
+"done" into something that isn't nuance anymore. In one of my factories, a
+frame-by-frame comparison against the original game pushed agents to
+rebuild the original's rules exactly, including ones I didn't want, and the
+check had to change
 ([lesson 34](docs/lessons.md#34-the-reference-was-the-oracle-and-the-owner-wanted-something-else-the-mod-factory-and-the-recompiler-factory)).
 
-Heavy checking used to cost too much, because people had to live with it.
-Rules that programmers hated, agents follow happily: "thank you very much,
-I'll have another." That's why it pays off now.
+Checking this heavily used to cost too much, because people had to live
+with it. Rules that programmers hated, agents follow happily: "thank you
+very much, I'll have another."
 
 ## What it is
 
@@ -161,7 +162,8 @@ every session reads.
 - **Never weaken the check to go green** (prompt, and the review before a
   branch lands). Editing a test, a golden file or a baseline is a question
   for you, never a way to finish a unit.
-- **Judgment gets an independent check** (code). Agents grade their own work too
+- **Judgment gets an independent check** (code, trusting the session's
+  name). Agents grade their own work too
   kindly, so a unit only judgment can settle is verified by a session that
   didn't do the work.
 
@@ -181,7 +183,7 @@ What holds each rule, and where it can still slip:
 | Done is computed | the tracker refuses `done` for a unit with a check (`tracker/test/probes.test.ts`, "computed can't be marked done"); with a git remote, a unit's branch can't carry tracker edits (`test/branches/landing.test.ts`, "a branch's tracker/ edits never reach main") | on one machine without a remote, a session could edit the tracker's JSON by hand |
 | Status is rechecked | the tracker reruns a check when its inputs change, and the loop refreshes before every claim (`tracker/test/probes.test.ts`, "and then catches it breaking") | a check sees only the inputs it's told about |
 | Independent check | the tracker refuses `done` from the session that worked the unit (`tracker/test/units.test.ts`, "the session that worked it can't record it done") | sessions name themselves, and the tracker trusts the name |
-| Real target, noise, never weaken | the spec and the prompt every session reads; with a remote, a fresh session reviews each branch before it lands, a weakened test among what it looks for | nothing in the code stops an agent from editing a test; the review, or you, has to catch it |
+| Real target, noise, never weaken | the spec and the prompt every session reads; with a remote, a fresh session reviews each branch before it lands, a weakened test among what it looks for | nothing in the code stops an agent from editing a test; the review, or you, has to catch it, and a review that times out or can't answer lets the branch land |
 
 In one factory in October 2026, the check each group of units runs after
 merging (rebuild, test, publish) failed 125 of the 351 times it finished,
@@ -189,7 +191,8 @@ some of those false alarms in the check itself. Each failure held back that
 group's publish.
 In the same factory, from 1 October to 17 November 2026, a fresh session
 reviewed 593 finished branches from one machine's lanes before they landed.
-It sent 45 back for fixes, and none landed without a review. `just
+It sent 45 back for fixes. The review fails open (one that times out or
+can't answer lets the branch land), and in that period it never did. `just
 scorecard` reads these figures from a factory's own records.
 
 [docs/lessons.md](docs/lessons.md) has the thirty-seven incidents the rules came
