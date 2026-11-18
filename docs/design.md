@@ -321,7 +321,7 @@ isn't told them again), and attach and the summary list each once.
   replaces into `work/.store/aside/`. That's how a migration deletes nothing
   locally.
 - What's set aside is settled by a rule, with no unit and no question
-  (lesson 40). A set is removed only when the store's own record names the
+  (lesson 41). A set is removed only when the store's own record names the
   units whose outputs it holds and the tracker's record says each has landed
   on main or is dropped: main rebuilds those. Anything short of that stays,
   with a line in the morning summary; a person or an audit removes it, never

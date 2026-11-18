@@ -160,7 +160,7 @@ each.
 in `$FACTORY_BUSY_GROUPS`: units another lane on this machine is partway
 through.
 
-### 40. Sorting set-aside copies took sessions and the owner (the mod factory, November)
+### 41. Sorting set-aside copies took sessions and the owner (the mod factory, November)
 
 **What happened.** A copy down keeps aside whatever it replaces in a copy
 not proven to be on the store, and so does putting the store's copy back
