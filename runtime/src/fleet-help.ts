@@ -25,10 +25,17 @@ Usage:
                                           the --hours from now to <time> ("09:00", "9am",
                                           "tomorrow 9am"; a time of day already past is
                                           tomorrow's). --lanes N: N lanes on each machine named,
-                                          for this run only; docs/machines.md keeps its count.
+                                          for this run only; docs/machines.md keeps its count,
+                                          and the start says the command that makes N its count.
                                           Lane clones past N with no loop running and nothing
                                           origin lacks are deleted (a later start clones them
-                                          again, with a cold target/)
+                                          again, with a cold target/). A machine with a day and a
+                                          night count ("2, 4 at night") starts the more of them;
+                                          a lane past the count for the time of day waits between
+                                          units (the profile's "night"), and its clone stays
+  factory/fleet.sh lanes [<machine> <count>]
+                                          each machine's lane count in docs/machines.md, or one's
+                                          set there ("2", "2, 4 at night"), committed and pushed
   factory/fleet.sh attach [--as ID]       this thread oversees the factory now (the newest
                                           to attach wins): prints its ID, then what the lanes
                                           and the last overseer logged since that one's last

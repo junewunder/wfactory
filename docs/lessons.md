@@ -308,6 +308,30 @@ only that its unit takes at least that long, so it sets a floor on the
 unit's usual session but isn't in its median; a merge unit with nothing to go by needs `min_unit_minutes`, since
 it always runs the project's check.
 
+### 40. The lane count the owner asked for didn't stick, and the week's usage went unspent (the recompiler factory, November)
+
+**What happened.** Lanes use the owner's weekly usage at a steady rate
+while they're up. Over two weeks in November, the owner's two factories
+had their lanes up a small part of the time, and usage piled up unspent
+before each weekly reset. Part of it was the lane count. In the
+recompiler factory the owner asked for 3 or 4 lanes on five different days, while
+`docs/machines.md` said 2 the whole time: `fleet start --lanes N` was for
+that start only, and each new overseer started the file's 2 until told
+again. What the owner wanted was 4 lanes at night and 2 by day, since
+the owner uses the machine by day; the table had one number for both.
+
+**What it cost.** Nights run at half the lanes the owner asked for, and
+a week's usage partly unspent at its reset.
+
+**The rule.** A machine's Lanes can be a day count and a night count
+(`2, 4 at night`, night being the profile's `night`). Every lane starts;
+one past the count for the time of day finishes its unit and waits
+between units until the count takes it in, its clone kept. A start with
+`--lanes N` that the file doesn't give says so, with the command that
+makes N the file's count (`just fleet lanes <machine> N`), and the next
+start without it says so again, so the count the owner asked for doesn't
+depend on an overseer remembering it.
+
 ## The overseer
 
 ### 16. Judgment at the loop's exits

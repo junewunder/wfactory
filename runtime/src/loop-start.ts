@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { g, git } from "./landing.ts";
-import { machineGet } from "./machines.ts";
+import { laneCount, machineGet, type LaneCount } from "./machines.ts";
 import { profileFile, profileGet, profileUnfilled } from "./profile.ts";
 import { linkedDirs, log } from "./session.ts";
 import { epoch, tryLock } from "./sys.ts";
@@ -18,10 +18,11 @@ import type { Restarted } from "./loop-restart.ts";
 export interface Opts {
   max: number; hours: string; model: string; effort: string; mem: string; limitWait: string;
   idleWait: string; wait: boolean; awake: boolean; dry: boolean; loop: string; lastCall: string;
+  lanes: LaneCount | null;   // --lanes: the machine's day and night counts (loop-lanes.ts)
 }
 export function options(args: string[], env: NodeJS.ProcessEnv): Opts | number {
   const o: Opts = { max: 50, hours: "8", model: env.FACTORY_MODEL || "", effort: env.FACTORY_EFFORT || "", mem: env.FACTORY_MEM || "10G",
-    limitWait: "30", idleWait: env.FACTORY_IDLE_WAIT || "4", wait: true, awake: true, dry: false, loop: "", lastCall: "" };
+    limitWait: "30", idleWait: env.FACTORY_IDLE_WAIT || "4", wait: true, awake: true, dry: false, loop: "", lastCall: "", lanes: null };
   for (let k = 0; k < args.length; k++) {
     const a = args[k], v = () => args[++k] ?? "";
     switch (a) {
@@ -33,6 +34,12 @@ export function options(args: string[], env: NodeJS.ProcessEnv): Opts | number {
       case "--limit-wait": o.limitWait = v(); break;
       case "--idle-wait": o.idleWait = v(); break;
       case "--last-call": o.lastCall = v(); break;
+      case "--lanes": {
+        const c = v();
+        o.lanes = laneCount(c);
+        if (!o.lanes) { console.error(`loop: --lanes needs a count: "2", or "2, 4 at night" (got '${c}')`); return 2; }
+        break;
+      }
       case "--no-wait": o.wait = false; break;
       case "--no-awake": o.awake = false; break;
       case "--dry-run": o.dry = true; break;

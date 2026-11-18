@@ -8,7 +8,7 @@ import { HELP } from "./fleet-help.ts";
 import { openFleet } from "./fleet-ctx.ts";
 import { beat } from "./fleet-beat.ts";
 import { attach, events, noteCmd, summary } from "./fleet-journal.ts";
-import { restart, run, start, state, stopAt, tell, tidy, usage } from "./fleet-lanes.ts";
+import { lanesCmd, restart, run, start, state, stopAt, tell, tidy, usage } from "./fleet-lanes.ts";
 import { wait } from "./fleet-wait.ts";
 
 export { HELP, EVENTS_SUMMARY, EVENTS_WAKE } from "./fleet-help.ts";
@@ -50,8 +50,9 @@ export async function fleetCli(argv: string[], env: NodeJS.ProcessEnv = process.
     case "tidy": tidy(f, takeMachines(args).ms); return 0;
     case "usage": return usage(f, args);
     case "run": return run(f, args);
+    case "lanes": return lanesCmd(f, args);
     default:
-      console.error(`fleet: unknown command ${cmd} (start | attach | wait | note | summary | beat | state | events | pause | pause-now | restart | last-call | stop-at | tell | stop | tidy | usage | run)`);
+      console.error(`fleet: unknown command ${cmd} (start | attach | wait | note | summary | beat | state | events | pause | pause-now | restart | last-call | stop-at | tell | stop | tidy | usage | run | lanes)`);
       return 2;
   }
 }

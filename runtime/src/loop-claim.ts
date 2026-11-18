@@ -7,7 +7,7 @@ import { log } from "./session.ts";
 import { sessionBase } from "./loop-unit.ts";
 import { epoch, stamp, tryLock, unlock } from "./sys.ts";
 import { addMergeUnit, dropMergeUnits, mergeUnits } from "./landing.ts";
-import { machineGet } from "./machines.ts";
+import { laneCount, laneMax, machineGet } from "./machines.ts";
 import { TR_BUSY, tr, trWait } from "./tr.ts";
 import { CiRun, ciHeld, ciNext, ciUnrun } from "./loop-ci.ts";
 import { both, cat, exists, hmAt, isInt, json, list, mins, read, resTitles, rm, uniq, type Json } from "./loop-util.ts";
@@ -51,8 +51,10 @@ function workFound(w: Waiting) {
 // file says nothing of its lanes: nothing is taken over.
 export function adoptMerges(l: Loop) {
   // (An empty cell, or no Lanes column, says nothing either.)
-  const cellv = (machineGet(l.host, "lanes") ?? "").trim(), lanes = Number(cellv);
-  if (!/^[0-9]+$/.test(cellv)) return;
+  // (A day count and a night count: the night's lanes are still its own by day, waiting for it.)
+  const c = laneCount(machineGet(l.host, "lanes") ?? "");
+  if (!c) return;
+  const lanes = laneMax(c);
   const units = (json(read(`${l.cfg.tdir}/groups/merge.json`))?.units as Json[] | undefined) ?? [];
   const base = l.checkout.replace(/-lane[0-9]+$/, "");
   for (const u of units) {
