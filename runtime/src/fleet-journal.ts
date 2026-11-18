@@ -168,8 +168,8 @@ export function summary(f: Fleet, args: string[]): number {
   byKind(rest);
   if (c.ok.length) { say("  Group CI:"); for (const l of c.ok) say(`  ${l}`); }
   checkin();
-  // Last, the scorecard's three worst lines since then and any prediction that came due (this
-  // machine's lanes; scorecard.ts), so the end-of-run report carries them.
+  // Last, the scorecard since then (this machine's lanes; scorecard.ts), so the end-of-run report
+  // quotes its figures, which add up, instead of working them out.
   for (const l of summaryLines(env, process.cwd(), since)) say(l);
   return 0;
 }

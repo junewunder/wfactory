@@ -348,6 +348,40 @@ outside the lanes or by a lane whose loop died before its unit ended.
 `fleet wait` keeps the questions it told, attach adds every one the logs
 have, and attach and the summary list each once.
 
+### 38. The card read a third of the money as waste, and the report did its own sums (the recompiler factory and the mod factory, November)
+
+**What happened.** The scorecard's first line put every session that
+finished no unit in one lump with one cost. In the recompiler factory
+that was 45 of 131 sessions and $141 of $379, and both the owner and the
+agent reading it took it as a third of the money wasted. Only 4 had lost
+their work (2 killed over memory, 2 cut off). Of the rest, 15 were sent
+back by the review and carried on from their branch by the next session,
+11 ended on a question to the owner, 10 gave their unit back unstarted at
+almost no cost, and 5 handed it back with the work kept. The same card
+knew of 131 sessions where the tracker's log had 219 loop claims: a start
+with fewer lanes removes the clones past the count, and each clone's run
+index and events went with it. Meanwhile the overseer wrote the morning
+report in prose from the events and the log. In two weeks it said a
+killed job had been rerun and its unit finished when neither was so,
+listed answered questions as waiting, gave 8 units against 17 sessions
+with nothing to reconcile them, and wrote "20 of 48 sessions finished no
+unit" so that it read as 20 lost units. Nobody ran the scorecard by hand
+in either factory, and nobody made a prediction for its ledger.
+
+**What it cost.** The owner was told a third of the spend was waste when
+a fortieth of the sessions had lost anything, and a morning report wrong
+four times in two weeks, each caught only by the owner checking it.
+
+**The rule.** The waste line counts only sessions whose work was lost;
+the rest are said as what became of them, each with its cost, and a unit
+sent back with what the session after it cost. The card opens with the
+sessions, what each finished or became of, and the units done, in lines
+that add up as they stand. Removing a lane clone moves its run index and
+events to the checkout first, and loop claims with no record left are
+counted as such. `fleet summary` ends with the card for its run, so the
+report quotes figures it didn't work out. The predictions went: a ledger
+used zero times in two factories was upkeep for nothing.
+
 ## The code
 
 ### 20. One copy of the loop, deployed
