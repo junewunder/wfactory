@@ -717,6 +717,40 @@ and where they'd be satisfied. The satisfied line is asked again over
 real output at the probe, the trials and every ramp review. Once the
 owner says start, the agent stops only at gates and real questions.
 
+### 38. The owner's own passes did most of the work, and the skill had no word for them (the mod factory)
+
+**What happened.** Over two weeks the mod factory's owner ran eight passes
+over the tracker by hand, with the lanes off: one thread as foreman, a
+handful of workers in git worktrees, each one's work merged by pull
+request. Some were sweeps: a kind of work stated once, to spend usage that
+lanes capped by one editor and two heavy-job slots couldn't. Others were
+sprints: a queue cut after the owner's calls on a change of direction.
+They did about 85% of the units finished in those weeks (the shared code,
+the pivots, the fixes off the editor), and the lanes got the in-game
+checks, CI and publishing. None of it was in the skill. Each foreman wrote
+its workers' brief from nothing, and every brief spelled out the same
+things again: a shell line linking `work/` into the worktree, the claim,
+heavy jobs through `just capped`, "the lanes are stopped, don't start
+them", "record the unit, leave the merge to me".
+
+**What it cost.** A worker whose worktree lacked a link failed its tests
+for a reason that wasn't its change. A unit read as done from the moment
+its worker recorded it, with its pull request still open, so what needed
+it read as free to start. That the lanes were off, and which had been running until
+when, lived in one thread's context. And each merge had passed only its
+worker's check on its own branch: the rebuild after one sprint found a
+build step a merged change had broken, and an installed script that no
+longer compiled.
+
+**The rule.** Sweep and sprint are modes of the skill
+([sweep.md](sweep.md), [sprint.md](sprint.md)), apart from the lanes and
+never beside them. `just fleet off` holds the lanes off on main, and keeps
+which were running, until `just fleet on`. Workers follow one guide (`just
+worker-guide`), get their worktree what a lane's clone gets (`factory/lane.sh
+worktree`), and claim with `--branch`, so a unit is merging until the
+foreman merges it. The foreman reads every diff and lists what merged on
+the lighter check as unproven, for the lanes' CI.
+
 ### 34. The reference was the oracle, and the owner wanted something else (the mod factory and the recompiler factory)
 
 **What happened.** The mod factory's oracle compared each character

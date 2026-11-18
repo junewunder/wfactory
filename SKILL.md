@@ -1,6 +1,6 @@
 ---
 name: wfactory
-description: "Use when starting or retrofitting a software factory: a project where agents grind through many similar units of work (a corpus, a library, a backlog, a tracker of cards or rules) for hours with little supervision, each unit judged by an oracle. Starts with the opening (prior work, the oracle, trial units, worked as the project's issues by parallel threads) until the owner passes the gate to lanes; then the spec, tracker, oracle, memory rules, a machines file and headless loop lanes. Examples: \"start a factory for X\", \"set this up so agents can grind through it overnight\", \"turn this into a tracker-driven loop\", \"I want to point agents at this and walk away\". Also when the owner says \"oversee\" in a factory repo: run the lanes (`just fleet`) and supervise them until every front is blocked (\"continue\" works one unit; \"questions\" goes through what's waiting on the owner; \"prune decisions\" goes through the stale ones with them)."
+description: "Use when starting or retrofitting a software factory: a project where agents grind through many similar units of work (a corpus, a library, a backlog, a tracker of cards or rules) for hours with little supervision, each unit judged by an oracle. Starts with the opening (prior work, the oracle, trial units, worked as the project's issues by parallel threads) until the owner passes the gate to lanes; then the spec, tracker, oracle, memory rules, a machines file and headless loop lanes. Examples: \"start a factory for X\", \"set this up so agents can grind through it overnight\", \"turn this into a tracker-driven loop\", \"I want to point agents at this and walk away\". Also when the owner says \"oversee\" in a factory repo: run the lanes (`just fleet`) and supervise them until every front is blocked (\"continue\" works one unit; \"sweep <what>\" and \"sprint <units>\" work the backlog by hand with the lanes off, many workers on one kind of work or a planned queue; \"questions\" goes through what's waiting on the owner; \"prune decisions\" goes through the stale ones with them)."
 compatibility: "Linux with systemd, or macOS on Apple silicon. Needs bash, node, curl, just, git, jq and the claude CLI. install.md checks them."
 allowed-tools: Bash(bash ${CLAUDE_SKILL_DIR}/scripts/init.sh *)
 ---
@@ -202,6 +202,22 @@ a session a list of units (another machine, a scoped run), end it with "then
 keep taking whatever `just next` offers that this machine may do, until
 nothing is workable", and say what it must not touch. A session handed only
 its list stops when the list is done, with work it could still do left open.
+
+## "Sweep" and "sprint": the owner's own passes
+
+The lanes are the factory growing on its own. A sweep or a sprint is the
+owner working it by hand: this thread is the foreman of workers in their own
+worktrees, and merges their work itself. The lanes are off while one runs
+(`just fleet off` holds them, `just fleet on` lets go), never beside it.
+
+- **"Sweep <a kind of work>"** (or "start a bunch of agents on the
+  backlog", "I have usage to use up"): no planning, a full set of workers
+  on every unit that matches. Read [docs/sweep.md](docs/sweep.md), all of
+  it, and run it.
+- **"Sprint <units>"** (or "sprint what we discussed", "run these while
+  I'm out"): the owner's calls settled first, then a worker per unit of a
+  planned queue. Read [docs/sprint.md](docs/sprint.md), all of it, and run
+  it.
 
 ## "Questions": the owner answers
 
