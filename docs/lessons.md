@@ -287,8 +287,8 @@ Its mod editor and headless desktop kept running.
 them.
 
 **The rule.** The project's `factory/tidy` says what to shut down. The last
-lane on a machine runs it as it stops, and the overseer's last step is
-`just fleet tidy`.
+lane on a machine runs it as it stops, and `just fleet stop` runs it too,
+the overseer's last step for a machine whose last lane didn't.
 
 ### 14. A unit too big for the night is a unit too big
 

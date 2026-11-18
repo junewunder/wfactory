@@ -25,7 +25,6 @@ Usage:
   factory/oversee.sh pause [<loop>] [--now]
   factory/oversee.sh restart [<loop>] [--id ID --of N]
   factory/oversee.sh last-call [<loop>]
-  factory/oversee.sh stop-at [<loop>] --at <epoch seconds>
   factory/oversee.sh tell [<loop>] [--unit <id>] -- <text…>
   factory/oversee.sh state [<loop>]
   factory/oversee.sh stop  [<loop>]
@@ -63,8 +62,6 @@ Commands:
           unit, lets the one in flight land (one that holds a resource CI needs is told
           to wrap up, and ended after "last_call_grace" minutes), runs CI for every group
           whose CI is stale, then stops (\`factory/loop.sh --help\`, "Last call").
-  stop-at Set the loop's stop time (runs/.stop-at), if earlier than its --hours: last
-          call comes before it, and the loop stops at it.
   tell    Queue a message for the session running now (its inbox, factory/inbox.sh):
           it reads it after its next tool call. With --unit, only if that session works
           that unit. Exit 3 if no session (or none on that unit) is running.
@@ -75,7 +72,7 @@ Commands:
           whose last finished unit's data is on the store are released; the
           cut-short unit's data isn't copied back.
   tidy    With the loop stopped: stop any session scope or long job it left
-          running, and say what was stopped. (\`just fleet tidy\` also runs the
+          running, and say what was stopped. (\`just fleet stop\` runs this, then the
           project's factory/tidy for the whole machine.)
   watch   What \`just fleet wait\` asks of this machine, as a line of JSON: its
           lanes now ({"op":"look","lanes":[{"unit","dir"}…]}), or once one
@@ -257,13 +254,6 @@ export async function overseeCli(args: string[], env: NodeJS.ProcessEnv = proces
       else console.log(`${UNIT} isn't running (a \`just loop\` here takes last call too)`);
       return 0;
     }
-    case "stop-at": {
-      if (a[0] !== "--at" || !/^[0-9]+$/.test(a[1] ?? "")) { console.error("usage: oversee.sh stop-at [<loop>] --at <epoch seconds>"); return 2; }
-      mkRuns();
-      fs.writeFileSync("runs/.stop-at", `${a[1]}\n`);
-      console.log(`${UNIT} stops at ${dayHm(new Date(Number(a[1]) * 1000))} (or at its --hours, if sooner), after last call${active() ? "" : "; it isn't running now"}`);
-      return 0;
-    }
     case "tell": {
       const usage = () => { console.error("usage: oversee.sh tell [<loop>] [--unit <id>] -- <text…>"); return 2; };
       let want = "";
@@ -316,7 +306,7 @@ export async function overseeCli(args: string[], env: NodeJS.ProcessEnv = proces
       return 0;
     }
     default:
-      console.error(`oversee: unknown command ${cmd} (start | wait | pause | restart | last-call | stop-at | tell | state | stop | tidy)`);
+      console.error(`oversee: unknown command ${cmd} (start | wait | pause | restart | last-call | tell | state | stop | tidy)`);
       return 2;
   }
 }

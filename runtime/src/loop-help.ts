@@ -150,8 +150,7 @@ time in a row). Past its timeout (minutes) it lands and the overseer hears
 the branch for the next look, not sent back nor counted towards stuck, and the overseer hears
 (\`land-check-unrun\`) once, then every two hours while it's held, with how long; a tracker that can't say what to run holds it too.
 
-Last call. Before the stop time (--hours, or an earlier one the overseer set with \`just
-fleet stop-at\`) comes a last call: tracker/project.json "last_call" minutes (default 30; at
+Last call. Before the stop time (--hours) comes a last call: tracker/project.json "last_call" minutes (default 30; at
 most half the run; 0 = none), or now with \`just fleet last-call\`. No time is added for CI: it
 runs as it falls due through the night, and what hasn't run by the stop is named for the
 morning. In last call the lane
@@ -162,11 +161,10 @@ overrun, its work pushed). \`just fleet last-call\` ("wrap up and publish") star
 all, and none starts while main is red. Work in flight finishes and lands, and every group counts as done
 for the night, so a group whose CI is stale comes due and runs. The lane waits while other
 work is moving (work in flight may still make CI due here), and stops once nothing is left
-that it may start. A stop
-time only moves earlier. A last call outlives a restart until the lane stops at its end. A stop
+that it may start. A last call outlives a restart until the lane stops at its end. A stop
 with CI not passed (out of time, say) names those groups, for the overseer.
-Before each unit the lane writes its last call to last-call in the lock folder (logging it when
-it moves by more than 5 minutes: an earlier stop time), for the daemon bringing a lane back.
+Before each unit the lane writes its last call to last-call in the lock folder, for the daemon
+bringing a lane back.
 Before last call the lane takes no unit last call will hold back with too little time left
 before it: the unit's --min-minutes, else the median of its past sessions (\`tracker next
 --last-call-in\`), else tracker/project.json "min_unit_minutes" (default 45; 0 = none). It

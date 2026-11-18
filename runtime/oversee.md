@@ -336,7 +336,8 @@ end-of-run report sums them up in one line.
    resource, a session using one is told in its prompt when it goes to CI,
    and one still holding it at last call is told to wrap up and ended 15
    minutes later (`last_call_grace`). A stop the owner names later ("pause at 9") is
-   `just fleet stop-at 09:00`, which gets the same last call. With more than
+   `just fleet last-call` at your first wake within half an hour of it: what's in
+   flight lands, then the lanes stop. With more than
    one machine in `docs/machines.md`, tell the owner in one line: "Starting on
    <this machine>. Want <the others> too?" Don't wait for the answer. Nothing
    runs on a machine the owner hasn't included; on a yes, `just fleet start
@@ -459,7 +460,7 @@ end-of-run report sums them up in one line.
    lane stopped"` gives a line per machine (one each time its last lane stopped), "<machine>: the last lane
    stopped and tidied up". A machine with that line since its lanes last
    stopped is done; one that says "except: …" goes in the report with
-   what failed. Run `just fleet tidy <machine>` only for a machine with no
+   what failed. Run `just fleet stop <machine>` only for a machine with no
    such line (a lane killed outright, as `just fleet stop` may do to a slow tidy, or one that couldn't push): it stops
    sessions and long jobs left behind and runs `factory/tidy`. A machine it
    can't reach then goes in the report.
@@ -520,7 +521,7 @@ them.
 | "stop now" | `just fleet stop <machine>` | lanes, sessions and long jobs are killed and the machine is tidied; only what's committed or on disk survives (the lane saves its unit's work to its branch when it next starts). Leases whose last finished unit's data is on the store are released; the cut-short unit's data isn't copied back | seconds |
 | "wrap up and publish" | `just fleet last-call <machine>` | last call now: no new units; the ones in flight finish and land (one holding a resource CI needs, like the editor, is told to wrap up and is ended after `last_call_grace` minutes, 15 by default), CI runs for every group whose CI is stale, then the lanes stop | the running units (at most the grace, for those), plus CI |
 | "tell the lane on X to …" | `just fleet tell <unit id> "…"` (or `<machine>[/<lane>]`) | the running session reads it after its next tool call, and it outranks its plan; a note or a scoped decision gets there by itself | a minute or two |
-| "stop at 9" | `just fleet stop-at 09:00 <machine>` | the lanes stop at 9 (or at their `--hours`, if sooner), with last call half an hour before (plus the CI still to run) | until then |
+| "stop at 9" | at the start, `--until 09:00`; later, `just fleet last-call <machine>` at your first wake after 8:30 | from the start: last call half an hour before, then the lanes stop at 9; later: as "wrap up and publish", so they stop once what's in flight has landed | until then |
 | "pick up the fix" (a fix to the skill is pushed) | `just fleet restart <machine>` (`--lane N` for one) | the newest pushed skill is deployed there; each running lane restarts on it when its own unit ends, or at once if it's waiting, without waiting for the others; nothing stops, and the stop time and leases carry on | the length of each lane's running unit |
 | "add / resume <machine>" | `just fleet start <machine> --until <the deadline>` | starts its lanes | a minute |
 | "N lanes on <machine> tonight" | `just fleet start <machine> --lanes N --until <the deadline>` | starts that many lanes for this run; `docs/machines.md` keeps its count, and a later start there without `--lanes` goes back to it. Lane clones past N that no loop runs in and that hold nothing origin lacks are deleted, so the next bigger start clones and builds them again | a minute |

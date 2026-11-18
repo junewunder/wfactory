@@ -6,8 +6,7 @@
 // after a reboot: the daemon then works it out from last_call itself, as the loop does.
 import fs from "node:fs";
 import { epoch } from "./sys.ts";
-import { cat, exists, hmAt, isInt, json } from "./loop-util.ts";
-import { log } from "./session.ts";
+import { cat, exists, json } from "./loop-util.ts";
 
 // Times for one stop time: a lane brought back gets its stop time again to within a minute.
 export const SAME_STOP_S = 120;
@@ -26,7 +25,6 @@ export function writtenLastCall(file: string, deadline: number, lastCall: number
 export class Clock {
   start = 0;
   deadline = 0;
-  stopAt = "";          // the stop time the overseer set, as "HH:MM" ("" while it's --hours's)
   lastCall = 30;        // minutes before the stop time that last call begins (0: none timed)
   graceS = 900;         // seconds a session holding what CI needs gets to wrap up in last call
   inLc = false;         // last call has begun (it doesn't end)
@@ -34,11 +32,6 @@ export class Clock {
   carried = 0;          // the last call of the run a lane brought back carries on (FACTORY_LAST_CALL_AT), 0: none
   published = 0;        // the last-call time this lane last wrote
 
-  // The stop time: --hours, or an earlier one the overseer set (`just fleet stop-at`, runs/.stop-at).
-  refresh() {
-    const s = cat("runs/.stop-at");
-    if (isInt(s) && Number(s) < this.deadline) { this.deadline = Number(s); this.stopAt = hmAt(this.deadline); }
-  }
   // When the timed last call begins (the stop time, with none): lastCall minutes before the
   // stop time, for the work in flight to land; at most half the run (a short run still works
   // some units). A lane brought back (by the daemon) keeps the last call of the run it carries
@@ -50,12 +43,10 @@ export class Clock {
     const at = this.deadline - w;
     return this.carried > 0 && this.carried < at ? this.carried : at;
   }
-  // Write this lane's last call (the loop does, before each unit, until last call), saying so when
-  // it moved by more than 5 minutes (an earlier stop time).
+  // Write this lane's last call (the loop does, before each unit, until last call).
   publish() {
     if (this.lastCall <= 0) return;
     const at = this.lcAt(), f = lastCallFile();
-    if (this.published && Math.abs(at - this.published) > 300) log(`last call now at ${hmAt(at)} (was ${hmAt(this.published)}), for the stop at ${hmAt(this.deadline)}`);
     if (at === this.published && writtenLastCall(f, this.deadline, this.lastCall) === at) return;
     this.published = at;
     if (!f) return;

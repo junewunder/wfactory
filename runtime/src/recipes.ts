@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { pwd } from "./sys.ts";
+import { REMOVED } from "./fleet-scripts.ts";
 
 const HERE = path.dirname(path.dirname(fileURLToPath(import.meta.url)));   // the skill's runtime/
 
@@ -24,8 +25,9 @@ export const RUNS_HELP = `runs [n] [--tsv]: the last n (default 20) loop iterati
 clones included: unit, result, turns, cost, minutes (just runs). --tsv: the rows as they are,
 tab-separated under their header, for awk and cut (the columns pad with spaces, and titles have them).`;
 
-// The last n loop iterations on this machine, from the checkout's runs/index.tsv and its lanes'
-// clones' beside it, by when each started.
+// The last n loop iterations on this machine, from the checkout's runs/index.tsv, its lanes'
+// clones' beside it, and those of clones removed since (kept in the checkout's
+// runs/removed-clones/<clone>-<when>/: fleet-scripts.ts, DROP_CLONE), by when each started.
 export function runsCli(args: string[]): number {
   if (args[0] === "-h" || args[0] === "--help") { console.log(RUNS_HELP); return 0; }
   const tsv = args.includes("--tsv");
@@ -35,16 +37,19 @@ export function runsCli(args: string[]): number {
   const here = pwd();
   const root = path.join(path.dirname(here), path.basename(here).replace(/-lane[0-9]*$/, ""));
   const parent = path.dirname(root), base = path.basename(root);
-  const lanes = fs.readdirSync(parent).filter((d) => d.startsWith(`${base}-lane`)).sort().map((d) => path.join(parent, d));
+  const lanes = fs.readdirSync(parent).filter((d) => d.startsWith(`${base}-lane`)).sort().map((d) => path.join(parent, d, "runs"));
+  const gone = path.join(root, "runs", REMOVED);
+  let removed: string[] = [];
+  try { removed = fs.readdirSync(gone).filter((d) => /-lane[0-9]+-[0-9]{8}-[0-9]{6}$/.test(d)).sort().map((d) => path.join(gone, d)); } catch {}
   let hdr = "";
   const rows: string[] = [];
-  for (const d of [root, ...lanes]) {
-    const text = read(path.join(d, "runs", "index.tsv"));
+  for (const d of [path.join(root, "runs"), ...lanes, ...removed]) {
+    const text = read(path.join(d, "index.tsv"));
     if (text === null) continue;
     const lines = text.split("\n");
     if (lines[lines.length - 1] === "") lines.pop();
     if (!hdr) hdr = lines[0] ?? "";
-    const m = /-lane([0-9]+)$/.exec(d);
+    const m = /-lane([0-9]+)(?:-[0-9]{8}-[0-9]{6})?(?:\/runs)?$/.exec(d);
     const l = m ? `lane${m[1]}` : "checkout";
     for (const x of lines.slice(1)) rows.push(`${l}\t${x}`);
   }

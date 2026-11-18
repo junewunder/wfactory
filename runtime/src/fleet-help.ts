@@ -73,7 +73,7 @@ Usage:
                                           not back is ended first, and it says so
   factory/fleet.sh note [--as ID] <text…> a line in the overseer's journal on this machine
                                           (what it decided, told the owner, waits for)
-  factory/fleet.sh summary [--since T] [--done]
+  factory/fleet.sh summary [--since T]
                                           what went wrong first: CI that failed, was cut off or never
                                           started, the problem events of either tier (EVENTS_PROBLEM),
                                           the journal's oom and memory-low, and what waits on the
@@ -83,8 +83,8 @@ Usage:
                                           since this checkout's last fleet start), then the check-in
                                           offer when one is due (tracker prune --due), and last the
                                           scorecard for the run (just scorecard --since T, this
-                                          machine's lanes); with --done,
-                                          how many units were done since then
+                                          machine's lanes), whose "Units done" counts each unit
+                                          done once, and not one the review sent back
   factory/fleet.sh beat                   one heartbeat line: lanes busy, waiting, stopped; what each
                                           busy one works on, for how long, and when its session's
                                           transcript was last written; each machine's memory
@@ -114,21 +114,18 @@ Usage:
                                           wrap up, and ended after last_call_grace minutes),
                                           CI runs for every group with stale CI, then the
                                           lanes stop
-  factory/fleet.sh stop-at <time> [<machine>…]  the lanes stop at <time> ("09:00", "9am",
-                                          "tomorrow 9am"), with last call before it (loop.sh --help)
   factory/fleet.sh tell <machine>[/<lane>] | <unit id> <text…>
                                           a message for a running session, which reads it after
                                           its next tool call (factory/inbox.sh): every lane on a
                                           machine, one lane, or whichever lane works the unit
-  factory/fleet.sh stop [<machine>…]      stop now: kill the lanes, sessions and long jobs
-  factory/fleet.sh tidy [<machine>…]      on machines with no lane running: stop leftover
-                                          sessions and long jobs, run factory/tidy (the editor,
-                                          a headless desktop), and remove lane clones past
-                                          docs/machines.md's count that hold nothing origin
-                                          lacks. The overseer's last step.
+  factory/fleet.sh stop [<machine>…]      stop now: kill the lanes, sessions and long jobs; then
+                                          tidy: stop leftover sessions and long jobs, run
+                                          factory/tidy (the editor, a headless desktop), and
+                                          remove lane clones past docs/machines.md's count that
+                                          hold nothing origin lacks. Also the overseer's last
+                                          step for a machine whose last lane didn't tidy it
   factory/fleet.sh usage                  how much of the plan is left, as each machine's
                                           transcripts last saw it; trust the newest
-  factory/fleet.sh run <machine> <command…>   run a command in that machine's checkout
 
 Examples:
   just fleet start --hours 10          # this machine's lanes
@@ -136,7 +133,6 @@ Examples:
   just fleet start laptop2 --hours 10  # add laptop2
   just fleet start laptop2 --lanes 2 --hours 10  # two lanes there, for this run only
   just fleet wait                      # in the background; wakes the overseer
-  just fleet run laptop2 just status
 
 Events. The lanes log what the overseer may need to hear to runs/events.log, one line
 per event with its kind (loop.sh, store.sh, capped.sh). Each kind is in one of two tiers:
@@ -175,7 +171,7 @@ export const EVENTS_WAKE = `question ci-published ci-broken ci-known-failing ci-
 // The bad news, whichever tier it's in: what \`fleet summary\` and the report put first.
 export const EVENTS_PROBLEM = `ci-broken ci-known-failing ci-unrecorded ci-affected-failed land-check-unrun check-unrun landing-waits oom-kill stuck main-broken review-skipped
   stuck-merge stuck-merging stuck-branch inbox-unread silent restart-failed lost-lease store-down store-torn gone-lane-left resume-refused
-  resume-failed oom memory-low ci-broken-noship ci-norun ci-known-failing-again store-aside-old resume-skipped land-check-timeout idle`.split(/\s+/);
+  resume-failed oom memory-low ci-broken-noship ci-norun ci-known-failing-again resume-skipped land-check-timeout idle`.split(/\s+/);
 // The problem kinds that happen in a unit's session or landing: \`fleet summary\` says under each
 // which unit, and what became of it (or "unit: unknown"). Other kinds get that line only when
 // their line names a unit.

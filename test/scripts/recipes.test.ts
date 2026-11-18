@@ -2,7 +2,7 @@
 // as recipes, in a factory made by init.sh: runs, prompt, oversee-guide, usage, skill-deploy,
 // view and pause. Run: node --test test/scripts/
 // Setup goes before a test's checks (or in an after() hook), so a failing check can't skip it.
-import { after, describe, test } from "node:test";
+import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -58,9 +58,20 @@ describe("just runs", () => {
   });
   test("just runs: the header from a lane's clone when the checkout has none", () => {
     fs.renameSync(at("runs/index.tsv"), w.at("index.keep"));
-    has(J("runs"), "lane1  2026-10-01T11:00:00  b");
+    const o = J("runs");
+    fs.renameSync(w.at("index.keep"), at("runs/index.tsv"));
+    has(o, "lane1  2026-10-01T11:00:00  b");
   });
-  after(() => { fs.renameSync(w.at("index.keep"), at("runs/index.tsv")); });
+  // A lane clone removed past its count leaves its records in the checkout's runs/removed-clones/
+  // (fleet-scripts.ts, DROP_CLONE): its rows are still this machine's, under the lane it was.
+  test("just runs: a removed clone's rows, under its lane", () => {
+    const d = at("runs/removed-clones/fresh-lane3-20261001-120000");
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, "index.tsv"), "started\ttag\tloop\tunit\tresult\tturns\tcost_usd\tminutes\n2026-10-01T09:00:00\tz\t\tUnit zero (g/zero)\tdone\t2\t0.01\t1\n");
+    const t = Jok("runs", "--tsv");
+    fs.rmSync(at("runs/removed-clones"), { recursive: true });
+    assert.equal(t.split("\n")[1], "lane3\t2026-10-01T09:00:00\tz\t\tUnit zero (g/zero)\tdone\t2\t0.01\t1");
+  });
 });
 
 // prompt, worker-guide and oversee-guide: the skill's, then the project's additions.

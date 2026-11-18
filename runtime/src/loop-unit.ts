@@ -110,7 +110,6 @@ class Wrapup {
     const { l, u } = this, k = l.clock;
     if (this.told === "none") return true;
     if (this.told === "") {
-      k.refresh();
       if (!k.inLastCall()) return true;
       // Still needed now? CI may have passed since the session started.
       this.res = both(this.res, ciUses());
@@ -338,7 +337,6 @@ export async function workUnit(l: Loop, u: Claimed): Promise<"next" | "stop"> {
   }
   // Still running well past the stop time (runSession ended it): its unit is left for the next run.
   if (s.stopped === 3) {
-    l.clock.refresh();
     l.stop(`out of time: ${title} (${unit}) was still running ${Math.trunc((Number(env.FACTORY_OVERRUN || 1200) + 59) / 60)} min after the stop time (${hmAt(l.clock.deadline)}), so it was ended; it shows as interrupted, ${c.branches ? "its work pushed to its branch" : "the next session carries on from what it left"}${ciUnrun(l.clock.inLc)}`);
     return "stop";
   }

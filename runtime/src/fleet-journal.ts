@@ -76,31 +76,16 @@ export function noteCmd(f: Fleet, args: string[]): number {
   return 0;
 }
 
-// fleet summary [--since T] [--done]: the morning summary.
+// fleet summary [--since T]: the morning summary.
 export function summary(f: Fleet, args: string[]): number {
   const { env, sh, onlyTier, allLanes } = f;
   let since = "";
   try { since = chomp(fs.readFileSync("runs/.fleet-start", "utf8")); } catch { since = dateHm("-24 hours") ?? ""; }
-  let done = false;
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--done") { done = true; continue; }
-    if (args[i] !== "--since") { console.error(`usage: fleet summary [--since T] [--done]`); return 2; }
+    if (args[i] !== "--since") { console.error(`usage: fleet summary [--since T]`); return 2; }
     const t = dateHm(args[i + 1] ?? "");
     if (t === null) { console.error(`fleet: --since needs a time (got '${args[i + 1] ?? ""}')`); return 2; }
     since = t; i++;
-  }
-  if (done) {
-    // The units done since then, each once (one done twice, after a reopen, counts once), as
-    // the tracker's log has them.
-    const r = spawnSync("factory/tracker", ["log", "--since", since.replace(" ", "T")], { env, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], maxBuffer: 1 << 28 });
-    if (r.status !== 0) { console.error("fleet: the tracker's log couldn't be read"); return 2; }
-    const units = new Set<string>();
-    for (const l of lines(r.stdout ?? "")) {
-      const m = /^\S+ \S+ [^:]*: (.*): done(?:, checked by .*)?$/.exec(l);
-      if (m) units.add(m[1]);
-    }
-    say(`Done since ${since}: ${units.size} unit${units.size === 1 ? "" : "s"} (the list: \`just log --since "${since}" | grep ': done'\`)`);
-    return 0;
   }
   say(`Morning summary since ${since}:`);
   // Each group's CI since then, whatever the events say: passed, failed (on what), cut off, or

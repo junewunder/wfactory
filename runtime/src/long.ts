@@ -54,7 +54,7 @@ limit: --max, else $FACTORY_LONG_WAIT, else 540 seconds. A job killed over its
 cap, or by the whole machine running out, says so in \`wait\`, and an
 \`oom-kill\` event tells the overseer (capped.sh).
 The stop time: in a loop session, $FACTORY_DEADLINE (the loop's --hours, epoch
-seconds), or runs/.stop-at if earlier (\`just fleet stop-at\`). \`wait\` returns
+seconds). \`wait\` returns
 11 once it's under $FACTORY_LONG_MARGIN seconds away (default 900), so the
 session has time to wrap up before the loop ends it. Asked again after that,
 it waits $FACTORY_LONG_AGAIN seconds (default 60) before saying so again.`;
@@ -81,9 +81,7 @@ const nameOk = (n: string) => {
 // The lane's stop time (epoch seconds), or null outside a loop session.
 function stopTime(env: NodeJS.ProcessEnv): number | null {
   const d = env.FACTORY_DEADLINE ?? "";
-  if (!/^[0-9]+$/.test(d)) return null;
-  const s = cat("runs/.stop-at") ?? "";
-  return /^[0-9]+$/.test(s) && Number(s) < Number(d) ? Number(s) : Number(d);
+  return /^[0-9]+$/.test(d) ? Number(d) : null;
 }
 
 // The last lines of a job's output, indented, as `wait` shows them.

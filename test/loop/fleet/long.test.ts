@@ -47,16 +47,7 @@ describe("long jobs", () => {
     assert.equal(near.code, 11);
   });
   test("  and says to stop the job and note it", () => { has(near.stdout, "out of time: the lane stops at"); });
-  test("  an earlier stop time the overseer set counts", () => {
-    fs.writeFileSync(path.join(F, "runs/.stop-at"), `${now() + 3}\n`);
-    const r = long(["wait", "slow"], { add: { FACTORY_DEADLINE: String(now() + 3600), FACTORY_LONG_MARGIN: "1", FACTORY_LONG_AGAIN: "0" } });
-    assert.equal(r.code, 11);
-  });
-  test("  outside a loop session there's no stop time", () => {
-    const r = long(["wait", "slow", "--max", "2"]);
-    fs.rmSync(path.join(F, "runs/.stop-at"), { force: true });
-    assert.equal(r.code, 10);
-  });
+  test("  outside a loop session there's no stop time", () => { assert.equal(long(["wait", "slow", "--max", "2"]).code, 10); });
   test("long start names the lane's stop time", () => {
     has(out(["start", "named", "--", "sleep", "1"], { FACTORY_DEADLINE: String(now() + 3600) }), "The lane stops at");
   });

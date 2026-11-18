@@ -8,7 +8,7 @@ import { after, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { has, hasnt } from "../lib/index.ts";
-import { hold, letGo, nextHeld, nextSecond, hmAt, hmsAt, run, type Run } from "./inproc.ts";
+import { hold, letGo, nextHeld, nextSecond, hmAt, hmsAt, hoursFor, run, type Run } from "./inproc.ts";
 import { loopFactory, order } from "./factory.ts";
 
 const f = loopFactory("lcholds");
@@ -23,9 +23,7 @@ async function intoLastCall(name: string) {
   const h = hold(a.locks, `gz${name}/wait`);
   // (A minute ahead of real time: what the sessions record has a real time.)
   const t0 = nextSecond() + 60;
-  fs.mkdirSync(a.at("runs"), { recursive: true });
-  fs.writeFileSync(a.at("runs/.stop-at"), `${t0 + 120}\n`);
-  const r = loop(["--hours", "1", "--last-call", "1"], {}, t0);
+  const r = loop(["--hours", hoursFor(120), "--last-call", "1"], {}, t0);
   await h.held();
   await r.at(60);
   h.go();
@@ -43,9 +41,7 @@ describe("a factory with no CI keeps starting units through last call until the 
     for (const n of ["one", "two", "three"]) { setup("add-unit", `gp/${n}`, "--title", `P ${n}`); hold(a.locks, `gp/${n}`); }
     // (A minute ahead of real time: what the sessions record has a real time.)
     const t0 = nextSecond() + 60;
-    fs.mkdirSync(a.at("runs"), { recursive: true });
-    fs.writeFileSync(a.at("runs/.stop-at"), `${t0 + 120}\n`);
-    r = loop(["--hours", "1", "--last-call", "1"], {}, t0);
+    r = loop(["--hours", hoursFor(120), "--last-call", "1"], {}, t0);
     const ends = [40, 60, 100];
     for (let i = 0; ; i++) {
       const k = await nextHeld(a.locks, r);
@@ -55,7 +51,6 @@ describe("a factory with no CI keeps starting units through last call until the 
       letGo(a.locks, k);
     }
     await r.end();
-    fs.rmSync(a.at("runs/.stop-at"), { force: true });
     has(r.out(), `${hmsAt(r.t0, 60)} loop: last call, stopping at ${hmAt(r.t0, 120)}`);
   });
   test("  a unit starts in last call", () => {
@@ -78,7 +73,6 @@ describe("with CI on group A, last call holds back A's units and starts group B'
     for (const n of ["one", "two"]) setup("add-unit", `gb/${n}`, "--title", `B ${n}`);
     r = await intoLastCall("b");
     await r.end();
-    fs.rmSync(a.at("runs/.stop-at"), { force: true });
   });
   test("  saying what it holds back", () => { has(r.out(), "last call: no unit of Group A or on its data (its CI runs here tonight) starts; other units do"); });
   test("  A's CI runs, then B's units", () => {
@@ -103,7 +97,6 @@ describe("a lane with only held-back work left waits while CI runs, then stops",
     setup("ci-pass", "ga", "--evidence", "passed in another lane");
     await r.at(70);
     await r.end();
-    fs.rmSync(a.at("runs/.stop-at"), { force: true });
   });
   test("  it waited, saying why", () => { has(before, "waiting: nothing workable: 1 unit of Group A or on its data, held back"); });
   test("  not stopping while CI ran", () => { hasnt(before, "last call is over"); });
@@ -124,7 +117,6 @@ describe("a stop in last call with only the owner's work left names the CI not p
     for (const u of ["ga/two"]) setup("park", u, "--why", "test");
     r = await intoLastCall("k");
     await r.end();
-    fs.rmSync(a.at("runs/.stop-at"), { force: true });
   });
   test("  it stops on the owner's work", () => { has(r.out(), "Only the owner's questions and gates are left"); });
   test("  naming CI not passed", () => { has(r.out(), "CI not passed: Group K (broken)"); });

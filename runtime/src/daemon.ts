@@ -145,7 +145,7 @@ function laneEvent(dir: string, kind: string, message: string, env: NodeJS.Proce
 export interface LaneAsk { unit: string; dir: string }
 // running: its job runs, or it was asked to start again as soon as it stops (a restart of a lane
 // on a copy from before restarts); a job the service manager couldn't be asked about counts as
-// running, never as a stop. deadline: when its run ends (its --hours, or an earlier stop time).
+// running, never as a stop. deadline: when its run ends (its --hours).
 export interface LaneSeen { running: boolean; count: number; fresh?: string; deadline?: number }
 export interface MachineAsk { since: number; floor: number; low: boolean }
 export interface MachineSeen { avail: number | null; ooms: OomKill[] }
@@ -157,8 +157,7 @@ export function look(lanes: LaneAsk[], env: NodeJS.ProcessEnv = process.env): La
   const recs = new Map(records(env).map((r) => [r.unit, r]));
   return lanes.map((l) => {
     const r = recs.get(l.unit);
-    const stopAt = Number(cat(path.join(expand(l.dir), "runs", ".stop-at")));
-    const deadline = r ? (stopAt > 0 && stopAt < r.deadline ? stopAt : r.deadline) : stopAt > 0 ? stopAt : undefined;
+    const deadline = r?.deadline;
     const running = platform.jobState(l.unit) !== "stopped" || r?.then === "start";
     return { running, count: countLines(eventsOf(l.dir)), ...(deadline ? { deadline } : {}) };
   });
@@ -338,8 +337,7 @@ async function bringBack(env: NodeJS.ProcessEnv, me: string, lastBeat: number) {
   for (const r of cut) {
     dropRecord(r.unit, env);
     const now = epoch();
-    const stopAt = Number(cat(path.join(r.dir, "runs", ".stop-at")));
-    const deadline = stopAt > 0 && stopAt < r.deadline ? stopAt : r.deadline;
+    const deadline = r.deadline;
     const name = r.loop ? `${path.basename(r.dir)} (${r.loop})` : path.basename(r.dir);
     // A timed last call is working time (units CI won't redo, and CI): the lane comes back for it.
     // The owner's (`just fleet last-call`) ends the night: it stays down.
@@ -397,8 +395,7 @@ async function startAgain(env: NodeJS.ProcessEnv, r: LaneRecord) {
     journal(env, `${r.unit}: paused for a restart, then asked to pause; not started again`);
     return;
   }
-  const stopAt = Number(cat(path.join(r.dir, "runs", ".stop-at")));
-  const deadline = stopAt > 0 && stopAt < r.deadline ? stopAt : r.deadline;
+  const deadline = r.deadline;
   const now = epoch();
   if (now >= deadline || fs.existsSync(path.join(r.dir, "runs", ".last-call"))) {
     dropRecord(r.unit, env);

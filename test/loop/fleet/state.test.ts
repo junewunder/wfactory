@@ -1,4 +1,4 @@
-// fleet state, run, pause and pause-now; oversee.sh wait, state, start (refused), stop-at, stop
+// fleet state, pause and pause-now, and the commands cut; oversee.sh wait, state, start (refused), stop
 // and tidy, on a lane fleet start runs as a unit. Each lane's unit is held until the test lets
 // it go. Run: node --test test/loop/fleet/
 // Setup goes before a test's checks (or in an after() hook), so a failing check can't skip it.
@@ -8,7 +8,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { linuxOnly, has, hasnt, chomp, readOr, until, HOST, active } from "../../lib/index.ts";
-import { dayHm } from "../../../runtime/src/sys.ts";
 import { fleetFactory } from "./helpers.ts";
 
 const f = fleetFactory("fstate");
@@ -17,7 +16,7 @@ const LANE = `factory-${P}-lane1`, L1 = lane(1);
 const L = (args: string[], add: NodeJS.ProcessEnv = {}) => oversee(args, { add });
 const start = () => fleet(["start", "--hours", "0.05", "--no-awake"]);
 
-describe("fleet state, run, pause; oversee.sh wait, state and tidy on a running lane", () => {
+describe("fleet state, pause, the commands cut; oversee.sh wait, state and tidy on a running lane", () => {
   const fp = hold("g/fp");
   let st = "";
   test("fleet state: each lane, headed", async () => {
@@ -36,9 +35,19 @@ describe("fleet state, run, pause; oversee.sh wait, state and tidy on a running 
   test("oversee.sh state: running, and the log's end", () => { s = L(["state"]).stdout; has(s, `running: ${LANE}\n--- runs/loop.log`); });
   test("  its last lines", () => { has(s, "iteration 1: Unit fp (g/fp)"); });
   test("  tidy refuses while the loop runs (exit 2)", () => { assert.equal(L(["tidy"]).code, 2); });
-  test("fleet run: a command in the machine's checkout", () => { assert.equal(chomp(fleet(["run", HOST, "pwd"]).stdout), F); });
-  test("  with its exit status", () => { assert.equal(fleet(["run", HOST, "sh", "-c", "exit 7"]).code, 7); });
-  test("  a machine that isn't in the file (exit 2)", () => { assert.equal(fleet(["run", "nosuchbox", "pwd"]).code, 2); });
+  // Three commands no overseer ran in two weeks of two factories, cut (2026-11-18): each is
+  // refused as any unknown command is. (A stop time is given at the start, --until or --hours;
+  // fleet stop tidies; a command on another machine is ssh.)
+  for (const c of ["stop-at", "tidy", "run"]) test(`fleet ${c}: an unknown command (exit 2)`, () => {
+    const r = fleet([c, ...(c === "stop-at" ? ["23:59"] : c === "run" ? [HOST, "pwd"] : [])]);
+    assert.equal(r.code, 2);
+    has(r.stdout, `fleet: unknown command ${c} (`);
+  });
+  test("oversee.sh stop-at: an unknown command (exit 2)", () => {
+    const r = L(["stop-at", "--at", String(Math.floor(Date.now() / 1000) + 7200)]);
+    assert.equal(r.code, 2);
+    has(r.stdout, "oversee: unknown command stop-at (");
+  });
   let p = "";
   test("fleet pause: each lane is asked", () => { p = fleet(["pause"]).stdout; has(p, `=== ${HOST} lane 1`); });
   test("  to stop after the unit it's on", () => { has(p, `asked ${LANE} to stop after the unit it's on`); });
@@ -92,28 +101,12 @@ describe("fleet pause-now", () => {
   });
 });
 
-describe("oversee.sh start, stop-at, tidy and stop", () => {
+describe("oversee.sh start, tidy and stop", () => {
   // A start systemd refuses (a user bus ssh can't reach, a unit still stopping) fails, so fleet start says so.
   test("oversee.sh start: a start systemd refuses exits non-zero", linuxOnly("a stand-in systemd-run"), () => {
     fs.mkdirSync(w.at("failrun"));
     fs.writeFileSync(w.at("failrun/systemd-run"), '#!/bin/sh\necho "Failed to connect to bus" >&2; exit 1\n', { mode: 0o755 });
     assert.equal(L(["start", "--hours", "0.01"], { PATH: `${w.at("failrun")}:${w.env.PATH}` }).code, 1);
-  });
-  const at = Math.floor(Date.now() / 1000) + 7200;
-  let o = "";
-  test("oversee.sh stop-at: the stop time", () => {
-    o = L(["stop-at", "--at", String(at)]).stdout;
-    // (GNU date where there is one, so the check doesn't read the time as the code under test does.)
-    const when = process.platform === "linux" ? chomp(spawnSync("date", ["-d", `@${at}`, "+%a %H:%M"], { encoding: "utf8" }).stdout) : dayHm(new Date(at * 1000));
-    has(o, `${LANE} stops at ${when} (or at its --hours, if sooner), after last call`);
-  });
-  test("  and that it isn't running", () => { has(o, "; it isn't running now"); });
-  test("  in runs/.stop-at", () => { assert.equal(chomp(readOr(path.join(L1, "runs/.stop-at"))), String(at)); });
-  test("  a time that isn't epoch seconds (exit 2)", () => { assert.equal(L(["stop-at", "--at", "09:00"]).code, 2); });
-  test("  no time (exit 2)", () => {
-    const c = L(["stop-at"]).code;
-    fs.rmSync(path.join(L1, "runs/.stop-at"), { force: true });
-    assert.equal(c, 2);
   });
   test("oversee.sh tidy: a long job left running is stopped", () => {
     long(["start", "leftover", "--", "sleep", "300"], { cwd: L1 });

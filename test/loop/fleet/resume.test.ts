@@ -138,20 +138,18 @@ describe("the daemon after the machine went down: a cut-off lane is brought back
     fleet(["stop"]); h6.go(); setup(["drop", "g/res6", "--why", "test"]);
     has(events(), `in its last call (since ${hm(new Date((now - 60) * 1000))})`);
   });
-  // Its run's half is up to its stop time, an earlier one the overseer set included: started 10
-  // minutes ago, stopping in 50 (not its --hours's 2 hours), its 90-minute last call is at most 30
-  // before. (With nothing written: the daemon works it out as the loop does.)
+  // Its run's half is up to its stop time: started 10 minutes ago, stopping in 50, its 90-minute
+  // last call is at most 30 before. (With nothing written: the daemon works it out as the loop does.)
   const h7 = hold("g/res7");
-  test("  its last call at most half its run before the stop time the overseer set", async () => {
+  test("  its last call at most half its run before the stop time", async () => {
     setup(["add-unit", "g/res7", "--title", "Unit res seven"]);
-    cutOff(now + 7200, [], 0, [...(rec.args as string[]), "--last-call", "90"], { started: now - 600 });
-    fs.writeFileSync(path.join(L1, "runs/.stop-at"), `${now + 3000}\n`);
+    cutOff(now + 3000, [], 0, [...(rec.args as string[]), "--last-call", "90"], { started: now - 600 });
     fs.rmSync(LCFILE, { force: true });
     dmn(["start"]);
     await fileHas(EVENTS, "\tresumed\t", 30);
     await h7.held();
     fleet(["stop"]); h7.go(); setup(["drop", "g/res7", "--why", "test"]);
-    fs.rmSync(LCFILE, { force: true }); fs.rmSync(path.join(L1, "runs/.stop-at"), { force: true });
+    fs.rmSync(LCFILE, { force: true });
     assert.ok(!events().includes("in its last call"), events());
   });
   // The owner's last call (wrap up and publish) ends the night: the lane stays down.
