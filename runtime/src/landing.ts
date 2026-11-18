@@ -22,8 +22,8 @@ export interface LaneCtx {
   log(s: string): void;
   event(kind: string, msg: string): void;
   // `just check` with these busy groups (FACTORY_BUSY_GROUPS), its output to <log>, stopped by
-  // a signal to the loop: true if it passed.
-  check(log: string, busy: string): Promise<boolean>;
+  // a signal to the loop: true if it passed. behind: the unit whose landing waits on it.
+  check(log: string, busy: string, behind?: string): Promise<boolean>;
   // After a signal: what was running is stopped, and the loop goes no further (it never resolves).
   halt(): Promise<void>;
   // The tracker (tr.ts's tr: in the loop's process), with these variables added.
@@ -371,12 +371,12 @@ export class Landing {
       // main only gets what passes the oracle: checked here whatever the session did.
       if (!checked) {
         this.busyNow(u);
-        if (!(await this.c.check("runs/land-check.log", this.busy))) {
+        if (!(await this.c.check("runs/land-check.log", this.busy, t))) {
           this.why = `\`just check\` fails on the branch with main merged in (${lastLine("runs/land-check.log")})`;
           // If main fails alone, the branch isn't to blame: no merge unit, wait for main to be fixed.
           // -f: a check that rewrote tracked files would otherwise keep us on the branch's tree.
           g("checkout", "-q", "-f", "--detach", this.om);
-          if (!(await this.c.check("runs/main-check.log", this.busy))) {
+          if (!(await this.c.check("runs/main-check.log", this.busy, t))) {
             g("checkout", "-q", "-f", b); mc = this.mainCode(); key = `${this.ownChange()} ${mc} ${this.busy ? "busy" : ""}`;
             if (mc) {
               const keep = (read("runs/.main-broken") ?? "").split("\n").filter((l) => l.endsWith(` ${mc} `) || l.endsWith(` ${mc} busy`));
