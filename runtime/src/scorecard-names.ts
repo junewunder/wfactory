@@ -1,6 +1,6 @@
 // The scorecard's figures by name (scorecard.ts): each one's fixed name in --json, and a line on
-// what it counts, for `just scorecard --names` and for `expect`, which refuses a name not here.
-// A <part> in a name stands for one of a set: an ending, a CI step, a group.
+// what it counts, for `just scorecard --names`. A <part> in a name stands for one of a set: an
+// ending or what became of one, a CI step, a group.
 
 // How a session that finished no unit ended, by its name in the figures, and as the scorecard says it.
 export const ENDINGS = {
@@ -15,15 +15,44 @@ export const ENDINGS = {
 } as const;
 export type Ending = keyof typeof ENDINGS | "finished" | "unknown";
 
+// What became of a session that finished no unit, by its ending. Only lost work is waste: a unit
+// sent back by the review or handed back keeps its branch, and the next session carries on from
+// it (landing.ts, saveBranch); a question waits on the owner; a unit given back unstarted cost
+// next to nothing. A session killed over memory, cut off or ended for going silent was ended
+// before it could finish or hand its work back.
+export const OUTCOMES = {
+  lost: { said: "lost their work", endings: ["oom", "interrupted", "silent"] },
+  carried_on: { said: "left their work for a later session to carry on", endings: ["sent_back", "handed_back"] },
+  waiting: { said: "ended waiting on the owner", endings: ["asked", "blocked"] },
+  unstarted: { said: "gave their unit back unstarted", endings: ["unstarted"] },
+} as const satisfies Record<string, { said: string; endings: (keyof typeof ENDINGS)[] }>;
+export type Outcome = keyof typeof OUTCOMES;
+// Each ending's own words inside its outcome's line ("2 sent back by the review ($5.00)").
+export const ENDING_SAID: Record<keyof typeof ENDINGS, string> = {
+  unstarted: "given back unstarted", handed_back: "handed back with their work kept", interrupted: "cut off",
+  blocked: "left their unit stuck", asked: "asked the owner", sent_back: "sent back by the review",
+  oom: "killed over memory", silent: "ended for going silent",
+};
+
 export const NAMES: [string, string][] = [
   ["sessions.count", "sessions this machine's lanes ran in the period (rows of their run index, CI runs aside)"],
   ["sessions.cost", "what those sessions cost, in dollars (the run index's cost_usd)"],
   ["lane.minutes", "lane time: the minutes of the lanes' sessions and CI runs, and the waits below"],
+  ["sessions.finished.count", "sessions that finished their unit: done, checked done, sent for a second check or dropped"],
+  ["units.done.count", "units done in the period, each once (the tracker's log: every machine)"],
   ["sessions.no_unit.count", "sessions that finished no unit: not done, checked done, sent for a second check or dropped (or done, then sent back by the review)"],
+  ["sessions.unrecorded.count", "loop sessions on this machine the tracker's log has a claim of but no run index has (a lane's records lost with its clone)"],
   ["sessions.unknown.count", "sessions whose claim isn't in this checkout's copy of the tracker's log (named under unknown; neither finished nor not)"],
   ["sessions.no_unit.share", "their share of the sessions whose ending is known (not sessions.unknown)"],
   ["sessions.no_unit.cost", "what they cost"],
   ["sessions.no_unit.cost_share", "their share of those sessions' cost"],
+  ["sessions.lost.count", "the waste: sessions that finished no unit and lost their work (sessions.no_unit.lost)"],
+  ["sessions.lost.share", "their share of the sessions whose ending is known"],
+  ["sessions.lost.cost", "what they cost"],
+  ["sessions.lost.cost_share", "their share of those sessions' cost"],
+  ["sessions.no_unit.<outcome>.count", `those that came to one end; <outcome> is one of ${Object.keys(OUTCOMES).join(", ")} (${Object.entries(OUTCOMES).map(([k, o]) => `${k}: ${o.endings.join(", ")}`).join("; ")})`],
+  ["sessions.no_unit.<outcome>.cost", "what they cost"],
+  ["sessions.no_unit.sent_back.next_cost", "what the sessions that carried on a unit the review sent back cost (the next claim of it after each send-back)"],
   ["sessions.no_unit.<ending>.count", `those that ended one way; <ending> is one of ${Object.keys(ENDINGS).join(", ")}`],
   ["sessions.no_unit.<ending>.share", "their share of the sessions whose ending is known"],
   ["sessions.no_unit.<ending>.cost", "what they cost"],
@@ -61,9 +90,3 @@ export const NAMES: [string, string][] = [
   ["unit_cost.group.<group>.total", "their cost in all"],
   ["unknown.count", "records the scorecard doesn't understand (each is named)"],
 ];
-
-// Is name one of the figures? <ending> must be an ending; <step> and <group> any id.
-export function knownName(name: string): boolean {
-  const part = (p: string) => p === "<ending>" ? `(?:${Object.keys(ENDINGS).join("|")})` : "[A-Za-z0-9_-]+";
-  return NAMES.some(([n]) => new RegExp(`^${n.split(".").map((x) => /^<.*>$/.test(x) ? part(x) : x.replace(/[-_]/g, "\\$&")).join("\\.")}$`).test(name));
-}

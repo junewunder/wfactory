@@ -1,14 +1,16 @@
 // The scorecard's records, read as they are (scorecard.ts): the tracker's log, once; this
-// machine's lanes' run index and events (the checkout's runs/ and each <checkout>-lane<N>/runs/
-// beside it); the heavy-job history in the machine's wfactory state folder; and the tracker's
-// project, groups and predictions. Nothing is written and nothing is asked of another process
+// machine's lanes' run index and events (the checkout's runs/, each <checkout>-lane<N>/runs/
+// beside it, and those of the clones removed since, which the removal moved to the checkout's
+// runs/removed-clones/<clone>-<when>/: fleet-scripts.ts, DROP_CLONE); the heavy-job history in
+// the machine's wfactory state folder; and the tracker's project and groups. Nothing is written and nothing is asked of another process
 // beyond git naming the checkout's origin, as the tracker does to find its state. A line or row
 // these readers don't understand goes to `unknown`, named, never dropped.
 import fs from "node:fs";
 import path from "node:path";
 import { makeContext } from "../../tracker/src/ctx.ts";
-import type { LogEntry, Prediction } from "../../tracker/src/types.ts";
+import type { LogEntry } from "../../tracker/src/types.ts";
 import { EVENTS_PROBLEM, EVENTS_SUMMARY, EVENTS_WAKE } from "./fleet-help.ts";
+import { REMOVED } from "./fleet-scripts.ts";
 import { jobsHome } from "./heavy.ts";
 import { host as hostOf } from "./sys.ts";
 
@@ -30,13 +32,13 @@ export interface Records {
   history: Record<string, { secs?: number[] }>;
   ciSteps: Record<string, { cmd?: string }>;
   groups: Group[];
-  predictions: Prediction[];
+  running: Set<string>;    // the tags of the sessions running in a lane here now (no row yet)
   unknown: Unknown[];
   logAge: number | null;   // seconds since the copy of main's log was fetched; null: the checkout's own
 }
 
-// Every command the tracker writes to its log (tracker/src: log(T, "<cmd>", …)), and two older
-// ones still in logs. A test keeps the list whole.
+// Every command the tracker writes to its log (tracker/src: log(T, "<cmd>", …)), and older ones
+// still in logs (ci-lost; expect and expect-settle, the predictions, gone since). A test keeps the list whole.
 export const LOG_CMDS = new Set(`add add-group add-unit answer aside-set ask block check check-ready checked-in ci-fail ci-fix-shared
   ci-known ci-pass ci-retry ci-split ci-start ci-touch ci-unclaim claim decide done drop edit edit-group expect expect-settle focus
   landing lanes-stopped lease merged note overseer park pass prune priority publish rebuilt release rename reopen review settle sync
@@ -89,12 +91,22 @@ export function readRecords(env: NodeJS.ProcessEnv, cwd: string): Records {
   const parent = path.dirname(root), base = path.basename(root);
   let sibs: string[] = [];
   try { sibs = fs.readdirSync(parent).filter((d) => new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-lane[0-9]+$`).test(d)).sort((a, b) => Number(a.slice(base.length + 5)) - Number(b.slice(base.length + 5))); } catch {}
-  const rows: Row[] = [], events: Ev[] = [], lanes: string[] = [];
-  for (const d of [root, ...sibs.map((s) => path.join(parent, s))]) {
-    const lane = d === root ? "checkout" : `lane${d.slice(root.length + 5)}`;
-    const idx = read(path.join(d, "runs", "index.tsv")), evs = read(path.join(d, "runs", "events.log"));
+  // A removed clone's records, under the lane it was: they come before the lane's clone now.
+  const gone = path.join(root, "runs", REMOVED);
+  let removed: string[] = [];
+  try { removed = fs.readdirSync(gone).filter((d) => /-lane[0-9]+-[0-9]{8}-[0-9]{6}$/.test(d)).sort(); } catch {}
+  const dirs: [string, string][] = [
+    ...removed.map((d): [string, string] => [path.join(gone, d), `lane${/-lane([0-9]+)-[0-9]{8}-[0-9]{6}$/.exec(d)![1]}`]),
+    [path.join(root, "runs"), "checkout"],
+    ...sibs.map((s): [string, string] => [path.join(parent, s, "runs"), `lane${s.slice(base.length + 5)}`]),
+  ];
+  const rows: Row[] = [], events: Ev[] = [], lanes: string[] = [], running = new Set<string>();
+  for (const [d, lane] of dirs) {
+    const tag = read(path.join(d, "inbox", "current", "tag"))?.trim();
+    if (tag) running.add(tag);
+    const idx = read(path.join(d, "index.tsv")), evs = read(path.join(d, "events.log"));
     if (idx === null && evs === null) continue;
-    lanes.push(lane);
+    if (!lanes.includes(lane)) lanes.push(lane);
     for (const l of (idx ?? "").split("\n").slice(1)) {
       if (!l.trim()) continue;
       const f = l.split("\t"), t = startedAt(f[0] ?? "");
@@ -130,6 +142,6 @@ export function readRecords(env: NodeJS.ProcessEnv, cwd: string): Records {
       if (g?.id) groups.push({ id: g.id, title: g.title ?? g.id, params: g.params ?? {} });
     }
   } catch {}
-  const predictions = parse<{ predictions?: Prediction[] }>(read(path.join(tdir, "predictions.json")))?.predictions ?? [];
-  return { host: hostOf(env), root, lanes, log, rows, events, history, ciSteps: project.ci?.steps ?? {}, groups, predictions, unknown, logAge };
+  lanes.sort((a, b) => (a === "checkout" ? -1 : b === "checkout" ? 1 : Number(a.slice(4)) - Number(b.slice(4))));
+  return { host: hostOf(env), root, lanes, log, rows, events, history, ciSteps: project.ci?.steps ?? {}, groups, running, unknown, logAge };
 }
