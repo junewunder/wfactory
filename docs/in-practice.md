@@ -60,7 +60,6 @@ as rough. I've only measured Max 20x. Max 5x and Pro have a smaller share
 of usage, so the same units take longer in proportion.
 
 The lanes read your usage as they go and pause below a share of the 5-hour
-window that you set (8% left by default). They also pace themselves through
-the week: they may have used the share of the week that has gone by, less a
-share kept back for you (15% by default), and they pause while they're
-ahead of that. `just usage` shows where they are.
+window that you set (8% left by default). They don't act on the week's
+usage, so a night can use up a week you wanted for other work: watch `just
+usage`, and give the lanes a stop time.

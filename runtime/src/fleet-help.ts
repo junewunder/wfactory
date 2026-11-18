@@ -80,8 +80,8 @@ Usage:
                                           CI that passed; since T ("09:00", "-24 hours"; default:
                                           since this checkout's last fleet start), then the check-in
                                           offer when one is due (tracker prune --due), and last the
-                                          scorecard's three worst lines and any prediction that came
-                                          due (just scorecard, this machine's lanes); with --done,
+                                          scorecard for the run (just scorecard --since T, this
+                                          machine's lanes); with --done,
                                           how many units were done since then
   factory/fleet.sh beat                   one heartbeat line: lanes busy, waiting, stopped; what each
                                           busy one works on, for how long, and when its session's
@@ -113,9 +113,8 @@ Usage:
                                           a headless desktop), and remove lane clones past
                                           docs/machines.md's count that hold nothing origin
                                           lacks. The overseer's last step.
-  factory/fleet.sh usage                  how much of the plan is left, where the week's line is
-                                          and until when the lanes pause for it, as each
-                                          machine's transcripts last saw it; trust the newest
+  factory/fleet.sh usage                  how much of the plan is left, as each machine's
+                                          transcripts last saw it; trust the newest
   factory/fleet.sh run <machine> <command…>   run a command in that machine's checkout
 
 Examples:

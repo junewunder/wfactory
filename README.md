@@ -105,9 +105,10 @@ around them.
   units need a gate you pass, and lanes never work one. Code
   (`questions.test.ts`), but the tracker doesn't check who runs `just
   pass`; the overseer's prompt says only to record your answer with it.
-- A night uses up your week. Lanes pause when less than 8% of the 5-hour
-  window is left, and pace the week keeping 15% back for you. Code
-  (`test/loop/usage.test.ts`).
+- A night runs into the usage limit. Lanes pause when less than 8% of the
+  5-hour window is left, and resume when it resets. Code
+  (`test/loop/usage.test.ts`). The week's usage is only shown (`just
+  usage`): to keep some of it, give the lanes a stop time.
 - One session's build takes the machine down, or a lane spins. Each
   session runs under a memory cap and is killed alone, and a second kill of
   the same kind blocks the unit; a lane that records and commits nothing

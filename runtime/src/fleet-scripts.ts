@@ -54,13 +54,17 @@ export const TIDY_LANE = `d=$0; case $d in "~/"*) d=$HOME/\${d#"~/"} ;; "~") d=$
 // The lane clones beside a checkout, and one removed once it's no lane's (past the machines file's
 // count): only when no loop runs in it (its runs/.loop.lock, which every loop there holds), the
 // daemon has no record of a lane there (one to start again, or bring back), and it
-// holds nothing committed, changed or stashed that origin lacks. Its runs/ (logs, transcripts) and
-// what git ignores there go with it.
+// holds nothing committed, changed or stashed that origin lacks. Its run index and events go to the
+// checkout's runs/removed-clones/<clone>-<when>/ first, where the scorecard reads them
+// (scorecard-read.ts): the lane's sessions are part of the factory's record after its clone is
+// gone. The rest of its runs/ (logs, transcripts) and what git ignores there go with it.
 export const CLONES = `for c in "$PWD"-lane*; do [ -d "$c/.git" ] && echo "$c"; done; true`;
 // flock -n 9 in a shell, where there's no flock(1) (macOS) by perl's flock(2) on the same open
 // file: the lock stays the shell's when either exits.
 export const LOCK9 = `if command -v flock >/dev/null; then flock -n 9; else perl -MFcntl=:flock -e 'open(my $f, ">&=", 9) or exit 1; flock($f, LOCK_EX | LOCK_NB) or exit 1'; fi`;
-export const DROP_CLONE = `${NETGIT}c=$0; cd "$c" || exit 0
+// (In the checkout's runs/: where a removed clone's records go.)
+export const REMOVED = "removed-clones";
+export const DROP_CLONE = `${NETGIT}top=$PWD; c=$0; cd "$c" || exit 0
   mkdir -p runs && exec 9>>runs/.loop.lock && ${LOCK9} || { echo "$c: an orphaned lane clone a loop is running in: left alone"; exit 0; }
   h=\${FACTORY_DAEMON_HOME:-\${XDG_STATE_HOME:-$HOME/.local/state}/wfactory}
   for r in "$h/lanes/factory-$1.json" "$h/lanes/factory-$1-"*.json; do [ ! -e "$r" ] || { echo "$c: an orphaned lane clone the machine's daemon will start a lane in: left alone"; exit 0; }; done
@@ -69,5 +73,7 @@ export const DROP_CLONE = `${NETGIT}c=$0; cd "$c" || exit 0
   netgit fetch -q origin 2>/dev/null
   u=$(git for-each-ref --format='%(refname:short)' refs/heads | while read -r b; do [ -z "$(git rev-list -n 1 "$b" --not --remotes=origin 2>/dev/null)" ] || printf '%s ' "$b"; done)
   [ -z "$u" ] || { echo "$c: an orphaned lane clone with commits origin lacks (on $u): left alone"; exit 0; }
+  k="$top/runs/${REMOVED}/$1-$(date +%Y%m%d-%H%M%S)"
+  for x in index.tsv events.log; do [ ! -f "runs/$x" ] || { mkdir -p "$k" && cp "runs/$x" "$k/$x"; } || { echo "$c: an orphaned lane clone whose records couldn't be kept in $k: left alone"; exit 0; }; done
   cd .. && rm -rf "$c" && echo "removed $c: an orphaned lane clone (its lane is past this start's count: docs/machines.md's, or --lanes)"`;
 export const TIDY_MACHINE = `if [ -x factory/tidy ]; then timeout 300 factory/tidy && echo "factory/tidy: done"; else echo "(no factory/tidy here)"; fi`;

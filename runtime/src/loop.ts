@@ -367,7 +367,7 @@ export class Loop {
       // ---- a lane past its machine's count for the time of day waits for it (loop-lanes.ts)
       if (await lanesRest(this)) continue;
 
-      // ---- usage: pause between units near the 5-hour limit, or ahead of the week's line (loop-usage.ts)
+      // ---- usage: pause between units near the 5-hour limit (loop-usage.ts)
       if (await usagePause(this)) continue;
 
       const next = await look(this);

@@ -1,8 +1,9 @@
 // just scorecard: the figures a hand-written factory's records give (test/scripts/scorecard/, every
 // way a session can finish no unit, a unit claimed four times, a review sending a branch back twice,
-// a wait, a failed CI step), plain and --json; a record it doesn't understand; a factory with no runs;
-// the ledger of predictions on a mocked clock; one read of a 50,000-line log; and that printing it
-// starts no agent and reaches no daemon. Run: node --test test/scripts/
+// a wait, a failed CI step), plain and --json; that only lost work is waste; a removed lane clone's
+// records, and the claims whose records were lost; a record it doesn't understand; a factory with
+// no runs; one read of a 50,000-line log; and that printing it starts no agent and reaches no
+// daemon. Run: node --test test/scripts/
 // The fixture's times are UTC, as is this process's clock (the run index and events are local time).
 process.env.TZ = "UTC";
 import { describe, mock, test } from "node:test";
@@ -12,7 +13,6 @@ import path from "node:path";
 import { ROOT, has, hasnt, tempDir, workspace } from "../lib/index.ts";
 import { scorecardCli, summaryLines } from "../../runtime/src/scorecard.ts";
 import { EVENT_KINDS, LOG_CMDS } from "../../runtime/src/scorecard-read.ts";
-import { knownName } from "../../runtime/src/scorecard-names.ts";
 
 const FIXTURE = path.join(ROOT, "test", "scripts", "scorecard");
 
@@ -34,7 +34,10 @@ function run(args: string[], env: NodeJS.ProcessEnv, cwd: string) {
   return { code, out, err };
 }
 
-// What each session in the fixture did, and so the figures it gives (11 sessions, $20.00):
+// What each session in the fixture did, and so the figures it gives (11 sessions, $20.00; lost:
+// the kill, the cut-off and the silent one, $3.50; carried on by a later session: the two sent
+// back, $5.00, of which the second carried on the first, $2.00, and the one handed back, $2.00;
+// waiting on the owner: the question and the stuck one, $0.90; given back unstarted, $0.10):
 //   s01 Four tries   claimed, given back unstarted          $0.10    0 min
 //   s02 Four tries   claimed, the loop's settle (mid-unit)   $1.00   10 min   interrupted
 //   s03 Four tries   handed back with a commit               $2.00   20 min
@@ -53,7 +56,11 @@ function run(args: string[], env: NodeJS.ProcessEnv, cwd: string) {
 // (dated), and two older undated ones at 110 and 120; test's at 280.
 const FIGURES = {
   "sessions.count": 11, "sessions.cost": 20, "lane.minutes": 415, "sessions.unknown.count": 0,
+  "sessions.finished.count": 2, "units.done.count": 2, "sessions.unrecorded.count": 0,
   "sessions.no_unit.count": 9, "sessions.no_unit.share": 0.8182, "sessions.no_unit.cost": 11.5, "sessions.no_unit.cost_share": 0.575,
+  "sessions.lost.count": 3, "sessions.lost.share": 0.2727, "sessions.lost.cost": 3.5, "sessions.lost.cost_share": 0.175,
+  "sessions.no_unit.lost.count": 3, "sessions.no_unit.lost.cost": 3.5, "sessions.no_unit.carried_on.count": 3, "sessions.no_unit.carried_on.cost": 7,
+  "sessions.no_unit.waiting.count": 2, "sessions.no_unit.waiting.cost": 0.9, "sessions.no_unit.sent_back.next_cost": 2,
   ...Object.fromEntries(([
     ["unstarted", 1, 0.1], ["handed_back", 1, 2], ["interrupted", 1, 1], ["blocked", 1, 0.5], ["asked", 1, 0.4],
     ["sent_back", 2, 5], ["oom", 1, 1.5], ["silent", 1, 1],
@@ -74,22 +81,20 @@ const FIGURES = {
   "unit_cost.group.beta.count": 1, "unit_cost.group.beta.median": 4, "unit_cost.group.beta.total": 4,
   "unknown.count": 0,
 };
-// The plain output: by share of cost or lane time, largest first; then the rest in their order.
+// The plain output: the sessions and units done first, which add up as they stand; then by share
+// of cost or lane time, largest first; then the rest in their order.
 const PLAIN = `This machine's lanes (fxhost: checkout), everything recorded: 11 sessions, $20.00, 415 min of lane time. Units and CI read the tracker's log: every machine.
-57% of cost       Sessions that finished no unit: 9 of 11 (82%), $11.50
-25% of cost       Sessions that had their unit sent back by the review: 2 (18% of sessions), $5.00
-25% of cost       Sent back (alpha/sent): claimed twice since it was last done or added: 2 sent back by the review; $5.00 here
+                  Sessions: 11, $20.00: 2 finished their unit (2 done), 9 finished none: 3 lost their work, 3 left their work for a later session to carry on, 2 ended waiting on the owner, 1 gave their unit back unstarted
+                  Units done: 2 in the tracker's log (every machine, each once), 2 of them by this machine's sessions
 24% of lane time  Waiting with nothing workable: 1 h 40 min (what for isn't recorded: below)
-21% of cost       Four tries (alpha/four): claimed 4 times since it was last done or added: 1 given back unstarted, 1 interrupted or cut off, 1 handed back with its work kept, 1 silent; $4.10 here
-10% of cost       Sessions that handed their unit back, work kept: 1 (9% of sessions), $2.00
+18% of cost       Waste: sessions that lost their work: 3 of 11 (27%), $3.50: 1 killed over memory ($1.50), 1 cut off ($1.00), 1 ended for going silent ($1.00)
 8% of lane time   Group CI: 2 runs, 1 failed (50%); 35 min of this machine's lane time
-8% of cost        Sessions that were killed over memory: 1 (9% of sessions), $1.50
 7% of lane time   Waiting in the usage pause: 30 min
-5% of cost        Sessions that were interrupted or cut off: 1 (9% of sessions), $1.00
-5% of cost        Sessions that were ended for going silent: 1 (9% of sessions), $1.00
-3% of cost        Sessions that left their unit stuck: 1 (9% of sessions), $0.50
-2% of cost        Sessions that asked the owner: 1 (9% of sessions), $0.40
-1% of cost        Sessions that gave their unit back unstarted: 1 (9% of sessions), $0.10
+                  Sessions that finished no unit and left their work for a later session to carry on: 3, $7.00: 2 sent back by the review ($5.00; the 1 session that carried them on: $2.00), 1 handed back with their work kept ($2.00)
+                  Sessions that finished no unit and ended waiting on the owner: 2, $0.90: 1 asked the owner ($0.40), 1 left their unit stuck ($0.50)
+                  Sessions that finished no unit and gave their unit back unstarted: 1, $0.10
+                  Four tries (alpha/four): claimed 4 times since it was last done or added: 1 given back unstarted, 1 interrupted or cut off, 1 handed back with its work kept, 1 silent; $4.10 here
+                  Sent back (alpha/sent): claimed twice since it was last done or added: 2 sent back by the review; $5.00 here
                   The review, of this machine's landings: 3 branches reviewed, 2 sent back for fixes (67%), 1 of them a second time; 2 landed, 1 without a review
                   Waiting for a resource: not recorded (the loop would have to record each wait as it ends: the resource, and the minutes)
                   Waiting for the memory budget: not recorded (the heavy-job queue would have to record each wait as it ends: the job, and the minutes)
@@ -114,7 +119,7 @@ describe("the fixture factory's figures", () => {
   });
   test("  the lines in the same order, each with its share", () => {
     const j = JSON.parse(run(["--json"], env, d).out);
-    assert.deepEqual(j.lines.slice(0, 3).map((l: { share: number; of: string }) => [l.share, l.of]), [[0.575, "session cost"], [0.25, "session cost"], [0.25, "session cost"]]);
+    assert.deepEqual(j.lines.slice(0, 4).map((l: { share: number; of: string }) => [l.share, l.of]), [[null, null], [null, null], [0.241, "lane time"], [0.175, "session cost"]]);
     assert.equal(j.lines.length, PLAIN.split("\n").length - 2);
   });
   // (A done the review sent back doesn't count as done: the unit sent back twice was claimed twice.)
@@ -133,6 +138,7 @@ describe("the fixture factory's figures", () => {
     const j = JSON.parse(run(["--json", "--since", "2026-11-01 13:00"], env, d).out);
     assert.equal(j.figures["sessions.count"], 2);
     assert.equal(j.figures["sessions.no_unit.count"], 0);
+    assert.equal(j.figures["units.done.count"], 2);
     // (CI step time by its runs' dates: none since then; the undated ones only for everything.)
     assert.equal(j.figures["ci.step.build.secs"], null);
   });
@@ -170,7 +176,8 @@ describe("a record it doesn't understand", () => {
   test("  a session the log has no claim of is counted, as unknown, and out of the shares", () => {
     const f = JSON.parse(run(["--json"], env, d).out).figures;
     assert.deepEqual([f["sessions.count"], f["sessions.unknown.count"], f["sessions.no_unit.count"], f["sessions.no_unit.share"], f["sessions.no_unit.cost_share"]], [12, 1, 9, 0.8182, 0.575]);
-    has(run([], env, d).out, "Sessions that finished no unit: 9 of 11 (82%; 1 more not in the log, not counted), $11.50");
+    has(run([], env, d).out, "Waste: sessions that lost their work: 3 of 11 (27%; 1 more not in the log, not counted), $3.50");
+    has(run([], env, d).out, "Sessions: 12, $21.00: 2 finished their unit (2 done), 9 finished none: 3 lost their work, 3 left their work for a later session to carry on, 2 ended waiting on the owner, 1 gave their unit back unstarted; 1 more whose claim isn't in the tracker's log");
   });
 });
 
@@ -198,88 +205,99 @@ describe("the review is this machine's; a step's runs count once", () => {
   });
 });
 
-// Each prediction is judged on the records from when it was made to the end of its date, whatever
-// period the card is for: p1 and p2 are made before the fixture's day, p3 after it.
-describe("the ledger of predictions", () => {
+// Only a session whose work was lost is waste: a unit the review sent back keeps its branch and
+// the next session carries on from it; a question waits on the owner. A factory with one of
+// each, a kill over memory, and a unit done first time.
+describe("only lost work is waste", () => {
+  const d = path.join(tempDir("scorecard-"), "fx");
+  fs.mkdirSync(path.join(d, "runs"), { recursive: true });
+  fs.cpSync(path.join(FIXTURE, "tracker"), path.join(d, "tracker"), { recursive: true });
+  const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: process.env.HOME, TZ: "UTC", FACTORY_STATE: "local", FACTORY_HOST: "fxhost", FACTORY_JOBS_HOME: path.join(d, "jobs") };
+  const L = (at: string, tag: string, cmd: string, id: string | null, text: string, more = "") => `{"at":"2026-11-01T${at}:00Z","actor":"loop","tag":"${tag}","host":"fxhost","cmd":"${cmd}"${id ? `,"id":"${id}"` : ""},"text":"${text}"${more}}`;
+  fs.writeFileSync(path.join(d, "tracker/log.jsonl"), [
+    L("07:00", "setup", "add-unit", "alpha/sent", "Sent back: added"), L("07:00", "setup", "add-unit", "beta/oom", "Out of memory: added"),
+    L("07:00", "setup", "add-unit", "beta/ask", "Asks: added"), L("07:00", "setup", "add-unit", "beta/fine", "Fine: added"),
+    // Sent back by the review, then carried on and landed by the next session.
+    L("08:00", "a1", "claim", "alpha/sent", "Sent back: claimed"), L("08:40", "a1", "done", "alpha/sent", "Sent back: done"),
+    L("08:42", "manual", "reopen", "alpha/sent", "Sent back: back to ready: the loop's review asked for fixes"),
+    L("08:45", "a2", "claim", "alpha/sent", "Sent back: claimed"), L("08:55", "a2", "done", "alpha/sent", "Sent back: done"),
+    L("08:57", "manual", "merged", "alpha/sent", "Sent back: on main"),
+    // Killed over memory.
+    L("09:00", "a3", "claim", "beta/oom", "Out of memory: claimed"), L("09:20", "a3", "settle", "beta/oom", "Out of memory: session ended mid-unit"),
+    // Asked the owner.
+    L("09:30", "a4", "claim", "beta/ask", "Asks: claimed"), L("09:35", "a4", "ask", null, "asked the owner: Which way?", ',"q":"q/which-way"'),
+    L("09:36", "a4", "block", "beta/ask", "Asks: waiting on the owner's answer to Which way?"),
+    // Done first time.
+    L("10:00", "a5", "claim", "beta/fine", "Fine: claimed"), L("10:30", "a5", "done", "beta/fine", "Fine: done"), L("10:32", "manual", "merged", "beta/fine", "Fine: on main"), ""].join("\n"));
+  fs.writeFileSync(path.join(d, "runs/index.tsv"), ["started\ttag\tloop\tunit\tresult\tturns\tcost_usd\tminutes",
+    "20261101-080000\ta1\t\tSent back (alpha/sent)\tDone.\t40\t3.00\t40", "20261101-084500\ta2\t\tSent back (alpha/sent)\tFixed.\t10\t0.80\t10",
+    "20261101-090000\ta3\t\tOut of memory (beta/oom)\t\t10\t1.50\t20", "20261101-093000\ta4\t\tAsks (beta/ask)\tAsked.\t8\t0.40\t6",
+    "20261101-100000\ta5\t\tFine (beta/fine)\tDone.\t30\t4.30\t30", ""].join("\n"));
+  fs.writeFileSync(path.join(d, "runs/events.log"), "2026-11-01 09:20\tfxhost\t1\toom-kill\tsession a3 on Out of memory (beta/oom) was killed: out of memory at 8G\tbeta/oom\n");
+  const out = () => run([], env, d).out;
+  test("the waste line counts only the kill", () => {
+    has(out(), "15% of cost       Waste: sessions that lost their work: 1 of 5 (20%), $1.50: 1 killed over memory ($1.50)");
+    const f = JSON.parse(run(["--json"], env, d).out).figures;
+    assert.deepEqual([f["sessions.lost.count"], f["sessions.lost.cost"], f["sessions.lost.cost_share"]], [1, 1.5, 0.15]);
+  });
+  test("  the sent-back session is carried on, with what the session after it cost", () => {
+    has(out(), "Sessions that finished no unit and left their work for a later session to carry on: 1, $3.00: 1 sent back by the review ($3.00; the 1 session that carried it on: $0.80)");
+    assert.equal(JSON.parse(run(["--json"], env, d).out).figures["sessions.no_unit.sent_back.next_cost"], 0.8);
+  });
+  test("  the question waits on the owner", () => { has(out(), "Sessions that finished no unit and ended waiting on the owner: 1, $0.40: 1 asked the owner ($0.40)"); });
+  test("  and only the waste line carries a share of the cost", () => {
+    const j = JSON.parse(run(["--json"], env, d).out);
+    assert.deepEqual(j.lines.filter((l: { of: string | null }) => l.of === "session cost").map((l: { text: string }) => l.text.split(":")[0]), ["Waste"]);
+  });
+  test("sessions, what became of each, and the units done add up as they stand", () => {
+    const o = out().split("\n");
+    assert.equal(o[1].trim(), "Sessions: 5, $10.00: 2 finished their unit (2 done), 3 finished none: 1 lost their work, 1 left their work for a later session to carry on, 1 ended waiting on the owner");
+    assert.equal(o[2].trim(), "Units done: 2 in the tracker's log (every machine, each once), 2 of them by this machine's sessions");
+  });
+});
+
+// A lane clone the fleet removed (past --lanes) leaves its run index and events in the checkout's
+// runs/removed-clones/<clone>-<when>/ (fleet-scripts.ts, DROP_CLONE): they count under its lane.
+describe("a removed lane clone's records", () => {
   const { d, env } = fixture();
-  const at = (iso: string) => mock.timers.enable({ apis: ["Date"], now: new Date(iso) });
-  const expect = (...a: string[]) => run(["expect", ...a], env, d);
-  test("expect refuses a name that isn't a figure", () => {
-    at("2026-10-31T09:00:00Z");
-    try {
-      const r = expect("sessions.no_unit.bogus.count", "< 0.1", "--by", "2026-11-10", "--why", "a change");
-      assert.equal(r.code, 2);
-      has(r.err, `"sessions.no_unit.bogus.count" isn't one of the scorecard's figures`);
-    } finally { mock.timers.reset(); }
+  const gone = path.join(d, "runs/removed-clones/fx-lane3-20261101-200000");
+  fs.mkdirSync(gone, { recursive: true });
+  fs.writeFileSync(path.join(gone, "index.tsv"), "started\ttag\tloop\tunit\tresult\tturns\tcost_usd\tminutes\n20261101-170000\tr1\t\tFine (beta/fine)\tLooked again.\t5\t2.00\t10\n");
+  fs.writeFileSync(path.join(gone, "events.log"), "2026-11-01 17:30\tfxhost\t3\tlane-stop\tout of time\n");
+  fs.appendFileSync(path.join(d, "tracker/log.jsonl"), [
+    '{"at":"2026-11-01T17:00:00Z","actor":"loop","tag":"r1","host":"fxhost","cmd":"claim","id":"beta/fine","text":"Fine: claimed"}',
+    '{"at":"2026-11-01T17:09:00Z","actor":"loop","tag":"r1","host":"fxhost","cmd":"unclaim","id":"beta/fine","text":"Fine: given back unstarted","unstarted":true}', ""].join("\n"));
+  test("are counted under the lane it was", () => {
+    const j = JSON.parse(run(["--json"], env, d).out);
+    assert.deepEqual(j.lanes, ["checkout", "lane3"]);
+    assert.equal(j.figures["sessions.count"], 12);
+    assert.equal(j.figures["sessions.no_unit.unstarted.count"], 2);
   });
-  test("  and a date in the past", () => {
-    at("2026-10-31T09:00:00Z");
-    try {
-      const r = expect("sessions.no_unit.share", "< 0.1", "--by", "2026-10-30", "--why", "a change");
-      assert.equal(r.code, 2);
-      has(r.err, "--by 2026-10-30 is in the past (today is 2026-10-31)");
-    } finally { mock.timers.reset(); }
+  // Claims here whose records went with a clone before removing one kept them: said, not guessed.
+  test("a loop claim on this machine with no record anywhere here is said as lost records", () => {
+    fs.appendFileSync(path.join(d, "tracker/log.jsonl"), [
+      '{"at":"2026-11-01T18:00:00Z","actor":"loop","tag":"x1","host":"fxhost","cmd":"claim","id":"beta/fine","text":"Fine: claimed"}',
+      '{"at":"2026-11-01T18:10:00Z","actor":"loop","tag":"x2","host":"fxhost","cmd":"claim","id":"alpha/ok","text":"Landed unreviewed: claimed"}',
+      // (Another machine's, and an owner's session's, are no lane's here.)
+      '{"at":"2026-11-01T18:20:00Z","actor":"loop","tag":"x3","host":"elsewhere","cmd":"claim","id":"beta/stuck","text":"Stuck: claimed"}',
+      '{"at":"2026-11-01T18:30:00Z","actor":"session","tag":"x4","host":"fxhost","cmd":"claim","id":"beta/ask","text":"Asks: claimed"}', ""].join("\n"));
+    // x2 is running now, in the checkout's lane: no row yet.
+    fs.mkdirSync(path.join(d, "runs/inbox/current"), { recursive: true });
+    fs.writeFileSync(path.join(d, "runs/inbox/current/tag"), "x2\n");
+    has(run([], env, d).out, "Not counted: 1 session on this machine claimed a unit (the tracker's log) but no lane here has a record of it");
+    assert.equal(JSON.parse(run(["--json"], env, d).out).figures["sessions.unrecorded.count"], 1);
   });
-  test("  and records one that is, through the tracker", () => {
-    at("2026-10-31T09:00:00Z");
-    try {
-      const a = expect("sessions.no_unit.share", "< 0.1", "--by", "2026-11-10", "--why", "units are passed over when they can't fit");
-      assert.equal(a.code, 0, a.err);
-      has(a.out, "p1: sessions.no_unit.share < 0.1 by 2026-11-10");
-      has(expect("review.sent_back.rate", "> 0.5", "--by", "2026-11-10", "--why", "the review is strict").out, "p2: review.sent_back.rate > 0.5 by 2026-11-10");
-      has(fs.readFileSync(path.join(d, "tracker/log.jsonl"), "utf8"), '"cmd":"expect"');
-    } finally { mock.timers.reset(); }
-    at("2026-11-05T09:00:00Z");
-    try { has(expect("sessions.count", "< 1", "--by", "2026-11-10", "--why", "the lanes rest this week").out, "p3: sessions.count < 1 by 2026-11-10"); } finally { mock.timers.reset(); }
-  });
-  test("open before its date, with the figure since it was made", () => {
-    at("2026-11-10T20:00:00Z");
-    try {
-      const r = run([], env, d);
-      has(r.out, "Predictions:\n  units are passed over when they can't fit (p1): sessions.no_unit.share < 0.1 by 2026-11-10: open; 0.8182 since it was made\n  the review is strict (p2): review.sent_back.rate > 0.5 by 2026-11-10: open; 0.6667 since it was made\n  the lanes rest this week (p3): sessions.count < 1 by 2026-11-10: open; 0 since it was made");
-      assert.deepEqual(summaryLines(env, d, "2026-11-01").filter((l) => l.includes("prediction")), []);
-    } finally { mock.timers.reset(); }
-  });
-  test("held or missed once its date has passed", () => {
-    at("2026-11-11T08:00:00Z");
-    try {
-      const r = run([], env, d);
-      has(r.out, "(p1): sessions.no_unit.share < 0.1 by 2026-11-10: MISSED (0.8182 from when it was made to that date)");
-      has(r.out, "(p2): review.sent_back.rate > 0.5 by 2026-11-10: HELD (0.6667 from when it was made to that date)");
-      has(r.out, "(p3): sessions.count < 1 by 2026-11-10: HELD (0 from when it was made to that date)");
-      assert.deepEqual(JSON.parse(run(["--json"], env, d).out).predictions.map((p: { state: string }) => p.state), ["missed", "held", "held"]);
-    } finally { mock.timers.reset(); }
-  });
-  test("  whatever period the card is for", () => {
-    at("2026-11-11T08:00:00Z");
-    try { has(run(["--since", "2026-11-01 13:00"], env, d).out, "(p1): sessions.no_unit.share < 0.1 by 2026-11-10: MISSED (0.8182"); } finally { mock.timers.reset(); }
-  });
-  test("  and so in fleet summary's lines, from its own start", () => {
-    at("2026-11-11T08:00:00Z");
-    try { has(summaryLines(env, d, "2026-11-01 13:00").join("\n"), "  prediction units are passed over when they can't fit (p1): sessions.no_unit.share < 0.1 by 2026-11-10: MISSED (0.8182"); } finally { mock.timers.reset(); }
-  });
-  test("  and still, a week on, after more records", () => {
-    fs.appendFileSync(path.join(d, "runs/index.tsv"), "20261115-090000\ts20\t\tFour tries (alpha/four)\t\t1\t9.00\t5\n");
-    at("2026-11-18T08:00:00Z");
-    try { has(run([], env, d).out, "(p3): sessions.count < 1 by 2026-11-10: HELD (0 from"); } finally { mock.timers.reset(); }
-  });
-  test("until settled", () => {
-    at("2026-11-18T08:00:00Z");
-    try {
-      const s = run(["settle", "p1", "--note", "missed: the share stayed high"], env, d);
-      assert.equal(s.code, 0, s.err);
-      const r = run([], env, d);
-      hasnt(r.out, "(p1)");
-      has(r.out, "(p2): review.sent_back.rate > 0.5");
-    } finally { mock.timers.reset(); }
-  });
-  test("a figure's name with a part: a step or a group, any; an ending, only one of them", () => {
-    assert.ok(knownName("ci.step.build.fail_rate"));
-    assert.ok(knownName("unit_cost.group.alpha.median"));
-    assert.ok(knownName("sessions.no_unit.silent.count"));
-    assert.ok(!knownName("sessions.no_unit.bogus.count"));
-    assert.ok(!knownName("ci.step.build"));
-  });
+});
+
+// The predictions (expect, settle) went unused in every factory: gone, with the tracker's commands.
+test("just scorecard expect and settle are gone", () => {
+  const { d, env } = fixture();
+  for (const a of [["expect", "sessions.count", "< 1", "--by", "2026-12-01", "--why", "x"], ["settle", "p1", "--note", "x"]]) {
+    const r = run(a, env, d);
+    assert.equal(r.code, 2);
+    has(r.err, `unknown argument '${a[0]}'`);
+  }
+  hasnt(run(["--help"], env, d).out, "expect");
 });
 
 describe("one read of the tracker's log", () => {
@@ -344,7 +362,7 @@ describe("just scorecard", () => {
     fs.appendFileSync(path.join(F, "tracker/log.jsonl"), fs.readFileSync(path.join(FIXTURE, "tracker/log.jsonl"), "utf8"));
     const r = w.just(["scorecard"], F, { ...add, TZ: "UTC" });
     assert.equal(r.code, 0, r.stdout);
-    has(r.stdout, "Sessions that finished no unit: 9 of 11 (82%), $11.50");
+    has(r.stdout, "Waste: sessions that lost their work: 3 of 11 (27%), $3.50");
   });
   test("  --help", () => { has(w.just(["scorecard", "--help"], F, add).stdout, "just scorecard [--since <when>] [--json]"); });
   test("and neither printing it started claude", () => { assert.ok(!fs.existsSync(ran), fs.existsSync(ran) ? fs.readFileSync(ran, "utf8") : ""); });

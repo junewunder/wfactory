@@ -17,7 +17,6 @@ import "./commands/memory.ts";
 import "./commands/merge.ts";
 import "./commands/view.ts";
 import "./commands/prune.ts";
-import "./commands/expect.ts";
 
 export { C as commands };
 
