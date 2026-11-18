@@ -17,6 +17,8 @@ The table (the first with a Machine column, under "## Lanes" if there is one) is
 headers, so its columns can be in any order; each header must be the column's name above (any
 case). A column it lacks reads as empty, which every script takes as that column's default, and
 is warned about once per command.
+A Lanes cell is one count ("2"), or a day count and a night count ("2, 4 at night"; when night
+is, the profile's "night" setting says).
 No machines file means one machine (this one) with one lane that takes any unit.
 Bash scripts that source factory/machines.sh get these as machine_rows, machine_get and
 expand_home.`;
@@ -89,6 +91,52 @@ function columnAsked(col: string): number | undefined {
   if (/^[0-9]+$/.test(col)) return Number(col) - 1;
   const i = FIELDS.findIndex((k) => HEADERS[k].toLowerCase() === col.toLowerCase() || k === col.toLowerCase());
   return i >= 0 ? i : undefined;
+}
+
+// The Lanes cell: one count ("2"), or a day count and a night count ("2, 4 at night"; "2,4",
+// "2 / 4" and "2 by day, 4 at night" too). null if it's neither. When night is: night.ts.
+export interface LaneCount { day: number; night: number }
+export function laneCount(c: string): LaneCount | null {
+  const s = c.trim();
+  if (/^[0-9]+$/.test(s)) return { day: Number(s), night: Number(s) };
+  const m = /^([0-9]+)(?:\s*(?:by day|day))?\s*[,/]\s*([0-9]+)(?:\s*(?:at night|night))?$/i.exec(s);
+  return m ? { day: Number(m[1]), night: Number(m[2]) } : null;
+}
+// The lanes a machine runs at most (the clones it keeps): day's or night's, the more.
+export const laneMax = (c: LaneCount) => Math.max(c.day, c.night);
+// A count in plain words: "1 lane", "2 lanes by day and 4 at night".
+export const showLanes = (c: LaneCount) => c.day === c.night ? `${c.day} lane${c.day === 1 ? "" : "s"}` : `${c.day} lane${c.day === 1 ? "" : "s"} by day and ${c.night} at night`;
+// A count as the cell writes it.
+export const cellLanes = (c: LaneCount) => c.day === c.night ? String(c.day) : `${c.day}, ${c.night} at night`;
+
+// The file's text with one machine's cell in the table machineRows reads set to value, the rest
+// as it was; null if the table has no such machine or no such column.
+export function setCell(text: string, name: string, k: Field, value: string): string | null {
+  const lines = text.split("\n");
+  let from = 0, to = lines.length;
+  if (mdSection(text, "Lanes") !== null) {
+    from = lines.findIndex((l) => /^## /.test(l) && l.slice(3).trim().toLowerCase() === "lanes");
+    const next = lines.findIndex((l, i) => i > from && /^#{1,2} /.test(l));
+    if (next >= 0) to = next;
+  }
+  let col = -1, nameCol = -1;
+  for (let i = from; i < to; i++) {
+    if (!/^[ \t]*\|/.test(lines[i])) { if (nameCol >= 0) break; continue; }
+    const parts = lines[i].split("|"), f = parts.slice(1).map(cell);
+    if (nameCol < 0) {
+      const head = f.map((c) => c.toLowerCase());
+      if (!head.includes("machine")) continue;
+      nameCol = head.indexOf("machine"); col = head.indexOf(HEADERS[k].toLowerCase());
+      if (col < 0) return null;
+      continue;
+    }
+    if (f[nameCol] !== name) continue;
+    const old = parts[col + 1];
+    parts[col + 1] = `${/^[ \t]*/.exec(old)![0] || " "}${value}${/[ \t]*$/.exec(old)![0] || " "}`;
+    lines[i] = parts.join("|");
+    return lines.join("\n");
+  }
+  return null;
 }
 
 // A markdown file's "## <title>" section, heading and all, up to the next heading of its level

@@ -7,7 +7,8 @@ Read the part you need when the factory needs it.
 ## More lanes, or more machines
 
 Lanes are the factory's parallelism: raise a machine's lane count in
-`docs/machines.md` once the owner sees the tokens and CPU are there.
+`docs/machines.md` once the owner sees the tokens and CPU are there (or
+`2, 4 at night` for a machine the owner uses by day: `just fleet lanes`).
 Inside a session, parallelize only work that's actually independent: for
 read-only fan-out over many items (reviewing pages, probing files), use
 subagents from one session, in batches of about 10 on a cheaper model, each
