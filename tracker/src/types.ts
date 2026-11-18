@@ -157,6 +157,23 @@ export interface CiCut {
   step?: string;   // the step it was on
   why: string;
 }
+// A run that couldn't run to a result, which says nothing of the group's work (ci-norun): a step
+// out of time ("time"), killed by a signal ("killed"), or one that said it didn't run (exit 79,
+// "unmet"). n: how many runs in a row ended so on this step.
+export interface CiNorun {
+  at: string;
+  ran?: string;     // when the run started: a unit done since is news to it
+  by?: string;
+  host?: string;
+  step: string;
+  kind: "time" | "killed" | "unmet";
+  why: string;
+  n: number;
+  commit?: string;
+  retry?: string;
+  log?: string;
+  cmds?: Record<string, string>;
+}
 // Work outside the group changed what its build makes (ci-touch, or the loop's ci.affected hook):
 // the latest such change, which makes CI stale like a unit of its own finishing.
 export interface CiTouch {
@@ -172,6 +189,7 @@ export interface GroupCi {
   failed?: CiFail;
   running?: CiRun;
   cut?: CiCut;
+  norun?: CiNorun;
   touched?: CiTouch;
 }
 

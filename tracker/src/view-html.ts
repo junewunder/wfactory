@@ -17,7 +17,7 @@ button{font:inherit;font-size:12px;border:1px solid var(--line);background:var(-
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
 .s-done{background:var(--done)}.s-you{background:var(--you)}.s-ready{background:var(--ready)}.s-waiting,.s-resource{background:var(--wait)}.s-broken,.s-stuck,.s-interrupted{background:var(--bad)}.s-doing,.s-review{background:var(--prog)}.s-dropped,.s-parked{background:transparent;border:1px solid var(--wait)}
 .legend span{margin-right:12px;font-size:13px}.log div{font-size:13px;padding:2px 0}.dec.replaced{text-decoration:line-through;opacity:.6}
-.ci-failed,.ci-cut,.ci-never{color:var(--bad)}
+.ci-failed,.ci-cut,.ci-never,.ci-norun{color:var(--bad)}
 input[type=search]{font:inherit;width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg)}
 .uf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.uf input[type=search]{flex:1 1 260px;width:auto}
 select{font:inherit;font-size:14px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);max-width:100%}

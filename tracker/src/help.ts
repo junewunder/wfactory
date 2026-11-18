@@ -73,10 +73,11 @@ For agents:
   decisions [words…] [--for <id>] [--all] [--json]   (--json for a check: who made each, and whether it stands)
   prune [--propose] [--json] | --apply <d> … | --keep <d> <kind> | --due | --apply-unasked | --restore <d> | --checked-in
                                         decisions to take off the cards: proposed, applied once approved
-  ci [<group>] [--json] [--since T]     each group's CI: passed, stale, due, running, broken, off;
-                                        --since: what became of it since T (passed, failed, cut off, never started)
+  ci [<group>] [--json] [--since T]     each group's CI: passed, stale, due, running, broken, couldn't run, off;
+                                        --since: what became of it since T (passed, failed, couldn't run, cut off, never started)
   ci-start <group> [--force] | ci-pass <group> --evidence "…" | ci-fail <group> --evidence "…"
-  ci-retry <group>                      try broken CI again now
+  ci-retry <group>                      try CI that's broken or couldn't run again now
+  ci-norun <group> --step S --kind time|killed|unmet --why "…"   the loop: its run couldn't run to a result
   ci-touch <group> --why "…" [--commit C]   work outside the group changed its build: CI stale
   ci-affected [--json] | <new> --touches F   the loop's ci.affected hook: what it covered; record a range
   ci-land <id> [--json]                 the checks the loop runs before a unit lands (ci.land), or why none
@@ -476,7 +477,12 @@ and the group still has work tonight); due
 last run failed: it's tried again once main moves and 6 hours pass, at once when its ci-fix is done,
 and like a change when another unit of the group is done); known failing (broken again on the
 same step after its ci-fix was done: it holds nothing, files nothing, and comes due as broken does,
-but not for that ci-fix; the next pass clears it); off. Also the last passed commit and
+but not for that ci-fix; the next pass clears it); couldn't run (its last run got no result: a step
+out of time, killed, or twice not run for the same reason. No verdict on the group's work: nothing
+is filed or held, and it's tried again when something changes, see ci-norun); off. Broken CI whose
+fix is in a session or waiting to land runs again once the fix is on main, not before. CI due here
+waits while the copy of the group's data here holds outputs of a unit that isn't on main yet (in a
+session, in review or waiting to land). Also the last passed commit and
 time, and a run cut off since. Due CI with work left comes before the group's new units: \`next\`
 skips them (not its ci-fix, nor one already started) until the CI has run. In last call a group
 whose work is in flight waits for it instead.
@@ -591,7 +597,17 @@ too (--release-lease: whoever took it).
 --cut "why": the run had started and was cut off (paused asap, the lane stopped) at step S: kept
 until a pass or a failure, for \`ci --since\` and the view.`,
   "ci-retry": `ci-retry <group>
-Try broken CI again without waiting for main to move and 6 hours to pass.`,
+Try CI that's broken, or that couldn't run, again without waiting for main to move and 6 hours to pass.`,
+  "ci-norun": `ci-norun <group> --step S --kind time|killed|unmet --why "…" [--commit C] [--log PATH]
+This session's CI run (ci-next --claim) couldn't run to a result at step S: the step ran out of time
+(time), was killed by a signal (killed), or said it didn't run (unmet: its exit 79). None is a
+verdict on the group's work, so the group isn't broken and nothing is filed.
+unmet: given back, due again, with the lease its claim took; the second run in a row not run for the
+same reason is kept as "couldn't run". time, killed: kept as "couldn't run" at once, and the second
+run in a row to end so on the same step counts as failing after all (as ci-fail, with its fix).
+CI that couldn't run holds nothing and isn't run again until a unit of the group is done, a change
+outside it touches it, a step's command changes, time passes (an hour for unmet; 6 hours once main
+has moved for the others), or ci-retry.`,
   publish: `publish [on|off]
 Whether CI runs the steps that ship (a step with "publish": true in project.json ci.steps, or named
 publish). Off: CI passes without them; turned back on, groups whose last pass skipped one are stale.`,

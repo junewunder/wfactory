@@ -578,6 +578,42 @@ store's copy with nothing else waiting to reach the store. A run cut short,
 or one whose step was killed, copies nothing back, and a live CI run holds up other copy backs of its
 group, since its outputs would go half-written.
 
+### 36. Red that wasn't the work, and a fix filed without a word of what changed (the mod factory)
+
+**What happened.** Over two weeks one factory's group CI ran 36 times and
+failed 9. Five of the nine were one cause: a shared change moved a pose, and
+four characters' export check failed on it. Each ran its own CI to find
+that, and one fix unit was filed for the four. Its session was told what
+failed but not what had changed, took 1 h 45 min (mostly to record the new
+pose as expected), and its branch then waited five hours to land. Meanwhile
+another change touched one of the four, so its CI ran again on a main that
+still hadn't got the fix, and failed the same way. Three more failures
+weren't the characters' work. A step that runs the whole project's tests ran
+out of its 60 minutes on the slower laptop. A step refused to run on a copy
+that held outputs of work not on main yet; the run was given back, came
+round again four minutes later, and the project's own script called the
+second refusal a failure, because the loop would have gone on asking for as
+long as the condition lasted. An audio tool crashed once and passed a minute
+later, in a step whose retries the project had turned off. Every group's CI
+there ends in a publish, so each failure woke the overseer to tell the
+owner at once, the lanes' to fix or not.
+
+**What it cost.** On one laptop, 4 hours of failing runs and 2 h 45 min of
+the fix's session against 8 h 45 min of CI that passed. A character red
+overnight for a timeout. And the owner's evening: she turned fix units off
+for that project, so a red CI there became hers to read.
+
+**The rule.** A run that got to no verdict is "couldn't run", not failed: a
+step out of time, killed by a signal, or twice not run for the same reason.
+Nothing is filed for it and nothing held; it's tried again when something
+changes, and a step out of time on two runs in a row counts as failing, so
+one that never ends still reaches a fix. CI waits where the copy of the
+group's data holds outputs of a unit not on main yet, and broken CI waits
+for a fix in flight to land before it runs again. A fix's card says what
+changed since the step last passed. The owner is told at once only of a
+failure that holds back a publish and is hers to look at; one the lanes have
+the fix of is a line in the morning summary.
+
 ## Checks
 
 ### 32. Checks claimed before they could pass (the mod factory)

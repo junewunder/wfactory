@@ -234,7 +234,7 @@ C.status = (a) => {
   const head = `${T.project.title || T.project.name}${env.LOOP && env.LOOP !== "all" ? ` / ${(loops[env.LOOP] || {}).title || env.LOOP}` : ""}`;
   console.log(`${head}: ${c.done || 0} of ${total} done${c.broken ? `, ${c.broken} broken again` : ""}${c.you ? `, ${c.you} waiting on you` : ""}${c.interrupted ? `, ${c.interrupted} interrupted` : ""}`);
   if (o.all || a.includes("all")) {
-    for (const g of groups) { const gc = counts(T, g.units); console.log(`  ${g.title} (${g.id}): ${fmtCounts(gc) || "no units"}${g.ci ? `; CI ${ciState(T, g).s}` : ""}`); }
+    for (const g of groups) { const gc = counts(T, g.units); console.log(`  ${g.title} (${g.id}): ${fmtCounts(gc) || "no units"}${g.ci ? `; CI ${ciState(T, g).s.replace("norun", "couldn't run")}` : ""}`); }
   } else {
     const active = groups.filter((g) => g.units.some((u) => ["doing", "ready", "review", "interrupted", "broken"].includes(derive(T, u).s)));
     const show = active.slice(0, 5).map((g) => { const gu = g.units.filter((u) => u.kind !== "gate" && derive(T, u).s !== "dropped"); return `${g.title} (${gu.filter((u) => derive(T, u).s === "done").length}/${gu.length}${g.host ? ` on ${g.host}` : ""})`; });
@@ -249,8 +249,8 @@ C.status = (a) => {
   const ls = T.leases.filter((l) => groups.some((g) => g.id === l.id));
   if (ls.length) console.log(`Leases: ${ls.map((l) => `${groupTitle(T, l.id)} on ${l.host}${leaseAge(l) >= ctx.STALE_MS ? " (stale)" : ""}`).join(", ")}`);
   const cs = groups.filter((g) => g.ci).map((g) => [g, ciState(T, g)] as const);
-  const cis = cs.map(([g, c]) => [g, c.s] as const).filter(([, s]) => ["due", "running", "broken"].includes(s));
-  if (cis.length) console.log(`CI: ${["broken", "running", "due"].map((k) => { const gs = cis.filter(([, s]) => s === k); return gs.length ? `${gs.length} ${k} (${gs.slice(0, 4).map(([g]) => g.title).join(", ")}${gs.length > 4 ? ", …" : ""})` : ""; }).filter(Boolean).join(", ")}`);
+  const cis = cs.map(([g, c]) => [g, c.s] as const).filter(([, s]) => ["due", "running", "broken", "norun"].includes(s));
+  if (cis.length) console.log(`CI: ${["broken", "norun", "running", "due"].map((k) => { const gs = cis.filter(([, s]) => s === k); return gs.length ? `${gs.length} ${k === "norun" ? "couldn't run" : k} (${gs.slice(0, 4).map(([g]) => g.title).join(", ")}${gs.length > 4 ? ", …" : ""})` : ""; }).filter(Boolean).join(", ")}`);
   // Known failing: each group with its reason, since there's nothing in the queue to show it.
   for (const [g, c] of cs) if (c.s === "known") console.log(`CI known failing: ${g.title} (${g.id}): ${c.why}`);
   const p = pick(T);

@@ -44,9 +44,11 @@ describe("a run given back after a step that ran copies that step's rebuild back
 
 describe("a run whose last step was killed mid-way copies nothing back", () => {
   const out = run("f2");
-  test("the run failed at the killed step", () => { has(out, "ci: Fighter f2 (f2) broken: crash failed (exit 137"); });
-  // (The failure files f2/ci-fix, which the lane works next: that unit's copy back carries the
-  // copy as it is, as any unit's does. The run itself copies nothing.)
+  // (A killed step is no verdict on the group's work: the run couldn't run, where it used to read
+  // as broken with a fix filed. What this file checks is the copy back, which is as it was.)
+  test("the run ended at the killed step, as couldn't run", () => { has(out, "ci: Fighter f2 (f2) couldn't run: crash was killed by signal 9"); });
+  // (A unit the lane works next carries the copy back as it is, as any unit's does. The run itself
+  // copies nothing.)
   test("  the run copies nothing back", () => {
     hasnt(out, "f2: copied back after f2's CI run");
     hasnt(a.events(), "after f2's CI run");

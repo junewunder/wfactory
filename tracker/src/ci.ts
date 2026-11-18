@@ -4,7 +4,8 @@
 // project.json ("ci": { "steps": { "drill": { "cmd": "…" }, "publish": { "cmd": "…" } } }).
 // The group keeps ci.passed (the last pass: commit, time, evidence, the steps it ran, and
 // which units were done and open then, and a hash of each step's command), ci.failed (a failure since; known, if it failed again
-// on the same step after its ci-fix was done), ci.running, and ci.touched (the latest change
+// on the same step after its ci-fix was done), ci.norun (a run that couldn't run to a result: a step
+// out of time, killed, or one that said it didn't run; no verdict on the group's work), ci.running, and ci.touched (the latest change
 // from outside the group to what its build makes: ci-touch, or the loop's ci.affected hook).
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -17,9 +18,11 @@ import { addNote, expand, MAX_TITLE, name } from "./names.ts";
 import { beatsHere, capsOk, hostBeatAge, claimAlive, dataGroup, dataPaths, hasStore, newerIn, heldHere, liveLease, lockHeld, resTitle, resourceBusy } from "./machine.ts";
 import { derive, LABEL, scopeGroups, sentence, SETTLED } from "./status.ts";
 import { fill } from "./templates.ts";
-import type { CiCut, CiFail, CiRun, CiTouch, Group, State, Status, Unit } from "./types.ts";
+import type { CiCut, CiFail, CiNorun, CiRun, CiTouch, Group, State, Status, Unit } from "./types.ts";
 
 const CI_RETRY_MS = 6 * 3600e3;
+// A run given back twice for the same unmet condition is looked at again after this long.
+const UNMET_RETRY_MS = 3600e3;
 // What a ci-fix a pass settled is recorded done with (ciFixPassed).
 const PASS_SETTLED = "CI passed since";
 export const publishing = (T: State) => T.project.publish !== "off";
@@ -190,13 +193,50 @@ export type CiState =
   | { s: "due"; why: string; left: Unit[] }
   | { s: "running"; run: CiRun }
   | { s: "broken"; failed: CiFail }
-  | { s: "known"; failed: CiFail; why: string };
+  | { s: "known"; failed: CiFail; why: string }
+  | { s: "norun"; norun: CiNorun };
 // A group's CI: off, passed, stale (changed, and the group still has work tonight), due (changed,
 // and the group is done for the night, or it has been stale ci_every minutes), running, broken
 // (the last run failed), known failing (it failed again after its ci-fix was done: like broken,
-// it holds nothing, and nothing more is filed until something changes). Stale has `at`: when it comes due. Due CI with work left (`left`) comes
+// it holds nothing, and nothing more is filed until something changes), couldn't run (norun: its last
+// run didn't get to a result, by a step out of time, killed, or twice not run for the same reason:
+// no verdict on the group's work, so nothing is filed and nothing held, and it isn't run again until
+// something changes). Stale has `at`: when it comes due. Due CI with work left (`left`) comes
 // before the group's new units (ciFirst). In last call it waits for the work in flight instead.
 export function ciState(T: State, g: Group): CiState {
+  const c = ciStateRun(T, g);
+  // A run that couldn't run isn't tried again (due or stale as it would be) until something
+  // changes: each try costs a lane the step's time limit, or a claim and a push, for the same end.
+  const n = c.s === "due" || c.s === "stale" ? norunNow(g) : null;
+  return n && norunHolds(n) && !norunRetry(T, g, n) ? { s: "norun", norun: n } : c;
+}
+// A group's run that couldn't run, if it's the latest of its runs (a pass or a failure clears it; a
+// merge of two machines' writes can keep both).
+export function norunNow(g: Group): CiNorun | null {
+  const ci = g.ci, n = ci?.norun;
+  return n && (!ci!.passed || n.at >= ci!.passed.at) && (!ci!.failed || n.at >= ci!.failed.at) ? n : null;
+}
+// One that keeps CI from running again: a step out of time or killed (its next try costs its whole
+// time limit again), or one not run twice in a row for the same reason (the first is given back
+// and tried again after the lane's wait, as the condition may be gone by then).
+const norunHolds = (n: CiNorun) => n.kind !== "unmet" || n.n >= 2;
+// What makes a run that couldn't run worth trying again ("" if nothing yet): a retry asked for, a
+// step's command changed, a unit of the group done or a change from outside since the run started,
+// or time: an hour for a condition unmet (it's the machine's, and may be gone), and for a step out
+// of time or killed, 6 hours once main has moved, as for a failure.
+function norunRetry(T: State, g: Group, n: CiNorun) {
+  if (n.retry === n.at) return "a retry was asked for";
+  if (cmdsChanged(T, g, n.cmds).length) return "a step's command changed";
+  const since = n.ran || n.at;
+  if ([...ciUnits(T, g), ...sharedFixes(T, g)].some((u) => derive(T, u).s === "done" && u.record!.at > since && u.record!.evidence !== PASS_SETTLED)) return "a unit finished since";
+  if (touchedSince(g.ci!.touched, { at: since, commit: n.commit })) return "a change outside the group since";
+  const age = Date.now() - Date.parse(n.at);
+  if (n.kind === "unmet") return age >= UNMET_RETRY_MS ? "an hour passed" : "";
+  const head = codeHead();
+  return head && !(n.commit && head.startsWith(n.commit)) && age >= CI_RETRY_MS ? "main has moved" : "";
+}
+// The state by its runs with a result (and the one in progress).
+function ciStateRun(T: State, g: Group): CiState {
   const ci = g.ci;
   if (!ci) return { s: "off" };
   const units = ciUnits(T, g);
@@ -231,6 +271,10 @@ export function ciState(T: State, g: Group): CiState {
     // second, so the same second counts: a needless retry is cheaper than 6 hours broken.
     // (Known failing judged its ci-fix's done already: that one counts only if done again.)
     // Another group's ci-fix this group's failure joined (it lists the group in also) counts as its own.
+    // Its fix in flight (a session on it, or finished and not on main yet): CI waits for it to
+    // land. Main hasn't got the fix, so a run now, for a unit done or a touch from outside, fails
+    // the same way and runs again when the fix lands.
+    if (fixInFlight(T, g)) return f.known ? { s: "known", failed: f, why: f.known } : { s: "broken", failed: f };
     const fixed = [...units, ...sharedFixes(T, g)].filter((u) => derive(T, u).s === "done" && u.record!.at >= f.at && !(f.known && u.tags?.includes("ci-fix") && u.record!.at <= f.at));
     // Its ci-fix, done, is what it waited for: that runs it again at once.
     if (fixed.some((u) => u.tags?.includes("ci-fix"))) return go(`${name(fixed.find((u) => u.tags?.includes("ci-fix"))!)} finished since it failed`, null);
@@ -278,16 +322,23 @@ export function ciText(T: State, g: Group, c = ciState(T, g)): string {
     case "stale": return `stale: ${c.why}; ${work(c.left.length)}${Number.isFinite(c.at) ? `; due at ${iso(c.at)} if it still has work then` : ""}${cut}${last}`;
     case "due": return `due: ${c.why}${c.left.length ? `; it runs before the group's other new units (${work(c.left.length)})` : ""}${cut}${last}`;
     case "running": return `running (session ${c.run.by}${c.run.host ? " on " + c.run.host : ""} since ${c.run.at})${last}`;
-    case "broken": return `broken: ${expand(T, c.failed.evidence)} (at ${short(c.failed.commit)}, ${c.failed.at}). It's tried again once main moves and 6 hours pass, when a unit of the group is done or a change outside it touches it, or now with \`just tracker ci-retry ${g.id}\`${last}`;
+    case "broken": {
+      const fix = fixInFlight(T, g);
+      if (fix) return `broken: ${expand(T, c.failed.evidence)} (at ${short(c.failed.commit)}, ${c.failed.at}). It runs again once ${name(fix)} (${LABEL[derive(T, fix).s]}) is on main, or now with \`just tracker ci-retry ${g.id}\`${last}`;
+      return `broken: ${expand(T, c.failed.evidence)} (at ${short(c.failed.commit)}, ${c.failed.at}). It's tried again once main moves and 6 hours pass, when a unit of the group is done or a change outside it touches it, or now with \`just tracker ci-retry ${g.id}\`${last}`;
+    }
+    case "norun": return `couldn't run: ${norunText(T, c.norun)}. That says nothing of the group's work: nothing is filed, and it holds nothing. It's tried again when a unit of the group is done or a change outside it touches it, ${c.norun.kind === "unmet" ? "in an hour" : "once main moves and 6 hours pass"}, or now with \`just tracker ci-retry ${g.id}\`${last}`;
     case "known": return `known failing: ${c.why} (${expand(T, c.failed.evidence)}, at ${short(c.failed.commit)}, ${c.failed.at}). It holds nothing; it's tried again when a unit of the group is done, once main moves and 6 hours pass, or now with \`just tracker ci-retry ${g.id}\`${last}`;
   }
 }
+// "check ran out of time after 60 min (at 1a2b3c4d, 2026-…, on host; 2 runs in a row)".
+const norunText = (T: State, n: CiNorun) => `${expand(T, n.why)} (${n.step}, at ${short(n.commit)}, ${n.at}${n.host ? ` on ${n.host}` : ""}${n.n > 1 ? `; ${n.n} runs in a row` : ""})`;
 const cutText = (x: CiCut) => `${x.step ? `at ${x.step}, ` : ""}${x.why}; started ${x.at}${x.host ? ` on ${x.host}` : ""}`;
 
 // What became of a group's CI since a time (the start of the night), for the morning summary
 // and the view: passed, failed (on what), cut off, or never started (and why it was needed);
 // null if it didn't need to run. The latest of its runs since then is the one that counts.
-export type CiOutcome = { s: "passed" | "failed" | "cut" | "running" | "never"; text: string };
+export type CiOutcome = { s: "passed" | "failed" | "norun" | "cut" | "running" | "never"; text: string };
 export function ciOutcome(T: State, g: Group, since = 0): CiOutcome | null {
   const ci = g.ci;
   if (!ci) return null;
@@ -296,7 +347,7 @@ export function ciOutcome(T: State, g: Group, since = 0): CiOutcome | null {
   const t = (x?: { at: string }) => (x && Date.parse(x.at) >= since ? Date.parse(x.at) : -1);
   // A run whose session is gone without a result (the machine went down) was cut off too.
   const lost = ci.running && !claimAlive(T, ci.running) ? { at: ci.running.at, by: ci.running.by, host: ci.running.host, why: "its lane stopped without a result" } : undefined;
-  const runs = [["passed", ci.passed], ["failed", ci.failed], ["cut", ci.cut], ["cut", lost]] as const;
+  const runs = [["passed", ci.passed], ["failed", ci.failed], ["norun", ci.norun], ["cut", ci.cut], ["cut", lost]] as const;
   // (Times are to the second: in a tie the later in this list is the later record.)
   const [k, r] = runs.reduce((best, x) => (t(x[1]) >= t(best[1]) && t(x[1]) >= 0 ? x : best), runs[0]);
   if (t(r) >= 0) {
@@ -306,12 +357,14 @@ export function ciOutcome(T: State, g: Group, since = 0): CiOutcome | null {
     if (k === "passed" && c.s === "due" && !since) return { s: "never", text: `never started since it came due: ${ciText(T, g, c)}` };
     if (k === "passed" && c.s !== "passed") return { s: "passed", text: `${passed}; since then ${ciText(T, g, c)}` };
     if (k === "passed") return { s: "passed", text: passed };
+    if (k === "norun") return { s: "norun", text: `couldn't run (no verdict on its work; nothing filed): ${norunText(T, ci.norun!)}${c.s === "norun" ? "" : `; since then ${ciText(T, g, c)}`}` };
     if (k === "failed") return { s: "failed", text: `failed${ci.failed!.step ? ` on ${ci.failed!.step}` : ""}: ${expand(T, ci.failed!.evidence)} (${short(ci.failed!.commit)}, ${ci.failed!.at})${ci.failed!.known ? `; known failing: ${ci.failed!.known}` : ""}` };
     return { s: "cut", text: `cut off: ${cutText(r as CiCut)}` };
   }
   if (c.s === "off" || c.s === "passed") return null;
   if (c.s === "broken") return { s: "never", text: `never started: still broken from ${c.failed.at} (${expand(T, c.failed.evidence)}), and not retried yet` };
   if (c.s === "known") return { s: "never", text: `never started: known failing since ${c.failed.at} (${c.why}), and nothing has changed since` };
+  if (c.s === "norun") return { s: "never", text: `never started: it couldn't run at ${c.norun.at} (${expand(T, c.norun.why)}), and nothing has changed since` };
   return { s: "never", text: `never started: ${ciText(T, g, c)}` };
 }
 
@@ -372,7 +425,29 @@ function ciHereWhy(T: State, g: Group, { resources = true } = {}) {
   // the session to end. (A claim whose session is gone holds nothing: claimAlive.)
   const held = resources ? heldHere(T).get(g.id) : undefined;
   if (held?.length) return `waiting for ${held.map((u) => `${name(u)}, which session ${u.record!.by} here is working on`).join(" and ")}`;
+  // So does a unit's work that's finished or under way and not on main yet: its outputs in the
+  // copy here were made by code main hasn't got, and the steps run main's. CI waits for it to land.
+  const flight = resources && dg ? unlandedHere(T, g.id) : [];
+  if (flight.length) return `waiting for ${flight.map((u) => `${name(u)} (${LABEL[derive(T, u).s]})`).join(" and ")} to land: ${flight.length > 1 ? "their" : "its"} outputs are in the copy of its data here, made by code main hasn't got`;
   return "";
+}
+// The units whose outputs the store has marked in group gid's copy here as not on main yet
+// (work/.store/groups/<g>.unmerged.<unit>, store.sh) and that are on their way there without the
+// owner: waiting to land, in review, or in a session (one interrupted is the lanes' first pick).
+// One stuck, parked or waiting on the owner holds nothing: CI would wait on the owner.
+const IN_FLIGHT = new Set<Status>(["merging", "review", "doing", "interrupted"]);
+function unlandedHere(T: State, gid: string) {
+  const dir = path.join(ctx.ROOT, "work/.store/groups"), out: Unit[] = [];
+  let names: string[] = [];
+  try { names = fs.readdirSync(dir); } catch { return out; }
+  for (const n of names) {
+    if (!n.startsWith(`${gid}.unmerged.`)) continue;
+    let who = "";
+    try { who = fs.readFileSync(path.join(dir, n), "utf8").split("\t")[0].trim(); } catch { continue; }
+    const u = T.byId.get(who);
+    if (u && IN_FLIGHT.has(derive(T, u).s) && !out.includes(u)) out.push(u);
+  }
+  return out;
 }
 export type CiPick =
   | { code: 0; group: Group }
@@ -411,6 +486,13 @@ export function ciRunRecord(T: State, g: Group) {
 // CI the loop runs at this machine and its leases: running here, or due and runnable here.
 export const ciKeepsLease = (T: State, g: Group) => !!g.ci && ((!!g.ci.running && claimAlive(T, g.ci.running) && g.ci.running.host === ctx.HOST) || (ciState(T, g).s === "due" && !ciHereWhy(T, g, { resources: false })));
 
+// A group's fix that's on its way to main (its own, or a shared one it's in): a session is on it,
+// or it's finished and waiting to land or in review.
+const FIX_FLIGHT = new Set<Status>(["doing", "review", "merging"]);
+function fixInFlight(T: State, g: Group) {
+  const own = T.byId.get(`${g.id}/ci-fix`);
+  return [...(own && T.groupOf.get(own.id) === g ? [own] : []), ...sharedFixes(T, g)].find((u) => FIX_FLIGHT.has(derive(T, u).s));
+}
 // A group's CI failure that counts: none passed since.
 const failing = (h: Group) => !!h.ci?.failed && (!h.ci.passed || h.ci.failed.at >= h.ci.passed.at);
 // CI passed: an open or stuck <group>/ci-fix has nothing left to fix, so it's recorded done, dated
@@ -501,7 +583,17 @@ export function ciFixUnit(T: State, g: Group, step: string, commit: string | und
   const row = `CI's ${step} step failed on ${short(commit)} (${HOST}): ${evidence}${logPath ? ` The whole output is in ${logPath} on ${HOST}.` : ""}`;
   // 29 Oct: five groups' CI broke one by one on a change to shared code, and each fix patched its
   // own group only; one fix waited 90 minutes on a whole build it didn't need.
-  const detail = `${row} Find out why, fix it on your branch, run \`just check\`, and record this unit done. If the cause is in code other groups' builds share, fix it for every group it reaches, not only this one, and name them in the evidence. Rerun the failed step, not the whole build: CI runs again once it's done.`;
+  // What a session with no context needs first: what changed since the step last passed. The
+  // group's own units finished since, and the latest change from outside it (ci-touch: shared
+  // code, with the range of main that made it).
+  const p0 = g.ci!.passed;
+  const since = p0 && (p0.steps || []).includes(step) ? (() => {
+    const own = ciUnits(T, g).filter((u) => derive(T, u).s === "done" && (u.record!.at > p0.at || !(p0.done || []).includes(u.id)) && !u.tags?.includes("ci-fix"));
+    const t = touchedSince(g.ci!.touched, p0, true);
+    const parts = [own.length ? `${own.slice(0, 6).map((u) => name(u)).join(", ")}${own.length > 6 ? ` and ${own.length - 6} more` : ""} finished` : "", t ? touchText(t) : ""].filter(Boolean);
+    return parts.length ? ` Since it last passed (at ${short(p0.commit)}): ${parts.join("; ")}.` : "";
+  })() : "";
+  const detail = `${row}${since} Find out why, fix it on your branch, run \`just check\`, and record this unit done. If the cause is in code other groups' builds share, fix it for every group it reaches, not only this one, and name them in the evidence. Rerun the failed step, not the whole build: CI runs again once it's done.`;
   // Filed or reopened for a new cycle: no other group is in it yet.
   // A shared fix done for the groups in it that haven't run since hands each its retry first, as
   // its done would have made it due at once (ciState) and reopening it takes that away.
