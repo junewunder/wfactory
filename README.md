@@ -23,56 +23,43 @@ runs one session at a time) and reports to you.
    unit done; the session saying so isn't.
 4. With a git remote, a fresh read-only session reviews the branch, and
    the loop merges it into main.
-5. When a session reaches a decision that's yours, it files a question
+5. When a session reaches a decision that needs your opinion, it files a question
    with options and a default, and the lane moves on to other work.
 
-`just questions` shows what's waiting on you, and `just runs` lists every
-session with its result, cost and transcript. In one factory, a finished
-unit cost a median of $1.68 in API-equivalent terms over 489 units
-([docs/in-practice.md](docs/in-practice.md)).
+Questions for you all collect in one place so it's easy for you to work through decisions with an agent.
 
 It's early: I use it every day, but few others have installed it yet.
 
-## Why not write your own loop?
 
-`while true; do claude -p "$(cat PROMPT.md)"; done` and a test suite are
-enough if you read every diff. wfactory is for when you don't. Writing code
-got cheap and reviewing it did not, so here the check always wins: over the
-prompt, over the agent, and over me.
+## Install
 
-```
-$ just tracker done text/slugify --evidence "wrote it, looks right"
-Turn titles into URL slugs (text/slugify) is done when its check passes
-(`bash test/slugify.sh` passes). Make it pass, then `just recheck text/slugify`.
-[exit 2]
-  ... the session fixes src/slugify.sh ...
-$ just tracker refresh
-Turn titles into URL slugs (text/slugify): now done (exit 0)
-  ... later, a change to shared code breaks it ...
-$ just tracker refresh
-Turn titles into URL slugs (text/slugify): BROKEN AGAIN, its check passed before (exit 1)
-```
+Tell Claude Code:
+
+> install this for me: https://github.com/junewunder/wfactory
+
+It follows [install.md](install.md): it checks what's missing, asks a few
+questions with defaults, installs the skill, and runs a toy factory of five
+units until they pass, in about 15 minutes. Then, in a project, say "start
+a factory for \<the work\>".
+
+It needs Linux with systemd or macOS 13+ on Apple silicon (not Windows);
+bash, git, node, curl, jq, [just](https://github.com/casey/just) and the
+[Claude Code](https://docs.claude.com/en/docs/claude-code) CLI, on a plan
+with usage to spare. Start with one machine and one lane; more are opt-in
+([docs/scaling-out.md](docs/scaling-out.md)).
 
 ## What it enforces
 
 All of these are code, with tests:
 
-- The tracker runs each unit's check and refuses "done" from the session
-  that did the work.
-- When shared code changes, the checks it touches rerun, and a unit that
-  broke goes first.
-- A fresh session reviews each branch before it merges. In one factory it
-  reviewed 593 and sent 45 back.
+- A unit of work being "done" is decided by checks and a reviewer agent
+- When shared code changes, the checks it touches rerun.
 - A session's edits to the tracker or the loop are dropped at merge.
 - Nothing merges onto a broken main.
-- Two lanes never take the same unit, across machines too.
-- A question for you has to come with options and a default, and only the
-  units it blocks wait.
-- Lanes pause before they use up your plan, and keep 15% of the week back
-  for you.
-- Each session has a memory cap, and a lane that does nothing twice stops.
+- Two lanes never take the same unit, even across separate machines.
+- Each session has a memory cap.
 
-[docs/protections.md](docs/protections.md) says how each one works and
+[docs/protections.md](docs/protections.md) goes into more depth, says how each one works and
 where it stops. More than 3,000 tests run real lanes against a fake
 `claude`.
 
@@ -97,26 +84,7 @@ or the rules.
 
 [gbaa](https://github.com/junewunder/gbaa), a static recompiler from Game
 Boy Advance games to native Rust, runs as a factory checked against the
-emulator mGBA. Its tracker and
-[factory spec](https://github.com/junewunder/gbaa/blob/main/docs/factory.md)
-are public.
-
-## Install
-
-Tell Claude Code:
-
-> install this for me: https://github.com/junewunder/wfactory
-
-It follows [install.md](install.md): it checks what's missing, asks a few
-questions with defaults, installs the skill, and runs a toy factory of five
-units until they pass, in about 15 minutes. Then, in a project, say "start
-a factory for <the work>".
-
-It needs Linux with systemd or macOS 13+ on Apple silicon (not Windows);
-bash, git, node, curl, jq, [just](https://github.com/casey/just) and the
-[Claude Code](https://docs.claude.com/en/docs/claude-code) CLI, on a plan
-with usage to spare. Start with one machine and one lane; more are opt-in
-([docs/scaling-out.md](docs/scaling-out.md)).
+emulator mGBA. Its tracker and [factory spec](https://github.com/junewunder/gbaa/blob/main/docs/factory.md) are public.
 
 ## Read next
 
