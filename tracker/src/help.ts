@@ -56,9 +56,9 @@ For agents:
   review <id> --evidence "…" [--dry-run]   hand to a second checker
   block <id> (--on q/<slug> | --why "…")
   reopen <id> [--note "…"]              back to ready
-  drop <id> --why "…"
-  park <id | selector> --why "…"        the owner set it aside: not offered, not waited on
-  unpark <id | selector>                back to ready (also lifts the owner's "later" on it)
+  drop <id | selector> … --why "…" [--dry-run]   several units, one write, one commit
+  park <id | selector> … --why "…" [--dry-run]   the owner set them aside: not offered, not waited on
+  unpark <id | selector> … [--dry-run]  back to ready (also lifts the owner's "later" on it)
   note <id> "…" [--dry-run]             for the next attempt (keeps 3)
   ask --title "…?" --context "…" --option "a | label | what it changes" …
       --default a --blocks <selector> … [--scope <selector> …] [--force]
@@ -270,14 +270,24 @@ Hand a unit to a later session for its independent check. Evidence as for done.`
 The unit waits on the owner's question, or is stuck on something else (say what).`,
   reopen: `reopen <id> [--note "…"]
 Put a unit back to ready, clearing its record.`,
-  drop: `drop <id> --why "…"
-Drop a unit for good.`,
-  park: `park <id | selector> --why "…"
+  drop: `drop <id | selector> … --why "…" [--dry-run]
+Drop units for good. Name several (IDs, and selectors: group:<g>, tag:<t>, a glob); one --why covers
+them all, and they go in one write: one commit and push, a log line per unit. Every unit is checked
+first: an unknown ID, a unit already done or dropped, or one in progress leaves all as they were,
+and the message names each (a selector leaves out the done and dropped ones it reaches). It says how
+many units and in which groups, and --dry-run lists them without writing. One ID alone is dropped
+whatever its state, as always.`,
+  park: `park <id | selector> … --why "…" [--dry-run]
 The owner set this work aside: it isn't offered, isn't waited on, and isn't counted as
-anything for the owner to do. Selectors: group:<g>, tag:<t>, a glob. Undo with unpark.`,
-  unpark: `unpark <id | selector>
-Bring parked units back to ready. A unit the owner put off (ask --parks) shows as parked while the
-decision holds, even after a reopen; unpark is what brings it back.`,
+anything for the owner to do. Selectors: group:<g>, tag:<t>, a glob. Name several, and
+they're parked in one write (one commit and push, a log line per unit) after every unit is
+checked: an unknown ID, a unit already done or dropped, or one in progress leaves all as they
+were, and the message names each. It says how many units and in which groups; --dry-run lists
+them without writing. Undo with unpark.`,
+  unpark: `unpark <id | selector> … [--dry-run]
+Bring parked units back to ready, several in one write as park does: a unit named by ID that
+isn't parked leaves all as they were. A unit the owner put off (ask --parks) shows as parked while
+the decision holds, even after a reopen; unpark is what brings it back.`,
   note: `note <id> "…" [--dry-run]
 What the next attempt must know (280 characters at most, {unit:<id>} counting as the
 ID; the last 3 are kept). Name units as {unit:<id>}; a bare ID is written so, with a
