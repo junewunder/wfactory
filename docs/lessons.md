@@ -714,7 +714,8 @@ there ends in a publish, so each failure woke the overseer to tell the
 owner at once, the lanes' to fix or not.
 
 **What it cost.** On one laptop, 4 hours of failing runs and 2 h 45 min of
-the fix's session against 8 h 45 min of CI that passed. A character red
+lane time on the fix (its session and its tries at landing) against
+8 h 45 min of CI that passed. A character red
 overnight for a timeout. And the owner's evening: she turned fix units off
 for that project, so a red CI there became hers to read.
 
