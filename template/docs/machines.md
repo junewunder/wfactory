@@ -27,7 +27,10 @@ __MACHINE_ROWS__
 - **ssh:** the address `just fleet` reaches it at from the other machines.
 - **Lanes:** how many loops run on it at once, each taking any unit the
   machine can do. Start at 1; raise it once there are tokens and CPU for
-  more. 0 means the factory never runs there.
+  more. 0 means the factory never runs there. `2, 4 at night` runs 2 by day
+  and 4 at night (the profile's "night"): `just fleet start` starts all 4,
+  and a lane past the count for the time of day waits between units, its
+  clone kept. `just fleet lanes <machine> <count>` sets it.
 - **Takes:** `any` (every unit this machine can do) or `pinned` (only units
   pinned to it with `--host`, leaving the rest to the other machines).
 - **Checkout:** the repo on that machine, where the owner and the overseer

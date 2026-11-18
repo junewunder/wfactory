@@ -2,7 +2,7 @@
 // `loop.sh --help`). This is the run, from start to its exit steps; its parts are its own modules:
 // how it starts (loop-start.ts), its clock (loop-clock.ts), what it takes next (loop-claim.ts), a
 // unit's session (loop-unit.ts), the review before a branch lands (review.ts), group CI (loop-ci.ts), out-of-memory kills (loop-oom.ts), its
-// locks (loop-locks.ts), its heartbeat (loop-beat.ts), the usage pause (loop-usage.ts), the ci.affected hook (loop-affected.ts) and restarting on a newer copy (loop-restart.ts). Branches and landing are
+// locks (loop-locks.ts), its heartbeat (loop-beat.ts), the usage pause (loop-usage.ts), the day and night lane counts (loop-lanes.ts), the ci.affected hook (loop-affected.ts) and restarting on a newer copy (loop-restart.ts). Branches and landing are
 // landing.ts's; one session is session.ts's; the tracker runs in this process (tr.ts).
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -20,6 +20,7 @@ import { platform } from "./os.ts";
 import { dropRecord } from "./daemon.ts";
 import { lanesOff, tr, trOut, trWait } from "./tr.ts";
 import { usagePause } from "./loop-usage.ts";
+import { lanesRest } from "./loop-lanes.ts";
 import { HELP } from "./loop-help.ts";
 import { Clock } from "./loop-clock.ts";
 import { look, type Waiting } from "./loop-claim.ts";
@@ -369,6 +370,9 @@ export class Loop {
         log(`last call${exists("runs/.last-call") ? " (just fleet last-call)" : `, stopping at ${hmAt(k.deadline)}`}: no new units${exists("runs/.last-call") ? "" : " that would make CI here run again"}; work in flight lands, then CI runs for every group whose CI is stale`);
       }
       if (this.mainRed()) break;
+
+      // ---- a lane past its machine's count for the time of day waits for it (loop-lanes.ts)
+      if (await lanesRest(this)) continue;
 
       // ---- usage: pause between units near the 5-hour limit (loop-usage.ts)
       if (await usagePause(this)) continue;

@@ -29,6 +29,11 @@ describe("fleet start --lanes N: that many lanes, for this run only", () => {
     await a.held(); await b.held();
     has(start, `=== ${HOST} lane 2`);
   });
+  // (The owner asked for more lanes on several nights; the file kept its count, and each new
+  // overseer started that until told again.)
+  test("  saying in one line that the file gives another count, and the command that makes this one its count", () => {
+    has(start, `=== ${HOST}: --lanes 2 is for this start only; docs/machines.md gives it 1 lane. To make 2 its count: just fleet lanes ${HOST} 2`);
+  });
   test("  the machines file keeps its count", () => { assert.equal(readOr(mf), machines); });
   test("  the beat counts both lanes", () => { has(out(["beat"]), "2 busy, 0 waiting, 0 stopped"); });
   test("  naming each lane's unit by lane", () => { has(out(["beat"]), `${HOST}/2: Unit l`); });
@@ -81,9 +86,47 @@ describe("fleet tidy: a lane clone past the machines file's count", () => {
     has(o, `${lane(5)}: an orphaned lane clone the machine's daemon will start a lane in: left alone`);
   });
   // (Lane 4 went at the last tidy, once its loop let go; lane 5's record is gone now.)
+  let o = "";
   test("fleet start removes one too, before it starts the lanes", () => {
-    const o = out(["start", "--hours", "0.02", "--no-awake"]);
+    o = out(["start", "--hours", "0.02", "--no-awake"]);
     fleet(["stop"]);
     has(o, `removed ${lane(5)}: an orphaned lane clone`);
+  });
+  test("  and the next start without --lanes says the last one asked for more, and how to keep that", () => {
+    has(o, `=== ${HOST}: the last start here asked for 2 lanes (--lanes); docs/machines.md gives it 1 lane. To make 2 its count: just fleet lanes ${HOST} 2`);
+  });
+});
+
+// fleet lanes <machine> <count>: the count the owner asked for, in docs/machines.md, committed
+// and pushed; a day count and a night count keep the night's clones through the day.
+describe("fleet lanes: the file's count, written by the command the start names", () => {
+  let said = "";
+  test("fleet lanes <machine> '1, 2 at night' writes the machine's Lanes cell", () => {
+    said = out(["lanes", HOST, "1, 2 at night"]);
+    has(readOr(mf), `| ${HOST} |`);
+    has(readOr(mf).split("\n").find((l) => l.startsWith(`| ${HOST} |`)) ?? "", "| 1, 2 at night |");
+  });
+  test("  says so", () => { has(said, `docs/machines.md: ${HOST} runs 1 lane by day and 2 at night (committed and pushed to origin's main)`); });
+  test("  committed and pushed, so every machine's overseer reads it", () => {
+    w.git(F, "fetch", "-q", "origin");
+    has(w.git(F, "log", "-5", "--format=%s", "origin/main"), `docs/machines.md: ${HOST} runs 1 lane by day and 2 at night`);
+    assert.equal(w.git(F, "status", "--porcelain", "--", "docs/machines.md"), "");
+  });
+  test("  fleet lanes alone lists each machine's", () => { has(out(["lanes"]), `${HOST}: 1 lane by day and 2 at night`); });
+  test("  a count it can't read is refused", () => {
+    assert.equal(fleet(["lanes", HOST, "two"]).code, 2);
+    assert.equal(fleet(["lanes", "no-such-machine", "2"]).code, 2);
+  });
+  // The day count is lower than the night's: lane 2 is the night's, not an old count's.
+  let st = "", stopped = "";
+  test("fleet start starts both lanes, saying a lane past the count for the time of day waits", () => {
+    st = out(["start", "--hours", "0.02", "--no-awake"]);
+    stopped = out(["stop"]);
+    has(st, `=== ${HOST}: 1 lane by day and 2 at night (the profile's night): all 2 start, and a lane past the count for the time of day waits between units`);
+  });
+  test("  each lane's loop gets the counts", () => { has(f.laneLog(2), "--lanes 1,2"); });
+  test("  and fleet stop's tidy leaves the night lane's clone", () => {
+    assert.ok(!stopped.includes(`removed ${lane(2)}`), stopped);
+    assert.ok(fs.existsSync(path.join(lane(2), ".git")));
   });
 });

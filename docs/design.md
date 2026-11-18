@@ -302,7 +302,7 @@ isn't told them again), and attach and the summary list each once.
 ### Sweep and sprint: the lanes held off
 
 The owner's own passes over the tracker (docs/sweep.md, docs/sprint.md;
-[lesson 40](lessons.md)) run with the lanes off, a foreman thread merging
+[lesson 41](lessons.md)) run with the lanes off, a foreman thread merging
 what workers in git worktrees finish. Four things are built for them:
 
 - **The hold is the tracker's** (`project.json` `lanes_off`, set by `just

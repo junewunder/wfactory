@@ -31,7 +31,7 @@ The runtime's own commands (main.mjs profile …) are the same, plus:
   profile file                the profile's path: $WFACTORY_PROFILE, else
                               \${XDG_CONFIG_HOME:-~/.config}/wfactory/profile.md
   profile get <setting> [default]   a value from its Settings table ("agent", "pause below",
-                              "store"), else the default
+                              "store", "night"), else the default
   profile machines            its Machines table, one line per machine: name, ssh, lanes, heavy,
                               can, cache (tab-separated)
   profile unfilled            the \`<fill: …>\` placeholders left in it, one per line, as
