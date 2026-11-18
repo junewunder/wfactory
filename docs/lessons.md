@@ -693,7 +693,7 @@ store's copy with nothing else waiting to reach the store. A run cut short,
 or one whose step was killed, copies nothing back, and a live CI run holds up other copy backs of its
 group, since its outputs would go half-written.
 
-### 42. Red that wasn't the work, and a fix filed without a word of what changed (the mod factory, November)
+### 43. Red that wasn't the work, and a fix filed without a word of what changed (the mod factory, November)
 
 **What happened.** Over two weeks one factory's group CI ran 36 times and
 failed 9. Five of the nine were one cause: a shared change moved a pose, and
