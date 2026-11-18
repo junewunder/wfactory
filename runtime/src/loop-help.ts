@@ -212,7 +212,7 @@ it; the overseer hears it once, from the first (fleet.sh, Events).
 
 Usage:
   factory/loop.sh [<loop>] [--max N] [--hours H] [--model M] [--effort E] [--mem SIZE]
-                  [--limit-wait MIN] [--idle-wait MIN] [--last-call MIN] [--no-wait] [--no-awake] [--dry-run]
+                  [--limit-wait MIN] [--idle-wait MIN] [--last-call MIN] [--lanes COUNT] [--no-wait] [--no-awake] [--dry-run]
 
 Examples:
   just loop                       # until done/gated/stuck, up to 8 hours
@@ -238,6 +238,10 @@ Options:
                    "last_call", else 30. 0: none (\`just fleet last-call\` still starts one).
                    Its "last_call_grace" (default 15) minutes set the wrap-up at its start
                    (Last call, above).
+  --lanes COUNT    The machine's lane count, as docs/machines.md's Lanes gives it (fleet start
+                   passes it on): "2, 4 at night" makes a lane past the count for the time of
+                   day wait between units until the count takes it in (the profile's "night",
+                   default 22:00-07:00). One count, or none, never waits.
   --no-wait        Stop when there's nothing to do instead of waiting.
   --no-awake       Don't keep the machine awake. By default the loop holds a
                    systemd-inhibit lock on sleep, idle and the lid switch while

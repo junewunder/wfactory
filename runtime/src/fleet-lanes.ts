@@ -2,13 +2,16 @@
 // things, and each machine's usage reading and a command run there.
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { spawnSync } from "node:child_process";
+import { netGit } from "../../tracker/src/net.ts";
 import { epoch, ymdHm, ymdHms } from "./sys.ts";
 import { platform, remote } from "./os.ts";
 import { openingOpen, trWait } from "./tr.ts";
 import { project } from "./oversee.ts";
 import { CLONES, DROP_CLONE, PULL_CHECKOUT, PULL_LANE, TIDY_LANE, TIDY_MACHINE } from "./fleet-scripts.ts";
 import { cat, chomp, chomp1, lines, say, timeAt } from "./fleet-util.ts";
+import { cellLanes, laneCount, setCell, showLanes, type LaneCount } from "./machines.ts";
 import type { Fleet, Lane } from "./fleet-ctx.ts";
 
 // Each lane's own state (oversee.sh state), and the leases with a store. With capture, returned.
@@ -76,13 +79,13 @@ export const hoursTo = (until: number, now: number) => ["--hours", ((until - now
 
 // fleet start [<machine>…] [--lanes N] [loop options]: deploy, then start each machine's lanes.
 export function start(f: Fleet, args: string[]): number {
-  const { ME, NAMES, checkout, lanes, loopArg, deployed, takeMachines, on, sh, updateSkill, laneState, LANES_FILE, MEM_FILE, setOverride, allLanes } = f;
+  const { ME, NAMES, field, checkout, laneSpec, lanes, loopArg, deployed, takeMachines, on, sh, updateSkill, laneState, LANES_FILE, MEM_FILE, setOverride, allLanes } = f;
   // A busy tracker lock is waited out: it isn't the opening over (#109).
   { const why = openingOpen((a) => trWait(a, (m) => console.error(`fleet: ${m}`))); if (why) { console.error(`fleet: ${why}`); return 2; } }
   let { ms, rest } = takeMachines(args, [ME]);
   if (rest.length && !rest[0].startsWith("-")) { console.error(`fleet: no machine ${rest[0]} in docs/machines.md (${NAMES.join(" ")})`); return 2; }
   // --lanes N: this many lanes on each machine named, for this start only (the machines file
-  // keeps its count).
+  // keeps its count, and the start says how to make N its count).
   let want: number | null = null;
   const li = rest.indexOf("--lanes");
   if (li >= 0) {
@@ -105,7 +108,12 @@ export function start(f: Fleet, args: string[]): number {
     fs.writeFileSync(MEM_FILE, JSON.stringify(Object.fromEntries(NAMES.map((m) => [m, { since: epoch(), low: false }]))) + "\n");
   }
   for (const m of ms) {
-    const count = want ?? lanes(m);
+    const count = want ?? lanes(m), spec = laneSpec(m);
+    askedFor(m, want, spec, field(m, "lanes"));
+    // A day count and a night count: every lane starts, and one past the count for the time of
+    // day waits between units until it's taken in (loop-lanes.ts). --lanes N is N all day.
+    const night = want === null && spec && spec.day !== spec.night ? ["--lanes", `${spec.day},${spec.night}`] : [];
+    if (night.length && spec) say(`=== ${m}: ${showLanes(spec)} (the profile's night): all ${count} start, and a lane past the count for the time of day waits between units`);
     // The lanes the fleet watches there from now on: these, and any already running past them
     // (an earlier start's), which go on.
     const shown = Math.max(count, ...allLanes([m]).filter((l) => l.n > count && laneState(m, l.d) === "running").map((l) => l.n));
@@ -125,7 +133,7 @@ export function start(f: Fleet, args: string[]): number {
       say(`=== ${m} lane ${n}`);
       sh(m, d, PULL_LANE);
       if (u.until !== null && u.until <= epoch()) { say(`=== ${m} lane ${n}: not started: its stop time has passed`); continue; }
-      const s = on(m, d, ["factory/oversee.sh", "start", ...loopArg, ...(u.until === null ? [] : hoursTo(u.until, epoch())), ...rest], { out: "capture", unset: deployed });
+      const s = on(m, d, ["factory/oversee.sh", "start", ...loopArg, ...(u.until === null ? [] : hoursTo(u.until, epoch())), ...night, ...rest], { out: "capture", unset: deployed });
       // Its output's last two lines, blank ones too (as `| tail -2`).
       const out = s.out ? chomp1(s.out).split("\n") : [];
       if (s.status !== 0) out.push(`(${m} lane ${n} didn't start)`);
@@ -134,6 +142,101 @@ export function start(f: Fleet, args: string[]): number {
   }
   return 0;
 }
+
+// The counts a start's --lanes asked for that docs/machines.md doesn't give ("<machine> <N>" a
+// line), kept from run to run: a start with --lanes says the file gives another count and how to
+// make N its count, and the next start without it says so again, once, so a count the owner asked
+// for isn't lost when no one carries it to the next start.
+const ASKED = "runs/.fleet-asked";
+function setAsked(m: string, n: number | null) {
+  const a = new Map(lines(cat(ASKED)).map((l) => l.split(" ")).filter((x) => /^[0-9]+$/.test(x[1] ?? "")).map((x) => [x[0], Number(x[1])]));
+  if (n === null ? !a.delete(m) : a.get(m) === n) return;
+  if (n !== null) a.set(m, n);
+  fs.mkdirSync("runs", { recursive: true });
+  if (a.size) fs.writeFileSync(ASKED, [...a].map(([k, v]) => `${k} ${v}\n`).join("")); else fs.rmSync(ASKED, { force: true });
+}
+function askedFor(m: string, want: number | null, spec: LaneCount | null, cell: string) {
+  const gives = spec ? showLanes(spec) : `'${cell}', which isn't a count`;
+  const differs = (n: number) => !spec || spec.day !== n || spec.night !== n;
+  const keep = (n: number) => `To make ${n} its count: just fleet lanes ${m} ${n}`;
+  if (want !== null) {
+    if (differs(want)) say(`=== ${m}: --lanes ${want} is for this start only; docs/machines.md gives it ${gives}. ${keep(want)}`);
+    setAsked(m, differs(want) ? want : null);
+    return;
+  }
+  const n = lines(cat(ASKED)).map((l) => l.split(" ")).find((x) => x[0] === m)?.[1];
+  if (n === undefined || !/^[0-9]+$/.test(n)) return;
+  if (differs(Number(n))) say(`=== ${m}: the last start here asked for ${showLanes({ day: Number(n), night: Number(n) })} (--lanes); docs/machines.md gives it ${gives}. ${keep(Number(n))}`);
+  setAsked(m, null);
+}
+
+// fleet lanes [<machine> <count>]: each machine's lane count in docs/machines.md, or one machine's
+// set there ("2", or "2, 4 at night"), so every machine's next start reads it. With an origin, the
+// commit is made on origin's main as it is now (the checkout is often behind it, with the lanes
+// landing) and pushed, then the checkout is brought up to it when it's clean; without one, it's
+// committed in the checkout.
+export function lanesCmd(f: Fleet, args: string[]): number {
+  const { NAMES, known, field, laneSpec, hasOrigin } = f;
+  if (!args.length) {
+    for (const m of NAMES) { const c = laneSpec(m); say(`${m}: ${c ? showLanes(c) : `'${field(m, "lanes")}', which isn't a count`}`); }
+    return 0;
+  }
+  const m = args[0], v = args.slice(1).join(" "), c = laneCount(v);
+  if (!known(m) || !c) {
+    console.error(`usage: fleet lanes [<machine> <count>]: a count is "2", or "2, 4 at night" (machines: ${NAMES.join(" ")}${v && !c ? `; got '${v}'` : ""})`);
+    return 2;
+  }
+  const MF = "docs/machines.md", msg = `${MF}: ${m} runs ${showLanes(c)}`;
+  const then = "; running lanes keep the count they started with until they start again";
+  const edit = (text: string) => setCell(text, m, "lanes", cellLanes(c));
+  const git = (a: string[], o: { input?: string; env?: NodeJS.ProcessEnv } = {}) =>
+    spawnSync("git", a, { encoding: "utf8", input: o.input, env: o.env ?? process.env, stdio: [o.input === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+  const last = (r: { stdout: string; stderr: string }) => (r.stderr || r.stdout).trim().split("\n").pop() ?? "";
+  setAsked(m, null);
+  if (!hasOrigin) {
+    let text: string;
+    try { text = fs.readFileSync(MF, "utf8"); } catch { console.error(`fleet: no ${MF} here to write ${m}'s count in`); return 2; }
+    const out = edit(text);
+    if (out === null) { console.error(`fleet: ${MF}'s Lanes table has no Lanes cell for ${m}`); return 2; }
+    if (out === text) { say(`${msg} already`); return 0; }
+    const own = git(["status", "--porcelain", "--", MF]);
+    fs.writeFileSync(MF, out);
+    if (own.status !== 0) { say(`${msg} (written; not a git checkout)${then}`); return 0; }
+    if (own.stdout.trim()) { say(`${msg} (written, not committed: the file had changes of its own; commit them with it)${then}`); return 0; }
+    const ci = git(["commit", "-q", "-m", `${msg} (just fleet lanes)`, "--", MF]);
+    say(ci.status === 0 ? `${msg} (committed)${then}` : `${msg} (written, not committed: ${last(ci)})${then}`);
+    return 0;
+  }
+  // On origin's main: a commit of the file alone, made in an index of its own (the checkout's
+  // isn't touched), pushed; tried again on a newer main if a lane pushed first.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fleet-lanes-"));
+  try {
+    const idx = { ...process.env, GIT_INDEX_FILE: path.join(tmp, "index") };
+    for (let n = 1; ; n++) {
+      const fe = netGit(["fetch", "-q", "origin", "main"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }, 120);
+      if (fe.status !== 0) { say(`${msg}: not written: couldn't fetch origin's main (${last(fe)})`); return 1; }
+      const base = chomp(git(["rev-parse", "FETCH_HEAD"]).stdout);
+      const shown = git(["show", `${base}:${MF}`]);
+      if (shown.status !== 0) { console.error(`fleet: origin's main has no ${MF} to write ${m}'s count in`); return 2; }
+      const out = edit(shown.stdout);
+      if (out === null) { console.error(`fleet: ${MF}'s Lanes table on origin's main has no Lanes cell for ${m}`); return 2; }
+      if (out === shown.stdout) { say(`${msg} already`); break; }
+      const blob = chomp(git(["hash-object", "-w", "--stdin"], { input: out }).stdout);
+      const mode = /^([0-9]+) /.exec(git(["ls-tree", base, "--", MF]).stdout)?.[1] ?? "100644";
+      if (git(["read-tree", base], { env: idx }).status !== 0 || git(["update-index", "--cacheinfo", `${mode},${blob},${MF}`], { env: idx }).status !== 0) { say(`${msg}: not written: git couldn't make the commit`); return 1; }
+      const tree = chomp(git(["write-tree"], { env: idx }).stdout);
+      const ci = git(["commit-tree", tree, "-p", base, "-m", `${msg} (just fleet lanes)`]);
+      if (ci.status !== 0) { say(`${msg}: not written: ${last(ci)}`); return 1; }
+      const pu = netGit(["push", "-q", "origin", `${chomp(ci.stdout)}:refs/heads/main`], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }, 120);
+      if (pu.status === 0) { say(`${msg} (committed and pushed to origin's main)${then}`); break; }
+      if (n >= 3 || pu.status === 124) { say(`${msg}: not written: couldn't push to origin's main (${last(pu)})`); return 1; }
+    }
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  // This checkout reads it now, if it can take origin's main as it is (PULL_CHECKOUT).
+  if (sh(f, PULL_CHECKOUT) !== 0) say(`(this checkout isn't up to date with origin's main: it reads the new count once it's pulled)`);
+  return 0;
+}
+const sh = (f: Fleet, script: string) => f.sh(f.ME, process.cwd(), script, { out: "ignore", err: "ignore" }).status;
 
 // fleet restart <machine> [--lane N]: deploy, then restart its running lanes on the new copy.
 export function restart(f: Fleet, args: string[]): number {

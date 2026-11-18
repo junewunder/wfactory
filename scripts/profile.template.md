@@ -23,6 +23,7 @@ The scripts read this table. Keep its columns.
 | agent | claude |
 | pause below | 8 |
 | store | none |
+| night | 22:00-07:00 |
 
 - **agent:** the agent CLI the loop starts, one session per unit. It has to
   accept Claude Code's flags (`-p` with the prompt on stdin, `--output-format
@@ -34,6 +35,8 @@ The scripts read this table. Keep its columns.
 - **store:** where big group data lives when several machines share a
   factory, as an rsync-over-ssh target (`nas:/tank/factory`). `none` is
   right for one machine. See "Scaling out" in SKILL.md.
+- **night:** when night is, in each machine's local time, for a Lanes count
+  with a night count (Machines, below).
 
 **Usage limits:** <fill: your plan and how much of it the factory may use,
 e.g. "Claude Max; I use it by day too, so leave the morning's window alone",
@@ -51,7 +54,8 @@ new factory's `docs/machines.md`. One machine is the normal case.
 - **Machine:** its short hostname (`hostname -s`).
 - **ssh:** how the other machines reach it (an address or an ssh alias).
   For this machine alone, its hostname is fine; nothing uses ssh then.
-- **Lanes:** how many loops it runs at once. Start at 1.
+- **Lanes:** how many loops it runs at once. Start at 1. A machine you use
+  by day can run more at night: `2, 4 at night` (night is the setting above).
 - **Heavy:** how many heavy jobs (builds, renders) run at once across its
   lanes. 1 unless it has the cores for more.
 - **Can:** short names for what only this machine can do (`gpu`,
