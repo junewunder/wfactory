@@ -275,18 +275,38 @@ lanes' `runs/events.log` and each machine's `runs/oversee.log` (every wake,
 and the overseer's own notes), kept outside git; attaching catches up from
 it since the last overseer's last note.
 
-**A timer wakes the overseer where it can.** A background `fleet wait`
-keeps the overseer awake only while the overseer remembers to start the
-next one, and overseers forget: the lanes then run unwatched until the
-owner looks. A timer the chat app runs (T3 Code's scheduled tasks) fires
-whether or not the overseer remembers, so where there is one it's the
-default, and each wake runs `fleet wait --check`: the same reading as a
-wait, at once, counted from `runs/.check-<id>.json`. Attach writes the
-first of those and every check and wait writes the next, so the first
-check hears what happened since the attach, and nothing a wait told is
-told again by a check. It hears news up to a tick late (20 minutes),
-which is the price. A check and a wait share the wait's lock, so the two
-never run at once.
+**The wait wakes the overseer, and a timer catches a wait that isn't running.**
+A background `fleet wait` hears news as it comes, but it keeps the overseer
+awake only while the overseer starts the next one, and overseers forget: the
+lanes then run unwatched until the owner looks. For two weeks a timer the chat
+app runs (T3 Code's scheduled tasks) stood in for the wait, every 20 minutes,
+each wake a `fleet wait --check`. It never forgot, and it cost a wake every 20
+minutes with nothing to say, news heard up to a tick late, and a heartbeat that
+read the same while finished work sat unlanded (lesson 42). So the two are
+split by what each is good at. The wait wakes the overseer, in T3 Code too. The
+timer, at 55 minutes, runs `fleet wait --check`, which answers in one command
+which state the wait is in: running (one line, no lane read, nothing to post),
+not running (what changed since `runs/.check-<id>.json`, which attach and every
+wait and check write, then the command that starts a wait), or ten minutes past
+its time and not back (ended, then as not running). The wait's lock file says
+whose it is and when it's due back. A quiet wait's 55 minutes exist to wake the
+overseer inside the hour its prompt cache lives; a timer's check-in has done
+that, so the wait reads when the last one came (`runs/.tick-<id>`) and watches
+on until 58 minutes after it, 110 in all at most (a background command is
+stopped at two hours). With a timer a quiet hour has one wake, the check-in;
+without one, the wait's own. If the timer dies, the wait returns within the
+hour of its last check-in, and is back on its 55 from then.
+
+**Finished work that can't land is news.** A lane whose landing check (or a
+probe of the loop's own) waits
+for its turn in the machine's memory budget reads as busy: its session is
+over, its last log line names the unit, and nothing moves. Past 30 minutes
+(a landing took 3 to 11 minutes at the median in the two factories' records,
+nine in ten were over inside 30, and a wait for memory was under 10 minutes
+or over 45) the loop logs a `landing-waits` event, once, naming the unit and
+what holds the budget, and the wait wakes for it. The heartbeat reads the
+same wait from the machine's budget (`heavy brief`) and says it in place of
+"nothing for you" for as long as it lasts.
 
 **A question is told once, by whoever reads.** The questions are main's, so
 a question asked anywhere (a lane's session, an interactive one, the owner's

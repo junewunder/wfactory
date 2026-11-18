@@ -31,15 +31,13 @@ then, and when to `just fleet start`).
 
 ## Waiting
 
-In T3 Code (`schedule_task`), a timer wakes you (guide step 3): each wake,
-run `just fleet wait --check --as <your ID>`; "wait" below means: end
-your turn. Elsewhere, in the background (`run_in_background: true`,
-`timeout: 7200000`, as is):
+In the background (`run_in_background: true`, `timeout: 7200000`, as is):
 
     just fleet wait --as <your ID>
 
 One per overseer. Its end says why you woke, then the heartbeat: post
-it, act, wait again.
+it, act, wait again. In T3 Code, a 55-minute timer too (guide step 3):
+its check says what to do.
 
 | It says | You |
 |---|---|
@@ -59,6 +57,7 @@ it, act, wait again.
 | `review-skipped` | one line; several in a row: the reviewer can't run (`review_model`, the CLI) |
 | `oom`, `memory-low` | which machine, what was killed or how little is left, what was running; the cap or the load is their call |
 | `oom-kill` | read the snapshot first (the guide's "Out-of-memory kills") |
+| `landing-waits` | `just heavy` there: end what's idle and ours, else one line |
 | `ci-published` (first), `ci-broken`, `ci-affected-failed`, `land-check-unrun` | one line; for broken, the failure and the options |
 | `ci-known-failing` | one line: the group, the step and the reason; nothing to unstick, and it goes in the report |
 | `idle`, usage pause/resume | one line each |

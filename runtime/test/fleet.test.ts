@@ -24,6 +24,14 @@ test("every lane waits for work in flight and none is busy: the wait can't end, 
   assert.match(forYou(none, [], [LC("wren", 1)], 2), /^2 waiting on you; the lanes wait for work in flight/);
 });
 
+// A lane held up too long with its finished work (beatOf: its landing check waiting for memory)
+// is for the owner though every lane reads as busy.
+test("finished work that can't land is for the owner, with busy lanes and beside questions", () => {
+  const late = "the landing check (proj-lane2) has waited 47 min for memory on wren, and its lane's work with it (`just heavy` there)";
+  assert.equal(forYou(new Set(["wren"]), [], [], 0, [late]), late);
+  assert.equal(forYou(new Set(["wren"]), [], [], 2, [late]), `2 waiting on you; ${late}`);
+});
+
 test("a lane busy on another machine doesn't land it: still flagged", () => {
   assert.match(forYou(new Set(["tern"]), [], [LC("wren", 1)], 0), /the wait won't end/);
 });

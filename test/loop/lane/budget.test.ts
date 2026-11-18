@@ -4,7 +4,9 @@
 // on the loop's own reservation, though it still waits on others'. A stop gives the loop's turn
 // back, and one that comes while it waits starts nothing. The loop is the real factory/loop.sh,
 // in the file's lane, on a made-up 10G machine (a 7G budget, after the 3G reserve), its budget
-// filled by a stand-in job's reservation until the test frees it. Run: node --test test/loop/
+// filled by a stand-in job's reservation until the test frees it. A wait past half an hour (a
+// second here) is news for the overseer: the lane's finished work waits with it.
+// Run: node --test test/loop/
 // Setup goes before a test's checks (or in an after() hook), so a failing check can't skip it.
 import { describe, test, after } from "node:test";
 import assert from "node:assert/strict";
@@ -26,7 +28,7 @@ just capped bash -c 'echo capped >> "$FACTORY_LOCKS/check.ran"'
 const f = laneFactory("lane-budget", "lane-budget", { check: "bash check.sh", files: { "check.sh": CHECK } });
 const { a, w, setup, state, until } = f;
 fs.writeFileSync(w.env.FACTORY_MEMINFO!, "MemTotal:       10485760 kB\nMemAvailable:    8388608 kB\n");
-const env = { FACTORY_HEAVY_POLL: "0.2", FACTORY_HEAVY_MAX_WAIT: "2" };
+const env = { FACTORY_HEAVY_POLL: "0.2", FACTORY_HEAVY_MAX_WAIT: "2", FACTORY_LAND_LATE: "1" };
 const G = 1024 ** 3;
 const cpu = w.env.FACTORY_CPU_LOCKS!;
 fs.mkdirSync(cpu, { recursive: true });
@@ -58,6 +60,20 @@ describe("the landing check waits for memory in the budget", () => {
   test("  and hasn't run", () => { assert.equal(ran(), ""); });
   // (Said just after its wait file is written: waited for, not read at that moment.)
   test("  it says what it waits for", async () => { await b.until("memory: needs 4.0G", 10); });
+  // One night a landing check sat two hours behind another process's reservation, its lane
+  // reading as busy all the while: past half an hour (FACTORY_LAND_LATE: a second here) the
+  // overseer hears, once, with the unit and what holds the budget.
+  const events = () => readOr(a.at("runs/events.log")).split("\n").filter((l) => l.split("\t")[3] === "landing-waits");
+  test("  waiting past its time, it tells the overseer: the unit that hasn't landed, and what holds the budget", async () => {
+    await until(() => events().length > 0, "a landing-waits event", 30);
+    has(events()[0], "Unit one (g/one) is finished and hasn't landed: the landing check (");
+    has(events()[0], "min for its turn in the machine's memory budget (needs 4.0G, and 0 of the budget's 7.0G is free; held by a stand-in job (7.0G))");
+  });
+  test("  its wait is marked as the lane's own, for the heartbeat", () => { has(waiting(), '"holdsLane":true'); });
+  test("  told once, however long it goes on", async () => {
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(events().length, 1);
+  });
   test("once memory frees, it runs", async () => {
     await hog.free();
     await until(() => ran().includes("check held="), "the landing check runs", 60);

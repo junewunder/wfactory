@@ -127,9 +127,12 @@ export class Loop {
   stop(why: string) { this.whyStop = why; log(why); }
   // One of the loop's own heavy commands (the landing check, the tracker's probes), run in a turn in
   // the machine's memory budget (heavy.ts, memoryTurn). A stop gives the turn back (stopChildren);
-  // one that came while it waited starts nothing.
-  async memory<T>(what: string, cmds: string[], run: (held: Record<string, string>) => Promise<T>): Promise<T> {
-    const t = await memoryTurn(what, cmds);
+  // one that came while it waited starts nothing. A wait past half an hour (heavy.ts, lateAfter)
+  // is news: the lane does nothing meanwhile, and what it finished (behind: the unit landing)
+  // sits unlanded, though the lane reads as busy.
+  async memory<T>(what: string, cmds: string[], run: (held: Record<string, string>) => Promise<T>, behind = ""): Promise<T> {
+    const t = await memoryTurn(what, cmds, process.env, (why, ms) => this.event("landing-waits",
+      `${behind ? `${behind} is finished and hasn't landed` : `${this.host} lane ${this.lane} waits, and its work with it`}: ${what} has waited ${Math.round(ms / 60000)} min for its turn in the machine's memory budget (${why.replace(/^memory: /, "")}). \`just heavy\` there shows what holds it`));
     if (t) this.turns.add(t);
     try {
       if (this.stopping) { t?.give(); await this.halt(); }
@@ -242,7 +245,7 @@ export class Loop {
       },
       affected: () => this.affected(),
       affectedBy: (old, nw) => this.affectedBy(old, nw),
-      check: async (logf, busy) => {
+      check: async (logf, busy, behind) => {
         const fd = fs.openSync(logf, "w");
         try {
           // A heavy command: it waits for memory in the machine's budget (heavy.ts), and its peak
@@ -250,7 +253,7 @@ export class Loop {
           return await this.memory(`the landing check (${this.checkout})`, ["just check"], async (held) =>
             (await measured("just check", ["timeout", process.env.FACTORY_CHECK_TIMEOUT || "1800", "just", "check"], { ...sessionBase(this.cfg.tdir, this.lane), FACTORY_BUSY_GROUPS: busy, ...held },
               // (Named as a session's scope is, so \`oversee.sh stop\` ends what it left running.)
-              this.cfg.cap ? `${this.cfg.scope}-${crypto.randomBytes(4).toString("hex")}` : "", (argv, env) => this.stoppable(argv, { out: fd, env }))) === 0);
+              this.cfg.cap ? `${this.cfg.scope}-${crypto.randomBytes(4).toString("hex")}` : "", (argv, env) => this.stoppable(argv, { out: fd, env }))) === 0, behind);
         } finally { fs.closeSync(fd); }
       },
     };

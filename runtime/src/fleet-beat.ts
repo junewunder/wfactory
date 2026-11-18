@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { hm } from "./sys.ts";
 import { LAST_LINE } from "./fleet-scripts.ts";
 import { gb, lines, say } from "./fleet-util.ts";
+import { lateAfter } from "./heavy.ts";
 import type { Fleet } from "./fleet-ctx.ts";
 
 // A length of time as the beat says it: "40 s", "12 min", "1h05".
@@ -19,7 +20,8 @@ export const startedOf = (f: string) => {
 // <machine>". Only a lane on that machine lands it, so when none there is busy (and the machine
 // answers), the wait can't end: that's for the owner, not "nothing for you". A unit named without
 // a machine (or past the first few) could be anywhere: then only no busy lane at all counts.
-export function forYou(busyOn: Set<string>, away: string[], quiet: string[], questions: number): string {
+// late: lanes held up too long with their work (beatOf), each said as it is.
+export function forYou(busyOn: Set<string>, away: string[], quiet: string[], questions: number, late: string[] = []): string {
   const FLIGHT = "once work in flight lands (";
   const stalled = (w: string) => {
     let what = w.slice(w.indexOf(FLIGHT) + FLIGHT.length);
@@ -32,7 +34,7 @@ export function forYou(busyOn: Set<string>, away: string[], quiet: string[], que
   };
   const held = quiet.filter((w) => w.includes(FLIGHT)).map(stalled).find(Boolean);
   const stuck = held ? `the lanes wait for work in flight to land (${held}), but no lane where it is is working, so the wait won't end` : "";
-  return [questions > 0 ? `${questions} waiting on you` : "", stuck].filter(Boolean).join("; ") || "nothing for you";
+  return [questions > 0 ? `${questions} waiting on you` : "", stuck, ...late].filter(Boolean).join("; ") || "nothing for you";
 }
 
 // A wait's timer with nothing at stake: under the hour the overseer's prompt cache lives, so a quiet
@@ -89,16 +91,19 @@ export function beatOf(f: Fleet): Beat {
   }
   const q = lines(spawnSync("factory/tracker", ["questions"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).stdout ?? "")
     .filter((l) => /^[0-9]+\. |^Gate: /.test(l)).length;
-  const mem: string[] = [], low: string[] = [];
+  const mem: string[] = [], low: string[] = [], late: string[] = [];
   for (const m of [...ms].sort()) {
-    const { available: a, held } = memOf(m), floor = floorOf(m);
+    const { available: a, held, waiting: ws = [] } = memOf(m), floor = floorOf(m);
+    // A lane's own command (its landing check, a probe) waiting this long for memory: its lane
+    // waits with it, so what it finished doesn't land, though the lane reads as busy.
+    for (const w of ws) if (w.secs >= lateAfter(env)) late.push(`${w.what} has waited ${dur(w.secs)} for memory on ${m}, and its lane's work with it (\`just heavy\` there)`);
     if (a === null) continue;
     if (a < floor) low.push(m);
     // What holds its budget of heavy jobs: the biggest three, by name.
     const hs = held.slice(0, 3).map((h) => `${h.what} ${gb(h.mem)}`).join(", ") + (held.length > 3 ? `, ${held.length - 3} more` : "");
     mem.push(`${m} ${gb(a)}${a < floor ? ` (under its ${gb(floor)} reserve)` : ""}${held.length ? ` (budget held by ${hs})` : ""}`);
   }
-  const fy = forYou(busyOn, away, quiet, q);
+  const fy = forYou(busyOn, away, quiet, q, late);
   let line = `${hm()} · ${busy} busy, ${waiting} waiting, ${stoppedn} stopped`;
   if (away.length) line += `, ${away.length} unreachable (${[...new Set(away)].sort().join(" ")})`;
   if (doing.length) line += ` · ${doing.join("; ")}`;
