@@ -21,9 +21,9 @@ Usage:
   scripts/profile.sh new       write a new profile from the template, with this machine's
                                hostname filled in; refuses to overwrite one
   scripts/profile.sh check     exit 0 if the profile exists with no <fill: …> left;
-                               else exit 2 and list what's missing. A row still under
-                               an old name ("stop below", now "keep back") works, and
-                               check says to rename it
+                               else exit 2 and list what's missing. A row no longer
+                               read ("keep back", "stop below") acts on nothing, and
+                               check says it can be removed
   scripts/profile.sh get <setting> [default]   one value from the Settings table
   scripts/profile.sh machines  the Machines table, tab-separated
 
@@ -31,7 +31,7 @@ The runtime's own commands (main.mjs profile …) are the same, plus:
   profile file                the profile's path: $WFACTORY_PROFILE, else
                               \${XDG_CONFIG_HOME:-~/.config}/wfactory/profile.md
   profile get <setting> [default]   a value from its Settings table ("agent", "pause below",
-                              "keep back", "store"), else the default
+                              "store"), else the default
   profile machines            its Machines table, one line per machine: name, ssh, lanes, heavy,
                               can, cache (tab-separated)
   profile unfilled            the \`<fill: …>\` placeholders left in it, one per line, as
@@ -93,15 +93,14 @@ export function profileProblems(env: NodeJS.ProcessEnv = process.env): string[] 
   return [];
 }
 
-// Rows still under an old name, which the scripts read all the same: what \`profile.sh check\`
-// says of each, with the profile complete. ("stop below" was the fixed floor under the week's
-// usage; its value is read as the share of the week kept back.)
-export function profileRenames(env: NodeJS.ProcessEnv = process.env): string[] {
-  const has = (setting: string) => profileTable("Setting", env).some((r) => r[0].toLowerCase() === setting);
-  if (!has("stop below")) return [];
-  return [has("keep back")
-    ? `profile: ${profileFile(env)} has a "stop below" row beside its "keep back" row: remove it ("keep back" is the one read)`
-    : `profile: ${profileFile(env)} has a "stop below" row: rename it to "keep back" (its value is read as the share of the week kept back for your own use)`];
+// Settings rows the scripts no longer read, which act on nothing: what \`profile.sh check\` says of
+// each, with the profile complete. Both held the lanes back on the week's usage, which is shown
+// and never acted on now ("stop below" a fixed floor, "keep back" a line; docs/lessons.md).
+const UNREAD = ["keep back", "stop below"];
+export function profileUnread(env: NodeJS.ProcessEnv = process.env): string[] {
+  const rows = profileTable("Setting", env).map((r) => r[0].toLowerCase());
+  return UNREAD.filter((s) => rows.includes(s)).map((s) =>
+    `profile: ${profileFile(env)} has a "${s}" row, which is no longer read (the week's usage is shown, never acted on): it can be removed`);
 }
 
 // A new profile from the template, with this machine as its one machine.
@@ -125,7 +124,7 @@ export function profileCli(args: string[]): number {
   if (cmd === "check") {
     const p = profileProblems();
     if (p.length) { for (const l of p) console.error(l); return 2; }
-    for (const l of profileRenames()) console.error(l);
+    for (const l of profileUnread()) console.error(l);
     return lines([`profile: ${profileFile()} is complete`]);
   }
   if (cmd === "get") {

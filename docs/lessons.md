@@ -348,6 +348,40 @@ outside the lanes or by a lane whose loop died before its unit ended.
 `fleet wait` keeps the questions it told, attach adds every one the logs
 have, and attach and the summary list each once.
 
+### 38. The card read a third of the money as waste, and the report did its own sums (the recompiler factory and the mod factory, November)
+
+**What happened.** The scorecard's first line put every session that
+finished no unit in one lump with one cost. In the recompiler factory
+that was 45 of 131 sessions and $141 of $379, and both the owner and the
+agent reading it took it as a third of the money wasted. Only 4 had lost
+their work (2 killed over memory, 2 cut off). Of the rest, 15 were sent
+back by the review and carried on from their branch by the next session,
+11 ended on a question to the owner, 10 gave their unit back unstarted at
+almost no cost, and 5 handed it back with the work kept. The same card
+knew of 131 sessions where the tracker's log had 219 loop claims: a start
+with fewer lanes removes the clones past the count, and each clone's run
+index and events went with it. Meanwhile the overseer wrote the morning
+report in prose from the events and the log. In two weeks it said a
+killed job had been rerun and its unit finished when neither was so,
+listed answered questions as waiting, gave 8 units against 17 sessions
+with nothing to reconcile them, and wrote "20 of 48 sessions finished no
+unit" so that it read as 20 lost units. Nobody ran the scorecard by hand
+in either factory, and nobody made a prediction for its ledger.
+
+**What it cost.** The owner was told a third of the spend was waste when
+a fortieth of the sessions had lost anything, and a morning report wrong
+four times in two weeks, each caught only by the owner checking it.
+
+**The rule.** The waste line counts only sessions whose work was lost;
+the rest are said as what became of them, each with its cost, and a unit
+sent back with what the session after it cost. The card opens with the
+sessions, what each finished or became of, and the units done, in lines
+that add up as they stand. Removing a lane clone moves its run index and
+events to the checkout first, and loop claims with no record left are
+counted as such. `fleet summary` ends with the card for its run, so the
+report quotes figures it didn't work out. The predictions went: a ledger
+used zero times in two factories was upkeep for nothing.
+
 ## The code
 
 ### 20. One copy of the loop, deployed
@@ -717,7 +751,7 @@ and where they'd be satisfied. The satisfied line is asked again over
 real output at the probe, the trials and every ramp review. Once the
 owner says start, the agent stops only at gates and real questions.
 
-### 38. The owner's own passes did most of the work, and the skill had no word for them (the mod factory)
+### 40. The owner's own passes did most of the work, and the skill had no word for them (the mod factory)
 
 **What happened.** Over two weeks the mod factory's owner ran eight passes
 over the tracker by hand, with the lanes off: one thread as foreman, a
@@ -794,3 +828,29 @@ stands. Such an exception applies the owner's call, so lesson 4
 (never weaken the check to go green) still holds: a lane never makes one
 without the owner's decision. Matching everything first is the owner's call, as a phase they
 start, after hearing what it costs.
+
+### 39. The lanes held back a week the owner wanted spent (the recompiler factory and the mod factory, November)
+
+**What happened.** A fixed floor under the week's usage had ended weeks
+early, so the lanes were given a line in its place: at any moment they
+could have used the share of the week gone by, less 15% kept back for the
+owner, and while ahead of it every lane paused between units. It acted
+three times in its first two days. On a night the owner had usage to use
+up before the week's reset, it paused every lane of the recompiler
+factory, and the owner switched it off nine minutes later. On another such night it paused one laptop's
+lane for about 4 of 8.7 hours, because that laptop's profile still had it
+on. At 99% of the week used it paused the mod factory's lanes on both
+laptops until the reset, and with them group CI, a step that uses no
+model at all.
+
+**What it cost.** Lane hours on the nights meant to spend the week, half
+of one laptop's night, and CI results held back to the reset. The owner
+turned it off two days after it went in.
+
+**The rule.** The week's usage is shown (`just usage`, `just fleet
+usage`) and never acted on. The line, like the floor before it, assumed an
+owner who wants a share of the week kept back; this one wants the week
+spent and decides by hand when to hold back (a stop time, `just pause`).
+Nothing replaces it. The 5-hour pause stays: near the end of that window
+the lanes would only run into the limit. A profile's old "keep back" or
+"stop below" row is no longer read, and `profile check` says it can go.

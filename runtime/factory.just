@@ -192,7 +192,7 @@ usage:
 runs *args:
     @"${FACTORY_NODE:-node}" "{{source_directory()}}/main.mjs" runs "$@"
 
-# Where a run's sessions and time went, from the records alone (just scorecard [--since <when>] [--json]; --names lists the figures; just scorecard expect <name> '<op> <value>' --by <date> --why "…" records a prediction, just scorecard settle <id> --note "…" closes one).
+# Where a run's sessions and time went, from the records alone (just scorecard [--since <when>] [--json]; --names lists the figures).
 [positional-arguments]
 [no-exit-message]
 scorecard *args:

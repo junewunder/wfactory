@@ -420,48 +420,121 @@ C.reopen = (a) => {
   });
 };
 
+// --- drop, park and unpark take several units in one write: IDs and selectors (names.ts, as
+// `decide --scope` and `ask --blocks` take them), one --why for all. Every unit is checked before
+// anything is written: one that can't go leaves all as they were, and the message names each.
+// The log gets a line per unit, the commit is one.
+const refsOf = (o: Args) => [...new Set([...(typeof o["dry-run"] === "string" ? [o["dry-run"]] : []), ...o._].flatMap(list))];
+
+type Bulk = {
+  // A unit this write has nothing to do with (done, not parked): left out when a selector reaches it
+  // or it's the only thing named; named among several, it's a problem the message says.
+  out: (u: Unit) => boolean; outWhy: (T: State, u: Unit) => string;
+  // A unit it can't touch now (in progress), refused whichever way it was reached.
+  refuse: (T: State, u: Unit) => string | null;
+  // What it says when no unit is left: `nothing open matches <refs>`.
+  none: string;
+  // The write's own single unit ID (drop) goes through unchecked, as it always has.
+  asIs?: boolean;
+  // With one thing named that matches nothing: "nothing ... matches", not a problem of its own.
+  quiet?: boolean;
+};
+
+function gather(T: State, refs: string[], v: Bulk): Unit[] {
+  const lone = refs.length === 1, got = new Set<Unit>(), bad: string[] = [];
+  const take = (u: Unit, byId: boolean) => {
+    if (byId && lone && v.asIs) { got.add(u); return; }
+    if (v.out(u)) { if (byId && !lone) bad.push(v.outWhy(T, u)); return; }
+    const why = v.refuse(T, u);
+    if (why) bad.push(why); else got.add(u);
+  };
+  for (const ref of refs) {
+    const u = resolve(T, ref, { soft: true });
+    if (u) { take(u, true); continue; }
+    if (ref.includes(":") || ref.includes("*")) {
+      const us = selected(T, [ref]);
+      if (!us.length && !(lone && v.quiet)) bad.push(`${ref} matches no unit`);
+      for (const x of us) take(x, false);
+    } else if (!(lone && v.quiet)) {
+      try { resolve(T, ref); } catch (e) { bad.push(e instanceof Error ? e.message : String(e)); }
+    }
+  }
+  if (bad.length && !(lone && bad.length === 1)) die(`${bad.map((x) => "  " + x).join("\n")}\nNothing was written: the units named are as they were.`);
+  if (bad.length) die(bad[0]);
+  if (!got.size) die(`${v.none} ${refs.join(" ")}`);
+  return [...got];
+}
+
+// "3 units in Old units (old)", or across several groups with how many in each.
+function inGroups(T: State, us: Unit[]) {
+  const gs = T.groups.map((g) => [g, us.filter((u) => T.groupOf.get(u.id) === g).length] as const).filter(([, n]) => n);
+  return `${plural(us.length, "unit")} in ${gs.length === 1 ? `${gs[0][0].title} (${gs[0][0].id})` : `${plural(gs.length, "group")}: ${gs.map(([g, n]) => `${g.title} (${g.id}) ${n}`).join(", ")}`}`;
+}
+const fewNames = (us: Unit[], n = 6) => us.slice(0, n).map((u) => name(u)).join(", ") + (us.length > n ? ` and ${us.length - n} more` : "");
+
+// What the write is about to do to a set of units (for more than one, or --dry-run): said before
+// anything is written, and with --dry-run nothing is.
+function said(T: State, us: Unit[], doing: "drop" | "park" | "unpark", dry: unknown) {
+  const ing = { drop: "dropping", park: "parking", unpark: "unparking" }[doing];
+  if (dry) { console.log(`dry run, nothing written: would ${doing} ${inGroups(T, us)}:\n${us.map((u) => `  - ${name(u)}`).join("\n")}`); return true; }
+  if (us.length > 1) console.log(`${ing} ${inGroups(T, us)}`);
+  return false;
+}
+
+const settledWhy = (T: State, u: Unit) => `${name(u)} is already ${derive(T, u).s}`;
+const inProgress = (verb: string) => (T: State, u: Unit) => derive(T, u).s === "doing" ? `${name(u)} is in progress${verb === "drop" ? ` in session ${u.record?.by}` : ""}; ${verb} it once its session ends` : null;
+
 C.drop = (a) => {
   const o = parseArgs(a);
-  return mutate((T) => {
-    const u = resolve(T, o._[0]);
+  return write(o["dry-run"], (T) => {
+    const refs = refsOf(o);
+    if (!refs.length) die("usage: drop <id | selector> … --why \"…\"");
+    const us = gather(T, refs, { out: (u) => SETTLED.has(derive(T, u).s), outWhy: settledWhy, refuse: inProgress("drop"), none: "nothing open matches", asIs: true });
     const why = str(o.why) || die('drop needs --why "…"');
     checkText(T, "--why", why);
-    u.record = { state: "dropped", why, by: ctx.TAG, at: now() };
-    touch(T, u); log(T, "drop", u.id, `${u.title}: dropped: ${why}`);
-    console.log(`${name(u)} → dropped`);
+    if (said(T, us, "drop", o["dry-run"])) return 0;
+    for (const u of us) {
+      u.record = { state: "dropped", why, by: ctx.TAG, at: now() };
+      touch(T, u); log(T, "drop", u.id, `${u.title}: dropped: ${why}`);
+    }
+    console.log(us.length === 1 ? `${name(us[0])} → dropped` : `dropped ${plural(us.length, "unit")}: ${fewNames(us)}`);
     return 0;
   });
 };
 
 // The owner sets work aside: parked units aren't offered, aren't waited on, and
-// don't count as anything for the owner to do. A selector parks several at once.
+// don't count as anything for the owner to do. IDs and selectors park several at once.
 C.park = (a) => {
   const o = parseArgs(a);
-  return mutate((T) => {
-    const sel = o._[0] || die('usage: park <id | selector> --why "…"');
+  return write(o["dry-run"], (T) => {
+    const refs = refsOf(o);
+    if (!refs.length) die('usage: park <id | selector> … --why "…"');
     const why = typeof o.why === "string" ? checkText(T, "--why", o.why) : die('park needs --why "…": why the owner set it aside');
-    const us = (resolve(T, sel, { soft: true }) ? [resolve(T, sel)] : selected(T, [sel])).filter((u) => !SETTLED.has(derive(T, u).s));
-    if (!us.length) die(`nothing open matches ${sel}`);
+    const us = gather(T, refs, { out: (u) => SETTLED.has(derive(T, u).s), outWhy: settledWhy, refuse: inProgress("park"), none: "nothing open matches", quiet: true });
+    if (said(T, us, "park", o["dry-run"])) return 0;
     for (const u of us) {
-      if (derive(T, u).s === "doing") die(`${name(u)} is in progress; park it once its session ends`);
       u.record = { state: "parked", why, by: ctx.ACTOR === "owner" ? "owner" : ctx.TAG, at: now() };
       touch(T, u); log(T, "park", u.id, `${u.title}: parked: ${why}`);
     }
-    console.log(`parked ${us.length === 1 ? name(us[0]) : plural(us.length, "unit")}. \`just tracker unpark ${sel}\` brings ${us.length === 1 ? "it" : "them"} back.`);
+    console.log(`parked ${us.length === 1 ? name(us[0]) : plural(us.length, "unit")}. \`just tracker unpark ${refs.join(" ")}\` brings ${us.length === 1 ? "it" : "them"} back.`);
     return 0;
   });
 };
-C.unpark = (a) => mutate((T) => {
-  const sel = a[0] || die("usage: unpark <id | selector>");
-  // A unit the owner put off (postpone.ts) shows as parked with its own record (or none): the
-  // unpark line is what lifts it, and the record (an interrupted claim's kept work) stays.
-  const us = (resolve(T, sel, { soft: true }) ? [resolve(T, sel)] : selected(T, [sel])).filter((u) => u.record?.state === "parked" || derive(T, u).s === "parked");
-  if (!us.length) die(`nothing parked matches ${sel}`);
-  for (const u of us) { if (u.record?.state === "parked") { u.record = undefined; touch(T, u); } log(T, "unpark", u.id, `${u.title}: back from parked`); }
-  T._memo = null;
-  console.log(`back to work: ${us.slice(0, 6).map((u) => `${name(u)} (${sentence(T, u)})`).join("; ")}${us.length > 6 ? ` and ${us.length - 6} more` : ""}`);
-  return 0;
-});
+C.unpark = (a) => {
+  const o = parseArgs(a);
+  return write(o["dry-run"], (T) => {
+    const refs = refsOf(o);
+    if (!refs.length) die("usage: unpark <id | selector> …");
+    // A unit the owner put off (postpone.ts) shows as parked with its own record (or none): the
+    // unpark line is what lifts it, and the record (an interrupted claim's kept work) stays.
+    const us = gather(T, refs, { out: (u) => !(u.record?.state === "parked" || derive(T, u).s === "parked"), outWhy: (T, u) => `${name(u)} isn't parked (${sentence(T, u)})`, refuse: () => null, none: "nothing parked matches", quiet: true });
+    if (said(T, us, "unpark", o["dry-run"])) return 0;
+    for (const u of us) { if (u.record?.state === "parked") { u.record = undefined; touch(T, u); } log(T, "unpark", u.id, `${u.title}: back from parked`); }
+    T._memo = null;
+    console.log(`back to work: ${us.slice(0, 6).map((u) => `${name(u)} (${sentence(T, u)})`).join("; ")}${us.length > 6 ? ` and ${us.length - 6} more` : ""}`);
+    return 0;
+  });
+};
 
 C.note = (a) => {
   // --dry-run before or after the text; one inside unquoted text is part of the note.

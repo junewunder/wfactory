@@ -370,7 +370,7 @@ export class Loop {
       }
       if (this.mainRed()) break;
 
-      // ---- usage: pause between units near the 5-hour limit, or ahead of the week's line (loop-usage.ts)
+      // ---- usage: pause between units near the 5-hour limit (loop-usage.ts)
       if (await usagePause(this)) continue;
 
       const next = await look(this);
