@@ -4,7 +4,7 @@ import path from "node:path";
 import { ctx } from "../ctx.ts";
 import { createState, hasStateAt, loadTemplate, log, mutate, RANKING, SCHEMA, touch } from "../store.ts";
 import { die, list, parseArgs, plural, str, strs, type Args } from "../text.ts";
-import { checkText, checkTitle, name, rankUnits, resolve } from "../names.ts";
+import { badDataValue, checkText, checkTitle, name, rankUnits, resolve } from "../names.ts";
 import { resourceKnown, unnamedUses, usesHint } from "../machine.ts";
 import { EFFECTS } from "../cards.ts";
 import { derive, groupOrderLine, LABEL, orderLine, priorityOf, sentence, SETTLED } from "../status.ts";
@@ -79,6 +79,8 @@ function groupDataFlag(v: Args[string], old?: Record<string, string>) {
   for (const kv of list(v)) {
     const i = kv.indexOf("=");
     if (i < 1 || !kv.slice(i + 1).trim()) die(`--data takes k=v pairs with a value (e.g. --data mod=3816038068), or none`);
+    // (What lint calls broken data, and a loop won't start over: refused here, where it's written.)
+    if (badDataValue(kv.slice(i + 1))) die(`A group's data values fill its data paths (tracker/project.json store.paths), so each is one name, without / \\ or ..\n--data ${kv.slice(0, i)}: "${kv.slice(i + 1).trim()}" has a path in it; nothing was recorded.`);
     out[kv.slice(0, i)] = kv.slice(i + 1).trim();
   }
   return out;

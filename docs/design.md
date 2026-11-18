@@ -173,11 +173,18 @@ unit with no sessions to go by needs `min_unit_minutes`, and a session cut
 off (at the stop, or otherwise) isn't in any unit's median: its length is
 only the least the unit needs. After three failures it's stuck, for the
 overseer.
-When main itself fails `just check`, no merge unit is filed: finished
-branches wait, pushed, and the lane that found it stops taking units, since
-nothing it worked could land. The overseer hears at once, stops the other
-lanes, fixes main, and starts them again once it passes; a lane started
-checks main again (it may have been fixed outside its code).
+When main itself fails `just check` in a lane's clone, the branch gets no
+merge unit and the lane doesn't stop. The check reads more than main's code
+(the `work/` the machine's lanes share, tools, the tracker's data), and a
+lane can't tell which of them failed. So it files one unit per machine for
+a session to find what fails and put it right, takes it next, and goes on;
+finished branches wait, pushed, and are checked again once that unit is
+done. Only when two sessions haven't put it right (or nobody could take
+the unit for an hour) is main red: the lanes there stop taking units and
+the overseer hears. A lane started again checks
+main once more. A check that gave no verdict (out of time, killed, no
+memory for it) says nothing of the branch or of main: the branch waits and
+is checked again later (lesson 45).
 
 **Capabilities, not pins.** What ties a unit to a machine is a capability it
 needs (`caps`) and the machine's "Can" column, not a hostname. Code shared

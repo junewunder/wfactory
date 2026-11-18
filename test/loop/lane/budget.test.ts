@@ -1,7 +1,8 @@
 // The loop's own heavy commands, the landing check, the settle's probe and refresh's, wait for
 // memory in the machine's budget (heavy.ts), as `just capped` jobs do (refresh only for a probe due
 // to run, and before the claim lock); a `just capped` inside the landing check runs without waiting
-// on the loop's own reservation, though it still waits on others'. A stop gives the loop's turn
+// on the loop's own reservation, though it still waits on others'. The landing check's wait has an
+// end, after which the lane goes on. A stop gives the loop's turn
 // back, and one that comes while it waits starts nothing. The loop is the real factory/loop.sh,
 // in the file's lane, on a made-up 10G machine (a 7G budget, after the 3G reserve), its budget
 // filled by a stand-in job's reservation until the test frees it. A wait past half an hour (a
@@ -168,6 +169,42 @@ describe("a `just capped` inside the loop's turn takes its own beside it", () =>
   test("  but waits for others' (and gives up, exit 75, when it would wait too long)", async () => {
     const loopTurn = fillBudget(4 * G), other = fillBudget(4 * G);
     try { const r = capped(loopTurn.id); assert.equal(r.code, 75, r.stdout); has(r.stdout, "memory: needs 4.0G, and 3.0G of the budget's 7.0G is free; held by a stand-in job (4.0G)"); } finally { await loopTurn.free(); await other.free(); }
+  });
+});
+
+// Memory nothing waiting will ever give back: an editor's standing reservation, the editor idle.
+// Two lanes once waited behind one for over two hours, each for someone to do something about it.
+// The landing check's wait has an end: no verdict, the overseer told what holds the memory, and the
+// lane on to its next unit.
+describe("a landing check that waits for memory nothing gives back", () => {
+  let out = "";
+  let editor: ReturnType<typeof spawn>;
+  const standing = path.join(cpu, "res-standing-other+editor.json");
+  const unrun = () => f.events().split("\n").filter((l) => l.split("\t")[3] === "check-unrun");
+  test("the wait ends, and the lane takes its next unit", () => {
+    // (As `just heavy reserve editor 7G --pid <pid>` leaves it: held while that process runs.)
+    editor = spawn("sleep", ["300"], { stdio: "ignore" });
+    fs.writeFileSync(standing, JSON.stringify({ id: "standing-other+editor", what: "editor, a standing reservation", cmd: "", project: "other", lane: "other", root: w.top, name: "editor", mem: 7 * G, pid: editor.pid, standing: true, since: Date.now() }));
+    setup("add-unit", "g/behind1", "--title", "Behind the editor");
+    setup("add-unit", "g/behind2", "--title", "Behind it too");
+    out = f.loopSh(["--max", "2", "--no-wait", "--hours", "0.05"], { ...env, FACTORY_MEM_WAIT: "1" }).stdout;
+    has(out, "iteration 2: Behind it too (g/behind2)");
+  });
+  test("  its finished unit waits, not sent back, and no check ran", () => {
+    assert.equal(state("g/behind1"), "merging");
+    has(out, "Behind the editor (g/behind1): `just check` gave no verdict on it: a heavy job in it couldn't get its turn (exit 75) (the landing check never started: it waited");
+  });
+  test("  the overseer hears what holds the memory, and how to give it back", () => {
+    assert.equal(unrun().length, 1, f.events());
+    has(unrun()[0], "held by editor, a standing reservation (7.0G");
+    has(unrun()[0], "`just heavy release <name>`");
+  });
+  test("  nobody is told main is broken", () => { assert.ok(!f.events().includes("\tmain-broken\t")); });
+  test("once the memory is given back, both land", async () => {
+    const exited = once(editor, "exit"); editor.kill(); await exited;
+    const later = f.loopSh(["--max", "1", "--no-wait", "--hours", "0.05"], { ...env, FACTORY_CHECK_RETRY: "0" }).stdout;
+    has(later, "unit/g/behind1 merged into main");
+    has(later, "unit/g/behind2 merged into main");
   });
 });
 

@@ -34,7 +34,9 @@ can push to; on one machine, a bare repo on the same disk). Then:
   loop runs `just check` once more, then merges the branch into main, pushes
   (merging and checking again if someone pushed first) and deletes it.
   A finished branch that couldn't land yet is pushed, and any lane on its
-  machine lands it once the lane that worked it is gone. A branch the loop can't merge
+  machine lands it once the lane that worked it is gone. When the check
+  fails on main too, the lane files "Main's check fails on <machine>" and
+  takes it next (`factory/loop.sh --help`, the landing check's answer). A branch the loop can't merge
   becomes a "Merge main on <machine> lane <n>" unit that only that lane
   takes, before anything else it can take, once it fits before the stop
   (with nothing to go by it needs `"min_unit_minutes"`, 45 by default: it

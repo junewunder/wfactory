@@ -6,6 +6,8 @@
 // every tracker write go straight to origin's main (the tracker pushes them), so a branch never
 // carries tracker/ changes. Kept apart from the loop, where
 // leases, pauses and CI meet: the bugs clustered where all of them were interleaved.
+// A check that fails on main too isn't taken for a broken main (fixMain, unjudged): over two weeks
+// in one factory, none of fourteen such failures came from main's code.
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -22,8 +24,9 @@ export interface LaneCtx {
   log(s: string): void;
   event(kind: string, msg: string): void;
   // `just check` with these busy groups (FACTORY_BUSY_GROUPS), its output to <log>, stopped by
-  // a signal to the loop: true if it passed. behind: the unit whose landing waits on it.
-  check(log: string, busy: string, behind?: string): Promise<boolean>;
+  // a signal to the loop: its exit status (unjudged says which ones are no verdict on the tree).
+  // behind: the unit whose landing waits on it.
+  check(log: string, busy: string, behind?: string): Promise<number>;
   // After a signal: what was running is stopped, and the loop goes no further (it never resolves).
   halt(): Promise<void>;
   // The tracker (tr.ts's tr: in the loop's process), with these variables added.
@@ -39,6 +42,8 @@ export interface LaneCtx {
   // The ci.affected hook over old..new, for the review: its lines ("<group>\t<why>"), or "" when
   // the project has none or it failed.
   affectedBy(old: string, nw: string): Promise<string>;
+  // Is lane <n> of this machine running now (its lane lock held)? Unknown without it.
+  laneRunning?(n: string): boolean;
 }
 
 // FACTORY_PID: the loop's own process, which a landing claim lives with.
@@ -66,6 +71,46 @@ const duration = (ms: number) => {
   return h ? `${h} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`;
 };
 const sha1 = (s: string) => crypto.createHash("sha1").update(s).digest("hex");
+
+// A check that ended without judging the tree: why, or null when its exit status is a verdict
+// (0 passed, anything else failed). Out of time (124, from `timeout`), a heavy job in it that
+// couldn't get its turn (75, `just capped`), one that couldn't check (79, as a check before
+// landing says it), or killed by a signal (128 and up: the machine out of memory, a stop). None of
+// these says the branch fails, nor main: the landing waits and is tried again.
+export function unjudged(rc: number): string | null {
+  if (rc === 124) return "it ran out of time";
+  if (rc === 75) return "a heavy job in it couldn't get its turn (exit 75)";
+  if (rc === 79) return "it couldn't check (exit 79)";
+  if (rc >= 128) return `it was killed (signal ${rc - 128})`;
+  return null;
+}
+// A branch whose check gave no verdict is tried again this long after, not at every look: a check
+// that ran out of time would otherwise run again and again, the lane taking nothing meanwhile.
+// ($FACTORY_CHECK_RETRY, seconds, in its place.)
+export const CHECK_RETRY_MS = 30 * 60_000;
+const checkRetry = () => { const s = Number(process.env.FACTORY_CHECK_RETRY ?? ""); return process.env.FACTORY_CHECK_RETRY && s >= 0 ? s * 1000 : CHECK_RETRY_MS; };
+// runs/.check-unrun: the branches whose check gave no verdict, and when ("<key>\t<ms>" a line).
+const UNRUN = "runs/.check-unrun", UNRUN_TOLD = "runs/.check-unrun-told";
+function unrunAt(key: string): number | null {
+  const l = (read(UNRUN) ?? "").split("\n").find((x) => x.startsWith(`${key}\t`));
+  return l ? Number(l.split("\t")[1]) || null : null;
+}
+function setUnrun(key: string, now: number) {
+  const keep = (read(UNRUN) ?? "").split("\n").filter((x) => x && !x.startsWith(`${key}\t`) && now - (Number(x.split("\t")[1]) || 0) < checkRetry());
+  try { fs.writeFileSync(UNRUN, [...keep, `${key}\t${now}`].map((x) => x + "\n").join("")); } catch {}
+}
+const hhmm = (ms: number) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+
+// The unit a lane files when main's own check fails in its clone, one per machine: a session finds
+// what fails (main's code, or something on the machine that isn't in git) and puts it right.
+export const fixUnitOf = (host: string) => `merge/${`${host.toLowerCase().replace(/[^a-z0-9.-]/g, "-").replace(/^[^a-z0-9]+/, "") || "host"}`.slice(0, 40)}-main-check`;
+// How many sessions get to put it right before the lanes stop for the overseer.
+export const FIX_TRIES = 2;
+// And how long it may wait with no session at it (it doesn't fit before the stop, its lane gave it
+// back) while landings fail: past this the lanes stop too, or they'd pile work up with nobody told.
+export const FIX_IDLE_MS = 60 * 60_000;
+// runs/.main-check-idle: since when this lane has seen that unit open with nobody at it.
+const FIX_IDLE = "runs/.main-check-idle";
 
 // This lane's merge units (the merges it couldn't do, which only it takes), first in line first:
 // runs/.merge-unit, one per line. A lane takes other work while one waits, so a second can be
@@ -100,7 +145,10 @@ export class Landing {
   // (why, when land() returned 5: the check before landing's last line)
   unreviewed = ""; // why its review gave no verdict, told once it has landed
   busy = "";    // the groups busy here at the last look (busyNow)
-  red = "";     // main itself fails the check: why, until something lands. The loop takes no new units.
+  // Main's check fails here and the sessions sent to find why didn't put it right (fixMain): why,
+  // until something lands. The loop takes no new units.
+  red = "";
+  redHow = "";  // what became of the unit that was to put it right, for the overseer
   constructor(c: LaneCtx) { this.c = c; }
   get om() { return `origin/${this.c.MAIN}`; }
 
@@ -298,11 +346,11 @@ export class Landing {
   busyWhy() { return this.busy ? `, while units of ${this.busy} have outputs in work/ that aren't on main yet` : ""; }
 
   // Merge a finished unit's branch into main and push. 0 = landed; 1 = it needs a merge unit
-  // (why says why); 2 = origin unreachable, or its review was stopped (the branch waits here); 3 =
-  // main itself fails the check (the branch waits for a fix, and the lane stops taking units; busy
-  // set: perhaps for another unit's outputs in work/, so it's checked again when none is busy, or
-  // at the next start); 4 = its review asks for fixes (findings says which); 5 = the project's check
-  // before landing failed (why has its last line).
+  // (why says why); 2 = origin unreachable, its review was stopped, or its check gave no verdict
+  // (unjudged: the branch waits here, and is tried again); 3 = main itself fails the check in this
+  // clone (the branch waits while a session finds what fails, fixMain; busy set: perhaps another
+  // unit's outputs in work/); 4 = its review asks for fixes (findings says which); 5 = the project's
+  // check before landing failed (why has its last line).
   async land(b: string, t: string): Promise<0 | 1 | 2 | 3 | 4 | 5> {
     const { log, event, MAIN, HOST, LANE, TDIR } = this.c;
     this.why = ""; this.findings = ""; this.unreviewed = "";
@@ -322,7 +370,9 @@ export class Landing {
       return 0;
     }
     // This branch already failed on this main, and main failed alone: neither has changed, so
-    // don't check again. A branch that changes (one that fixes main, say) is checked as usual.
+    // don't check again while the unit that's to put main right (fixMain) is open or stuck. Once
+    // it's done, what it fixed may be nothing in main's code (a file in work/), so it's checked
+    // again. A branch that changes (one that fixes main, say) is checked as usual.
     // The key is the branch's own change (its diff from main, outside tracker/), which merging
     // main in doesn't alter, plus main's code. And whether any group was busy: main may fail for
     // another unit's outputs in work/ (a check that doesn't skip FACTORY_BUSY_GROUPS), so once
@@ -330,8 +380,13 @@ export class Landing {
     this.busyNow(u);
     let mc = this.mainCode();
     let key = `${this.ownChange()} ${mc} ${this.busy ? "busy" : ""}`;
-    if (mc && (read("runs/.main-broken") ?? "").split("\n").includes(key)) {
+    if (mc && (read("runs/.main-broken") ?? "").split("\n").includes(key) && !["", "done", "dropped", "broken"].includes(this.fixState())) {
       this.why = `main itself fails \`just check\`${this.busyWhy()} (runs/main-check.log)`; return 3;
+    }
+    // Its check gave no verdict a while ago, on this main: not again yet (CHECK_RETRY_MS).
+    const un = unrunAt(key);
+    if (un !== null && Date.now() - un < checkRetry()) {
+      this.why = `\`just check\` gave no verdict on it at ${hhmm(un)}; it's checked again after ${hhmm(un + checkRetry())}`; return 2;
     }
     // The tracker lives on main: tracker/ edits on a branch are dropped, never merged.
     const base = git("merge-base", this.om, "HEAD") ?? "";
@@ -371,22 +426,32 @@ export class Landing {
       // main only gets what passes the oracle: checked here whatever the session did.
       if (!checked) {
         this.busyNow(u);
-        if (!(await this.c.check("runs/land-check.log", this.busy, t))) {
+        const rc = await this.c.check("runs/land-check.log", this.busy, t);
+        // No verdict (out of time, killed, couldn't run): it says nothing of the branch or of main.
+        if (unjudged(rc)) return this.unrun(b, t, "runs/land-check.log", unjudged(rc)!);
+        if (rc !== 0) {
           this.why = `\`just check\` fails on the branch with main merged in (${lastLine("runs/land-check.log")})`;
-          // If main fails alone, the branch isn't to blame: no merge unit, wait for main to be fixed.
+          // If main fails alone, the branch isn't to blame: no merge unit for it (fixMain instead).
           // -f: a check that rewrote tracked files would otherwise keep us on the branch's tree.
           g("checkout", "-q", "-f", "--detach", this.om);
-          if (!(await this.c.check("runs/main-check.log", this.busy, t))) {
+          const mrc = await this.c.check("runs/main-check.log", this.busy, t);
+          // (Whose fault the branch's failure is can't be told without main's verdict.)
+          if (unjudged(mrc)) return this.unrun(b, t, "runs/main-check.log", unjudged(mrc)!);
+          if (mrc !== 0) {
             g("checkout", "-q", "-f", b); mc = this.mainCode(); key = `${this.ownChange()} ${mc} ${this.busy ? "busy" : ""}`;
             if (mc) {
               const keep = (read("runs/.main-broken") ?? "").split("\n").filter((l) => l.endsWith(` ${mc} `) || l.endsWith(` ${mc} busy`));
               try { fs.writeFileSync("runs/.main-broken.new", [...keep, key].map((l) => l + "\n").join("")); } catch {}
             }
             try { fs.renameSync("runs/.main-broken.new", "runs/.main-broken"); } catch {}
-            this.why = `main itself fails \`just check\`${this.busyWhy()} (${lastLine("runs/main-check.log")})`; return 3;
+            this.why = `main itself fails \`just check\`${this.busyWhy()} (${lastSaid("runs/main-check.log", 160)})`; return 3;
           }
+          // Main passes alone here: the branch is what fails, and nothing is left to put right on main.
+          this.fixOver(`main passed it alone when {unit:${u}} was checked`);
           g("checkout", "-q", "-f", b); return 1;
         }
+        // A check has run to a verdict again: nothing is held for want of one.
+        for (const f of [UNRUN, UNRUN_TOLD]) fs.rmSync(f, { force: true });
         checked = this.mainCode() || "1";
       }
       // The project's check before landing, once, on the merged tree: cheaper than the review, so
@@ -412,6 +477,8 @@ export class Landing {
       if (g("push", "-q", "origin", MAIN)) {
         for (const f of ["runs/.main-broken", "runs/.main-broken-told", `runs/.merge-tries-merge_${this.mergeSlug(u)}`]) fs.rmSync(f, { force: true });
         this.red = "";
+        // The check passed here on a tree with main in it: a unit still open to make it pass is moot.
+        this.fixOver(`{unit:${u}} landed`);
         if (this.unreviewed) {
           event("review-skipped", `${t} landed without the loop's review: ${this.unreviewed}`);
           this.c.tr(["note", u, `Landed without the loop's review: ${this.unreviewed}`], LOOP);
@@ -426,6 +493,109 @@ export class Landing {
       if (!g("fetch", "-q", "origin", MAIN)) return 2;
     }
     this.why = "origin refused the push six times"; return 2;
+  }
+
+  // A landing's check gave no verdict (unjudged): the branch waits, pushed, and is checked again
+  // after CHECK_RETRY_MS, the lane taking other work meanwhile. The overseer hears once, then every
+  // UNRUN_RETELL_MS while landings stay held for it, with how long (as for a check before landing
+  // that couldn't check): a check that can never finish here would otherwise hold them silently.
+  unrun(b: string, t: string, logf: string, how: string): 2 {
+    const { log, event, HOST, LANE } = this.c;
+    g("checkout", "-q", "-f", b);
+    const last = lastSaid(logf, 400), now = Date.now();
+    setUnrun(`${this.ownChange()} ${this.mainCode()} ${this.busy ? "busy" : ""}`, now);
+    this.why = `\`just check\` gave no verdict on ${logf === "runs/main-check.log" ? "main" : "it"}: ${how}${last ? ` (${last})` : ""}`;
+    log(`check: ${t}: ${this.why}; it waits, not sent back, and is checked again after ${hhmm(now + checkRetry())}`);
+    const held = unrunHeld(UNRUN_TOLD, now);
+    if (held === null || now - held.told >= UNRUN_RETELL_MS) {
+      const since = held?.since ?? now;
+      const long = now - since >= 60_000 ? `; landings have been held ${duration(now - since)} so far` : "";
+      event("check-unrun", `${t}: ${this.why}. That says nothing of the branch or of main, so ${HOST} lane ${LANE} keeps taking units, and the branch waits and is checked again every ${duration(checkRetry())} (${logf} in its clone has the output)${long}`);
+      try { fs.writeFileSync(UNRUN_TOLD, JSON.stringify({ since, told: now, why: this.why }) + "\n"); } catch {}
+    }
+    return 2;
+  }
+
+  // The unit that's to make main's check pass on this machine (fixMain): its ID, its state ("" when
+  // there's none, or the tracker can't say), and this lane's count of the sessions it sent.
+  get fixId() { return fixUnitOf(this.c.HOST); }
+  fixState() { const r = this.c.tr(["state", this.fixId]); return r.code === 0 ? r.out.trim() : ""; }
+  get fixTries() { return `runs/.merge-tries-${this.fixId.replace(/\//g, "_")}`; }
+  // A landing passed its check here: main's check passes on this machine, so that unit is closed
+  // unless a session has it (one that does finds the check passing, and records it done).
+  fixOver(how: string) {
+    for (const f of [this.fixTries, FIX_IDLE]) fs.rmSync(f, { force: true });
+    // (Its file first: no tracker call at a landing unless there is such a unit.)
+    if (!unitField(`${this.c.TDIR}/groups/merge.json`, this.fixId, "id") || !["ready", "resource", "waiting", "interrupted", "stuck", "parked"].includes(this.fixState())) return;
+    this.c.tr(["drop", this.fixId, "--why", `\`just check\` passes on ${this.c.HOST} again: ${how}`], LOOP);
+    dropMergeUnits((x) => x === this.fixId);
+  }
+  // Main's own check fails in this clone (land() returned 3). That alone doesn't say main's code is
+  // broken: the check also reads this machine (work/, which its lanes share; a tool; the tracker's
+  // data), and over two weeks in one factory none of fourteen such failures came from main's code,
+  // while each stopped a lane until someone started it again. So a session looks: one unit per
+  // machine, pinned to the lane that files it and taken before anything else, as a lane's merge is.
+  // Other lanes here find it open, leave their finished branches waiting and go on. Whatever it
+  // fixes (main's code on its branch, a file in work/ where it lies), the waiting branches are
+  // checked again once it's done. Still failing after FIX_TRIES sessions, or the unit stuck or with
+  // the owner: that's the evidence main is red, and only then do the lanes stop.
+  // own: the branch that failed is that unit's own (its fix didn't fix it).
+  // "open": a session has it or will; "red": the lanes can't put it right themselves (redHow).
+  fixMain(why: string, own: boolean): "open" | "red" {
+    const { log, HOST, LANE, MAIN } = this.c;
+    const id = this.fixId, tf = this.fixTries, me = `${HOST}/${LANE}`;
+    const st = this.fixState();
+    const title = `Main's check fails on ${HOST}`.slice(0, 60);
+    // (The tracker refuses text naming a unit by its bare ID, which a check's last line may do:
+    // such a write is made again without that line.)
+    const plain = `main itself fails \`just check\`${this.busyWhy()}`;
+    const said = (args: (why: string) => string[]) => this.c.tr(args(why), LOOP).code === 0 || this.c.tr(args(plain), LOOP).code === 0;
+    const detail = (why: string) => `\`just check\` fails on origin/${MAIN} itself in ${HOST} lane ${LANE}'s clone: ${why}. \`runs/main-check.log\` there has its output. Nothing lands on ${HOST} until it passes. That doesn't say ${MAIN}'s code is broken: the check also reads this machine. Run \`just check\` on this unit's branch (it starts from ${MAIN}) and find what fails. If it's ${MAIN}'s code, fix it on this branch. If it's something on this machine that isn't in git (a file a session left in work/, a stale recording or cache, a tool), put that right where it lies, or make the check cope with it. The outputs of units other lanes have in flight are theirs (\`factory/tracker busy\` names their groups): leave them, and if they're what fails, make that part of the check skip $FACTORY_BUSY_GROUPS (docs/factory.md, the oracle). If the tracker's own data is broken (\`just lint --broken\`), repair it with the tracker's commands. Never weaken the check so it passes. Once \`just check\` passes, commit what you changed and record this unit done; the loop then lands the branches that wait.`;
+    if (["stuck", "you", "parked"].includes(st)) { this.redHow = st === "you" ? "waits on the owner" : st === "parked" ? "is parked" : "didn't put it right"; return "red"; }
+    // Open already (another lane's here, or this lane's from before): it settles it.
+    if (st && !["done", "dropped", "broken"].includes(st) && !(own && st === "merging")) {
+      const pin = unitField(`${this.c.TDIR}/groups/merge.json`, id, "lane");
+      // Filed by a lane here that isn't running any more, and nobody at it: this lane takes it,
+      // or every lane here would leave its branches waiting on a unit none of them works.
+      if (pin !== me && ["ready", "resource", "waiting", "interrupted"].includes(st) && this.c.laneRunning?.(pin.split("/")[1] ?? "") === false && this.c.tr(["edit", id, "--lane", me], LOOP).code === 0) {
+        addMergeUnit(id);
+        log(`git: ${title} (${id}) was lane ${pin.split("/")[1]}'s, which isn't running: this lane takes it next`);
+        return "open";
+      }
+      if (pin === me) addMergeUnit(id);
+      // Nobody at it (it doesn't fit before the stop, or was given back) for FIX_IDLE_MS: red.
+      if (["ready", "resource", "waiting", "interrupted"].includes(st)) {
+        const since = Number(cat(FIX_IDLE) ?? 0) || Date.now();
+        if (Date.now() - since >= FIX_IDLE_MS) { this.redHow = `has waited ${duration(Date.now() - since)} with no lane taking it`; return "red"; }
+        if (!fs.existsSync(FIX_IDLE)) fs.writeFileSync(FIX_IDLE, `${since}\n`);
+      } else fs.rmSync(FIX_IDLE, { force: true });
+      log(`git: ${title} (${id}) is to put it right; finished branches wait for it, and the lane goes on`);
+      return "open";
+    }
+    // (A count from an earlier failure of main's check, a day or more old, isn't this one's.)
+    let old = true;
+    try { old = Date.now() - fs.statSync(tf).mtimeMs > 24 * 3600_000; } catch {}
+    const tries = st && !old ? (Number(cat(tf) ?? 0) || 0) + 1 : 1;
+    if (tries > FIX_TRIES) {
+      said((why) => ["block", id, "--why", `\`just check\` still fails on ${HOST} after ${FIX_TRIES} sessions were sent to put it right: ${why}`]);
+      dropMergeUnits((x) => x === id);
+      log(`git: ${title} (${id}) didn't put it right in ${FIX_TRIES} sessions; it's stuck, for the overseer`);
+      this.redHow = "didn't put it right";
+      return "red";
+    }
+    this.c.tr(["add-group", "merge", "--title", "Merges the loop couldn't do by itself", "--priority", "1000"]);
+    if (!st) {
+      // (Not filed: the lane goes on all the same, and the next landing that fails so files it.)
+      if (!said((why) => ["add-unit", id, "--title", title, "--detail", detail(why), "--lane", me, "--check", "recorded"])) { log(`tracker: couldn't file ${title} (${id})`); return "open"; }
+    } else {
+      said((why) => ["edit", id, "--detail", detail(why), "--lane", me]);
+      this.c.tr(["reopen", id, "--note", `\`just check\` still fails on ${HOST}: ${why}`.slice(0, 200)], LOOP);
+    }
+    fs.writeFileSync(tf, `${tries}\n`);
+    fs.rmSync(FIX_IDLE, { force: true });
+    addMergeUnit(id);
+    log(`git: filed ${title} (${id}), which this lane takes next: a session finds what fails, in ${MAIN}'s code or on this machine`);
+    return "open";
   }
 
   // The project's checks before a unit lands (tracker/project.json ci.land, \`tracker ci-land --help\`):
@@ -559,7 +729,10 @@ export class Landing {
 
   // After a session: land a finished unit, save an unfinished one.
   async finishUnit(u: string, b: string, t: string) {
-    const { log, event, HOST, LANE } = this.c;
+    const { log, event, HOST, LANE, TDIR } = this.c;
+    // (A session of this lane was just at the unit that's to put main's check right: it hasn't
+    // been waiting untaken, however that session ended.)
+    if (u === this.fixId) fs.rmSync(FIX_IDLE, { force: true });
     let st = this.state(u);
     // In review with no branch on its record: a check given up without a verdict put it back
     // (the reviewer's session ended). Nothing of it is finished here: save, never land.
@@ -594,21 +767,26 @@ export class Landing {
       }
       else {
         log(`git: ${b} waits: ${this.why}`);
-        // Main is red: every landing fails until it's fixed, so the lane stops taking units (the
-        // overseer stops the rest, fixes main, and starts them again). Busy or not: with two lanes
-        // here something nearly always is, and a check that doesn't skip the busy groups is the
-        // project's to fix (the event says so).
-        this.red = this.why;
-        // Once per broken main, not once per branch and look; again if that was while units
-        // here were busy (perhaps the cause) and it's still broken once none are.
-        let told = cat("runs/.main-broken-told") ?? "";
-        const mc = this.mainCode();
-        if (told.split(" ")[0] !== mc || (!this.busy && told !== `${mc} `)) {
-          told = `${mc} ${this.busy ? "busy" : ""}`;
-          const stops = `${HOST} lane ${LANE} stops taking units, its finished branch pushed. Stop the lanes, fix main, and start them again once main passes`;
-          if (!this.busy) event("main-broken", `${this.why}; ${stops}`);
-          else event("main-broken", `${this.why}. If the check doesn't skip FACTORY_BUSY_GROUPS (docs/factory.md, the oracle), those may be what fails, and main passes on a clean checkout; ${stops}`);
-          fs.writeFileSync("runs/.main-broken-told", `${told}\n`);
+        // Main's check fails here too, so no landing on this machine passes. A session is sent to
+        // find what fails (fixMain), and the lane goes on. Only when that doesn't put it right is
+        // main red: every landing fails until someone else fixes it, so the lane stops taking units
+        // (the overseer stops the rest, fixes main, and starts them again). Busy or not: with two
+        // lanes here something nearly always is, and a check that doesn't skip the busy groups is
+        // the project's to fix (the event says so).
+        if (this.fixMain(this.why, u === this.fixId) === "red") {
+          this.red = this.why;
+          // Once per broken main, not once per branch and look; again if that was while units
+          // here were busy (perhaps the cause) and it's still broken once none are.
+          let told = cat("runs/.main-broken-told") ?? "";
+          const mc = this.mainCode();
+          if (told.split(" ")[0] !== mc || (!this.busy && told !== `${mc} `)) {
+            told = `${mc} ${this.busy ? "busy" : ""}`;
+            const fix = `${unitField(`${TDIR}/groups/merge.json`, this.fixId, "title") || "the unit filed to put it right"} (${this.fixId}) ${this.redHow} (\`just show ${this.fixId}\`)`;
+            const stops = `${HOST} lane ${LANE} stops taking units, its finished branch pushed. Stop the lanes, fix main, and start them again once main passes`;
+            if (!this.busy) event("main-broken", `${this.why}; ${fix}; ${stops}`);
+            else event("main-broken", `${this.why}; ${fix}. If the check doesn't skip FACTORY_BUSY_GROUPS (docs/factory.md, the oracle), those may be what fails, and main passes on a clean checkout; ${stops}`);
+            fs.writeFileSync("runs/.main-broken-told", `${told}\n`);
+          }
         }
         this.pushBranch(u, b); this.toMain();
       }
@@ -735,6 +913,12 @@ export class Landing {
 async function pause(s: number, c: LaneCtx) { if (s > 0) await sleep(s * 1000); await c.halt(); }
 // The last line of a check's log, cut to 80 characters (or n), for a reason.
 const lastLine = (f: string, n = 80) => ((read(f) ?? "").replace(/\n+$/, "").split("\n").pop() ?? "").trim().slice(0, n);
+// The same, with the line before it when the last is only `just` saying which recipe failed: that
+// one says what did.
+const lastSaid = (f: string, n: number) => {
+  const ls = (read(f) ?? "").replace(/\n+$/, "").split("\n").map((x) => x.trim()).filter(Boolean), last = ls.pop() ?? "";
+  return (/^error: recipe `/.test(last) && ls.length ? `${ls.pop()!.slice(0, n)}; ${last}` : last).slice(0, n + 80);
+};
 
 // A unit's field in a group's file, "" if there's none.
 export function unitField(file: string, id: string, k: string): string {

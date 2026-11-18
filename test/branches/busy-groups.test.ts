@@ -1,7 +1,7 @@
 // Two lanes on one laptop share work/: one lane's half-written outputs there don't hold up the
 // other's merges (2026-10-12: a factory's check saw them, and main looked broken). The check
 // is told the busy groups (FACTORY_BUSY_GROUPS); one that ignores them makes the branch wait, and
-// the overseer hears why. Run: node --test test/branches/
+// the unit the lane files to find what fails says they may be why. Run: node --test test/branches/
 import { describe, test, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -62,8 +62,9 @@ describe("a check that honours the busy groups", () => {
   test("  and the busy lane's own unit lands after", async () => { has(await s.go(), "unit/w/slow merged into main"); });
 });
 
-// A check that doesn't skip busy groups: main fails while they're busy. The branch waits, the
-// overseer hears why it may be, and it's checked again once those units move on (at the lane's next start).
+// A check that doesn't skip busy groups: main fails while they're busy. The branch waits, the unit
+// the lane files to find what fails says why it may be (nobody is told main is broken), and the
+// branch is checked again once those units move on (at the lane's next start).
 describe("a check that ignores the busy groups", () => {
   let s: ReturnType<typeof slow>;
   let h4 = "";
@@ -75,13 +76,18 @@ describe("a check that ignores the busy groups", () => {
     h4 = quick("quick2");
     has(h4, "while units of w have outputs in work/");
   });
-  test("  the overseer hears the busy groups may be why", () => {
-    has(h2.events().split("\n").filter((l) => l.includes("main-broken")).join("\n"), "doesn't skip FACTORY_BUSY_GROUPS");
+  test("  the unit filed to find what fails says the busy groups may be why, and to leave their outputs", () => {
+    const card = h2.ok(["show", "merge/h-main-check"]);
+    has(card, "while units of w have outputs in work/ that aren't on main yet");
+    has(card, "make that part of the check skip $FACTORY_BUSY_GROUPS");
+    assert.equal(h2.events().split("\n").filter((l) => l.includes("main-broken")).length, 0, h2.events());
   });
   test("  once the other lane's unit is done, the waiting branch lands at the next start", async () => {
     await s.go();
     has(quick("quick3"), "unit/g/quick2 merged into main");
   });
+  // The check passes here again, so there's nothing left for that unit to find.
+  test("  and that unit is dropped, unworked", () => { assert.equal(h2.ok(["state", "merge/h-main-check"]), "dropped"); });
 });
 
 // The other lane's unit interrupted, not landed: its outputs stay in work/, and its group stays busy.

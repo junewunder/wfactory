@@ -183,6 +183,42 @@ reopened doesn't count, and neither does a set that lacks the store's own
 record of whose it is. Any other set stays where it is, costs no session,
 and gets one line in the morning summary for each run it outlasts.
 
+### 45. "Main is red" with main fine (the mod factory, November)
+
+**What happened.** A lane whose landing check failed on the branch, and
+then on main in the same clone, took main for broken: it stopped taking
+units and told the overseer, who was to stop the rest, fix main and start
+them again. Over two weeks that fired fourteen times on the mod factory's
+two laptops and stopped lanes nine times. None of the fourteen came from
+main's code:
+
+| What the check had failed on | Times |
+|---|---|
+| The tracker's own data. A CI step wrote a check's name with a slash in it into a group's data, and a question's option said units were dropped without naming them. The tracker took both writes, and its lint, which the project's check runs, rejected them. | 3 |
+| Nothing, since it never judged the tree. The check ran past its 30 minutes on the slower laptop, or a heavy job in it gave up waiting for memory that an editor's reservation held, or it was killed waiting. | 5 |
+| The `work/` folder the machine's lanes share: a stale recording a test read, files a stage had written that no code in git accounted for, a scratch build a session left there. All of them pass on a clean checkout. | 6 |
+
+One night the overseer's thread had ended, and lanes that stopped at 06:58
+on a question's wording stayed down until the owner looked at noon. Another
+night, once the project's check waited for memory where it used to fail,
+two lanes' landing checks waited behind the reservation of an editor no
+session was using, one for 45 minutes and one for over two hours, until the
+overseer stopped the editor by hand.
+
+**What it cost.** Nine stops, each lasting until someone started the lanes
+again: once a morning on both laptops, once most of a last call.
+
+**The rule.** A check that fails on main in a lane's clone says something
+on that machine fails. It doesn't say main's code is broken, and the loop
+can't tell which. So the lane doesn't stop: it files one unit per machine
+for a session to find what fails and put it right, takes it next, and
+leaves finished branches waiting for it. Only when two sessions haven't
+fixed it is main red. A check that never judged the tree (out of time,
+killed, no memory for it) is no verdict: the branch waits and is tried
+again, and the check's wait for memory has an end. A slip in the tracker's
+records fails no landing, since no branch carries them, and a write the
+tracker's lint would call broken data is refused when it's made.
+
 ## Running many lanes
 
 ### 10. The first two-laptop day (the mod factory)

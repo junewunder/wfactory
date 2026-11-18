@@ -88,6 +88,62 @@ describe("lint and lint --broken", () => {
   });
 });
 
+// The loop's check before a branch lands runs the project's `just check`, and a project's check
+// runs lint. The tracker's records are main's: no branch carries them, so a slip in one says
+// nothing of the branch, nor of main's code (a question's wording failed a factory's lint on main,
+// every landing failed with it, and the lanes stopped on "main is red" for the morning).
+describe("lint inside the loop's landing check (FACTORY_LANDING)", () => {
+  const LANDING = { FACTORY_LANDING: "1" };
+  const note = (text: string | null) => f.edit("tracker/groups/fenn.json", (g) => {
+    g.units.find((u: { id: string }) => u.id === "fenn/anim").notes = text === null ? [] : [{ at: "2026-10-10T00:00:00Z", by: "x", text }];
+  });
+  let out = "";
+  test("a slip in a record doesn't fail it", () => {
+    note("see fenn/rig-import");
+    assert.equal(t(["lint"]).code, 1);
+    const r = t(["lint"], LANDING, { merged: true });
+    out = r.stdout;
+    assert.equal(r.code, 0, out);
+  });
+  test("  it's listed as a warning, and why it doesn't fail is said", () => {
+    has(out, "warning: fenn/anim note: names fenn/rig-import bare");
+    has(out, "1 slip in the tracker's records, above: they're main's, not the branch's, so a landing doesn't fail on them");
+  });
+  test("broken data fails it all the same", () => {
+    f.edit("tracker/groups/fenn.json", (g) => { g.units.find((u: { id: string }) => u.id === "fenn/anim").needs = ["fenn/nowhere"]; });
+    assert.equal(t(["lint"], LANDING).code, 1);
+    setup(["edit", "fenn/anim", "--needs", "fenn/rig-import"]);
+  });
+  // What a branch can change (AGENTS.md, the spec, memory/) is the branch's, and fails it as ever.
+  test("so does a slip in a file a branch can change", () => {
+    note(null);
+    fs.writeFileSync(f.at("AGENTS.md"), "x\n".repeat(130));
+    const r = t(["lint"], LANDING, { merged: true });
+    assert.equal(r.code, 1, r.stdout);
+    has(r.stdout, "AGENTS.md is 131 lines (max 120)");
+    fs.rmSync(f.at("AGENTS.md"));
+  });
+  test("lint passes again", () => { assert.equal(t(["lint"]).code, 0); });
+});
+
+// A group's data values fill its data paths: lint calls one with a path in it broken data, and a
+// loop refuses to start over broken data. So the write refuses it (a factory's CI step wrote a
+// check's name with a slash in it there, and every landing failed on lint until it was taken out).
+describe("a group's data value that lint would call broken is refused when it's written", () => {
+  test("a value with a path in it", () => {
+    setup(["add-group", "dat", "--title", "Data group"]);
+    for (const v of ["check of fenn/jab", "..", "a\\b"]) {
+      const r = t(["edit-group", "dat", "--data", `checks=${v}`], {}, { merged: true });
+      assert.equal(r.code, 2, r.stdout);
+      has(r.stdout, "has a path in it");
+      has(lastLine(r.stdout), "nothing was recorded");
+    }
+    assert.equal(f.json("tracker/groups/dat.json").data, undefined);
+  });
+  test("on a new group too", () => { assert.equal(t(["add-group", "dat2", "--title", "Data group two", "--data", "mod=a/b"]).code, 2); });
+  test("and lint still passes", () => { assert.equal(t(["lint"]).code, 0); });
+});
+
 // Agents write {d:<slug>} without the d/ a decision's ID starts with: it shows as the decision
 // all the same, and a reference to nothing is a slip lint reports.
 describe("references to decisions and questions by their slug", () => {

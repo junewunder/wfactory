@@ -163,8 +163,11 @@ lands; say so, and that `just tracker merged --branch <branch>` clears it.
   missing, an account to sign in), tell them what they need to do and what
   it holds up. Otherwise `just reopen` it with a note on the way round, and
   restart nothing: the lane already went on;
-- a `main-broken` event: main's own check fails, so nothing can land.
-  Tell the owner now, not in the report, and follow "Main is red" in step 4;
+- a `main-broken` event: main's own check fails and the sessions the lane
+  sent to fix it couldn't, so nothing can land. Tell the owner now, and
+  follow "Main is red" in step 4. A `check-unrun` event (a landing check
+  out of time, killed, or without memory: the lane goes on) needs you only
+  if it repeats: give back what holds the memory, or tell the owner;
 - a `review-skipped` event: a branch landed without the loop's review (the
   event says why). Several in a row mean the reviewer can't run at all (its
   model, `review_model` in `tracker/project.json`, or the CLI): fix that, or
@@ -420,12 +423,10 @@ end-of-run report sums them up in one line.
      --broken` and `just next`, fix what you can with the tracker CLI, then
      restart. A slip in someone's
      note doesn't stop a lane; fix it quietly when you see it.
-   - **"main is red"** (a `main-broken` event came with it), or the same
-     landing failure on two lanes in a row: main's own check fails on a
-     clean checkout of main, so no lane's work can land, and every unit
-     worked meanwhile only piles up waiting. The lane that found it already
-     stopped taking units, with its finished branch pushed. Never file a
-     unit for main and leave the lanes running:
+   - **"main is red"** (a `main-broken` event came with it): main's own
+     check fails there, and the unit the lane filed for it (`just show` the
+     ID in the event: what its sessions tried) didn't fix it. The lane
+     stopped taking units, with its finished branch pushed:
      1. tell the owner now, in one line: what fails (the event's reason,
         `runs/main-check.log` in that lane's clone) and that the lanes are
         coming down;
@@ -441,13 +442,11 @@ end-of-run report sums them up in one line.
         started before main passes stops again (at once if a branch of its
         waits, else after its first unit), so a restart for this doesn't
         count toward the 3.
-     A `main-broken` event that says FACTORY_BUSY_GROUPS may be why: run
-     `just check` on a clean checkout of origin's main first. If it passes,
-     main isn't red, but the project's check fails on other units' outputs
-     in the shared work/, so lanes sharing a machine stop each other again
-     after a unit or so. Treat fixing the check as fixing main (3. above):
-     tell the owner it must skip the busy groups (docs/factory.md, the
-     oracle), and until it does, start one lane per machine.
+     A `main-broken` event that says FACTORY_BUSY_GROUPS may be why: if
+     `just check` passes on a clean checkout of origin's main, the check
+     fails on other units' outputs in the shared work/. Fix the check as you
+     would main (3. above): it must skip the busy groups (docs/factory.md,
+     the oracle); until it does, start one lane per machine.
      Last call isn't cut short by a red main: it runs to its end, and what
      couldn't land waits on its branch, for the report.
    - **Anything the spec doesn't cover:** tell the owner, and leave that lane down.

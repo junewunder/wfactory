@@ -351,6 +351,8 @@ export async function takeTurn(o: TurnOpts, env: NodeJS.ProcessEnv = process.env
       fs.rmSync(waitFile, { force: true });
       if (o.queueFile) fs.rmSync(o.queueFile, { force: true });
       const s = Math.round((Date.now() - t0) / 1000);
+      // (The loop's own: it isn't sent to `just long start`.)
+      if (o.late) return `it waited ${s < 60 ? `${s} s` : `${mins(s)} min`} for its turn and got none (${why}). \`just heavy\` shows what holds the budget; a standing reservation nothing uses goes with \`just heavy release <name>\``;
       return `queued ${s < 60 ? `${s} s` : `${mins(s)} min`} and still waiting (${why}); use \`just long start\``;
     }
     writeJson(waitFile, { what: o.what, lane: lane(env), mem: o.mem, since: t0, why, pid: process.pid, ...(o.late ? { holdsLane: true } : {}) } satisfies Waiting);
@@ -373,10 +375,12 @@ export async function takeTurn(o: TurnOpts, env: NodeJS.ProcessEnv = process.env
 // settle's runs inside the loop's own process (tr.ts), so what it used can't be told from the
 // loop's, and refresh runs many probes in one process, whose peak would be put on each (#116).
 export interface MemTurn { env: Record<string, string>; give(): void }
-export async function memoryTurn(what: string, cmds: string[], env: NodeJS.ProcessEnv = process.env, late: TurnOpts["late"] = () => {}): Promise<MemTurn | null> {
+// failAfter (seconds): the wait ends then, with what it was waiting on (a string) in place of a turn.
+export async function memoryTurn(what: string, cmds: string[], env: NodeJS.ProcessEnv = process.env, late: TurnOpts["late"] = () => {}, failAfter?: number): Promise<MemTurn | null | string> {
   if (!cmds.length || env.FACTORY_HEAVY_HELD) return null;
   const sized = cmds.map((c) => ({ c, mem: request(c, env) })).sort((x, y) => y.mem - x.mem);
-  const turn = await takeTurn({ what, cmd: sized[0].c, mem: sized[0].mem, memoryOnly: true, late }, env) as Turn;
+  const turn = await takeTurn({ what, cmd: sized[0].c, mem: sized[0].mem, memoryOnly: true, late, failAfter }, env);
+  if (typeof turn === "string") return turn;
   return { env: { FACTORY_HEAVY_HELD: "1", FACTORY_HEAVY_RES: turn.id }, give: turn.give };
 }
 
