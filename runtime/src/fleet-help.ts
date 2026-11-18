@@ -47,7 +47,10 @@ Usage:
                                           is at stake, 55 when nothing is: every machine
                                           answers, nothing waits on the owner, every running
                                           lane is busy, memory is above each reserve, and no lane
-                                          is within the hour of its stop time). Each machine's
+                                          is within the hour of its stop time; a quiet wait
+                                          that a timer's --check came in on watches on until
+                                          58 minutes after it, 110 in all at most, so the two
+                                          don't both wake the overseer). Each machine's
                                           daemon answers as soon as one of its lanes does
                                           (main.mjs daemon --help); a machine ssh can't reach
                                           is tried every FACTORY_WAIT_EVERY seconds (default
@@ -59,16 +62,15 @@ Usage:
                                           reads as a failure, and refuses (exit 2) while
                                           another wait for the same overseer runs. Each wake
                                           is noted in the overseer's journal (runs/oversee.log)
-  factory/fleet.sh wait --check [--as ID] the same, at once: what changed since this overseer's
-                                          last check (runs/.check-<ID>.json), for an overseer a
-                                          timer wakes instead of a wait. A lane that was running
-                                          then and has stopped, the wake-now events logged since,
-                                          memory, and a newer overseer, said as a wait says them
-                                          ("woke: time" when nothing changed). The first
-                                          counts from the overseer's attach (or from now,
-                                          with none); a wait moves it on too, so nothing a
-                                          wait told is told again. It shares the wait's lock,
-                                          so it's refused while a wait for that overseer runs
+  factory/fleet.sh wait --check [--as ID] for a timer under the wait, at once, exit 0. While that
+                                          overseer's wait runs: one line saying so ("watching:",
+                                          its pid and when it's back at the latest), no lane
+                                          read. With none running: what changed since this
+                                          overseer's last wait or check (runs/.check-<ID>.json;
+                                          the first counts from its attach), said as a wait says
+                                          it, then the heartbeat, and last the command that
+                                          starts a wait. A wait 10 minutes past its time and
+                                          not back is ended first, and it says so
   factory/fleet.sh note [--as ID] <text…> a line in the overseer's journal on this machine
                                           (what it decided, told the owner, waits for)
   factory/fleet.sh summary [--since T] [--done]
@@ -87,7 +89,8 @@ Usage:
                                           busy one works on, for how long, and when its session's
                                           transcript was last written; each machine's memory
                                           available; and what's for you (questions; a wait for
-                                          work in flight no lane lands)
+                                          work in flight no lane lands; a lane's landing check
+                                          or probe that has waited half an hour for memory)
   factory/fleet.sh state [<machine>…]     each lane's state and log tail
   factory/fleet.sh events [N]             the last N lines the owner may need to hear about (default 20)
   factory/fleet.sh pause [<machine>…]     find a good pausing spot: stop after the running unit
@@ -142,7 +145,10 @@ cap; the lanes' own sessions and jobs at their caps are their \`oom-kill\` event
 and a \`memory-low\` event when the memory available falls under the machine's
 reserve (its Reserve and GPU in docs/machines.md, as \`just heavy\` reads them),
 told once until it's back above it. The beat shows each machine's memory
-available and what holds its budget of heavy jobs (\`just heavy\` there).
+available and what holds its budget of heavy jobs (\`just heavy\` there). A lane's own
+heavy command (its landing check, a probe) that has waited 30 minutes for its turn in that
+budget holds its lane, finished work and all: its loop logs a \`landing-waits\` event, once,
+and the beat says so while it lasts.
 
 Without a machine, pause, pause-now, stop and state act on every machine in
 docs/machines.md. A machine ssh can't reach shows as "unreachable", never as
@@ -153,11 +159,11 @@ non-login ssh shell lacks.`;
 
 // The two tiers of events (Events, above). Wake now: what the owner must hear, or the overseer must
 // act on, before the morning. Summary: what only the end-of-run report needs.
-export const EVENTS_WAKE = `question ci-published ci-broken ci-known-failing ci-unrecorded ci-affected-failed land-check-unrun oom-kill stuck idle usage-pause usage-resume
+export const EVENTS_WAKE = `question ci-published ci-broken ci-known-failing ci-unrecorded ci-affected-failed land-check-unrun landing-waits oom-kill stuck idle usage-pause usage-resume
   main-broken review-skipped stuck-merge stuck-merging stuck-branch inbox-unread silent restart-failed lost-lease lease-kept store-up store-down store-torn gone-lane-left
   resumed resume-refused resume-failed oom memory-low`.split(/\s+/);
 // The bad news, whichever tier it's in: what \`fleet summary\` and the report put first.
-export const EVENTS_PROBLEM = `ci-broken ci-known-failing ci-unrecorded ci-affected-failed land-check-unrun oom-kill stuck main-broken review-skipped
+export const EVENTS_PROBLEM = `ci-broken ci-known-failing ci-unrecorded ci-affected-failed land-check-unrun landing-waits oom-kill stuck main-broken review-skipped
   stuck-merge stuck-merging stuck-branch inbox-unread silent restart-failed lost-lease store-down store-torn gone-lane-left resume-refused
   resume-failed oom memory-low ci-broken-noship ci-norun ci-known-failing-again store-aside-old resume-skipped land-check-timeout idle`.split(/\s+/);
 // The problem kinds that happen in a unit's session or landing: \`fleet summary\` says under each

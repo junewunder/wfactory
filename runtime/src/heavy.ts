@@ -179,8 +179,9 @@ function slotCount(env: NodeJS.ProcessEnv) {
 // run (scope) does, whatever it left there included.
 // A standing one (heavy reserve): held while its process (pid) or systemd unit runs.
 interface Res { id: string; what: string; cmd: string; project: string; lane: string; root: string; name: string; mem: number; cap?: string; pid: number; scope?: string; hold?: boolean; slot?: boolean; since: number; standing?: boolean; unit?: string }
-// A job waiting its turn: wait-<pid>.json.
-interface Waiting { what: string; lane: string; mem: number; since: number; why: string; pid: number }
+// A job waiting its turn: wait-<pid>.json. holdsLane: the loop's own (its landing check, a probe),
+// which its lane does nothing but wait with, finished work and all.
+interface Waiting { what: string; lane: string; mem: number; since: number; why: string; pid: number; holdsLane?: boolean }
 // A slot's holder: slot-<i>.json.
 interface Who { what: string; cmd: string; project: string; lane: string; since: number }
 
@@ -278,7 +279,14 @@ export interface TurnOpts {
   memoryOnly?: boolean;       // no slot, however long it's expected to run
   beside?: string;            // a reservation it runs inside (the loop's, around its check), not
                               // waited on: it fits if it would without that one
+  late?: (why: string, waited: number) => void;   // the loop's own: told once, when it has waited
+                              // lateAfter() seconds (what it waits for, and how long in ms)
 }
+// How long one of the loop's own heavy commands waits for its turn before that's news, in seconds:
+// 30 minutes. A landing took 3 to 11 minutes at the median in two factories' records and nine in
+// ten were over within half an hour; a wait for memory was under 10 minutes, or 45 and more.
+// (FACTORY_LAND_LATE: in seconds, for tests.)
+export const lateAfter = (env: NodeJS.ProcessEnv = process.env) => Number(env.FACTORY_LAND_LATE) > 0 ? Number(env.FACTORY_LAND_LATE) : 1800;
 
 // Wait until the budget has room for <mem> and, for a job not known to be short, a slot is
 // free; then hold both. A string instead when the slot would be held past failAfter: what it's
@@ -290,7 +298,7 @@ export async function takeTurn(o: TurnOpts, env: NodeJS.ProcessEnv = process.env
   const id = `${process.pid}-${Math.floor(Math.random() * 1e9)}`;
   const resFile = path.join(d, `res-${id}.json`), waitFile = path.join(d, `wait-${process.pid}.json`);
   const t0 = Date.now();
-  let said = "";
+  let said = "", late = false;
   for (;;) {
     let why = "";
     const fd = lock(path.join(d, "budget.lock"));
@@ -345,7 +353,8 @@ export async function takeTurn(o: TurnOpts, env: NodeJS.ProcessEnv = process.env
       const s = Math.round((Date.now() - t0) / 1000);
       return `queued ${s < 60 ? `${s} s` : `${mins(s)} min`} and still waiting (${why}); use \`just long start\``;
     }
-    writeJson(waitFile, { what: o.what, lane: lane(env), mem: o.mem, since: t0, why, pid: process.pid } satisfies Waiting);
+    writeJson(waitFile, { what: o.what, lane: lane(env), mem: o.mem, since: t0, why, pid: process.pid, ...(o.late ? { holdsLane: true } : {}) } satisfies Waiting);
+    if (o.late && !late && Date.now() - t0 >= lateAfter(env) * 1000) { late = true; o.late(why, Date.now() - t0); }
     if (o.queueFile) fs.writeFileSync(o.queueFile, `${why}\n`);
     // Said once, and again when what it waits on changes.
     const gist = why.replace(/[0-9.]+G|about [0-9]+ min|running [0-9]+ min/g, "");
@@ -364,10 +373,10 @@ export async function takeTurn(o: TurnOpts, env: NodeJS.ProcessEnv = process.env
 // settle's runs inside the loop's own process (tr.ts), so what it used can't be told from the
 // loop's, and refresh runs many probes in one process, whose peak would be put on each (#116).
 export interface MemTurn { env: Record<string, string>; give(): void }
-export async function memoryTurn(what: string, cmds: string[], env: NodeJS.ProcessEnv = process.env): Promise<MemTurn | null> {
+export async function memoryTurn(what: string, cmds: string[], env: NodeJS.ProcessEnv = process.env, late: TurnOpts["late"] = () => {}): Promise<MemTurn | null> {
   if (!cmds.length || env.FACTORY_HEAVY_HELD) return null;
   const sized = cmds.map((c) => ({ c, mem: request(c, env) })).sort((x, y) => y.mem - x.mem);
-  const turn = await takeTurn({ what, cmd: sized[0].c, mem: sized[0].mem, memoryOnly: true }, env) as Turn;
+  const turn = await takeTurn({ what, cmd: sized[0].c, mem: sized[0].mem, memoryOnly: true, late }, env) as Turn;
   return { env: { FACTORY_HEAVY_HELD: "1", FACTORY_HEAVY_RES: turn.id }, give: turn.give };
 }
 
@@ -470,12 +479,16 @@ export function statusLines(env: NodeJS.ProcessEnv = process.env): string[] {
 }
 
 // The machine's memory for the overseer's beat (\`heavy brief\`, one line of JSON): available now
-// (null if it can't be read), and what holds the budget, biggest first.
+// (null if it can't be read), what holds the budget, biggest first, and each of this project's
+// lanes' own commands that waits for its turn (its landing check, a probe: finished work waits with
+// it), longest first, with how long in seconds and for what.
 export function brief(env: NodeJS.ProcessEnv = process.env) {
   const fd = lock(path.join(dir(env), "budget.lock"));
-  let held: Res[];
-  try { held = reservations(env); } finally { unlock(fd); }
-  return { available: platform.memory().available, held: held.map((r) => ({ what: r.name || r.what, mem: r.mem })).sort((a, b) => b.mem - a.mem) };
+  let held: Res[], ws: Waiting[];
+  try { held = reservations(env); ws = waiting(env); } finally { unlock(fd); }
+  return { available: platform.memory().available, held: held.map((r) => ({ what: r.name || r.what, mem: r.mem })).sort((a, b) => b.mem - a.mem),
+    waiting: ws.filter((w) => w.holdsLane && w.lane.replace(/-lane[0-9]+$/, "") === project(env))
+      .map((w) => ({ what: w.what, lane: w.lane, secs: Math.max(0, Math.round((Date.now() - w.since) / 1000)), why: w.why })) };
 }
 
 export async function heavyCli(args: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {

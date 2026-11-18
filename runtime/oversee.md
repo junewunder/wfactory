@@ -147,7 +147,7 @@ way it says.
 
 ## Talking to the owner
 
-**Every wake-up gets one heartbeat line**, built from `just fleet beat`:
+**Every wake of your wait gets one heartbeat line**, built from `just fleet beat`:
 "10:45 · 2 lanes busy · the lexer waiting on the desktop · nothing for you".
 When it says the lanes wait for work in flight that no lane is working on,
 the wait won't end on its own: find out why that work isn't landing (`just
@@ -244,6 +244,11 @@ lands; say so, and that `just tracker merged --branch <branch>` clears it.
   still at work, `just fleet tell` it what happened, so it doesn't spend
   the night on the symptom.
   The cap, or how much runs at once on that machine, is the owner's call;
+- a `landing-waits` event (a lane's landing check has waited half an hour
+  for memory, so what it finished hasn't landed, and the lane reads as busy
+  while doing nothing): `just heavy` on that machine says what holds the
+  budget. Something of the factory's that's idle or done: end or release
+  it. Something the owner runs (an editor): tell them, in one line;
 - a machine went down while its lanes ran: `resumed` (they're back; one
   line), `resume-refused` (it went down again soon after the last two
   resumes, so its lanes stay down: tell the owner, and have a subagent
@@ -333,44 +338,32 @@ end-of-run report sums them up in one line.
    <this machine>. Want <the others> too?" Don't wait for the answer. Nothing
    runs on a machine the owner hasn't included; on a yes, `just fleet start
    <machine> --until <the deadline>`.
-3. **Wait.** In a T3 Code chat (its `schedule_task` tool is defined, perhaps
-   deferred: search for it once), a timer wakes you instead of a wait.
-   Right after attaching, create one interval task with `schedule_task`:
-   `schedule: {type: "interval", everyMs: 1200000}` (20 minutes),
-   `bindToCurrentThread: true`, `freshSession: false` (each wake keeps this
-   session), a title like "Oversee check-in", and this prompt, your ID in it:
-
-       Oversee check-in: run `just fleet wait --check --as <your ID>`, act
-       on what it says as the overseer's card says, post the heartbeat
-       line, and end your turn.
-
-   Tell the owner its title and next run time, note its ID (`just fleet
-   note`), and end your turn. Delete it (`delete_scheduled_task`) when you
-   stop. A wake that comes while you're still working is one check, after.
-   A check says what changed since the last one (the first, since you
-   attached) in the same words as a wait, so everything below holds for
-   it, except that "wait again" means end your turn. It hears news at the
-   next tick, up to 20 minutes on, where a wait wakes you as it comes.
-   What it buys is that you can't forget: an overseer that doesn't start
-   its wait again leaves the lanes unwatched until the owner looks, and a
-   timer fires anyway. Run no `just fleet wait` beside it: a check is
-   refused while one runs.
-
-   Anywhere else, run `just fleet wait --as <your ID>` as a **background**
+3. **Wait.** Run `just fleet wait --as <your ID>` as a **background**
    command: the Bash tool with `run_in_background: true` and `timeout:
-   7200000`. The timeout has to be longer than the wait, which lasts up to
-   55 minutes: a shorter one kills the wait before it wakes you. You're
-   woken when it returns: after 30 minutes while anything is at stake (a
-   question waiting, a lane waiting, a machine unreachable or short of
-   memory, a stop time within the hour), after 55 when nothing is, or as
-   soon as something happens. (55, not 60: your prompt cache lives an
-   hour, so a wake inside it finds your context still cached, and a later
-   one pays to read it all again.) It always exits 0, and its last lines say why
-   it woke, then the heartbeat, so the notice that it finished is enough to
-   read: no need to open its output file unless it says to look above. Only
-   one wait per overseer runs: a second is refused (exit 2, naming the
-   first's pid); never start one with `&` or alongside another. Post the
-   heartbeat line.
+   7200000` (a shorter one kills the wait before it wakes you). It returns,
+   and you're woken, as soon as something happens; failing that, after 30
+   minutes while anything is at stake (a question waiting, a lane waiting,
+   finished work that can't land, a machine unreachable or short of memory,
+   a stop time within the hour) and after 55 when nothing is, inside the
+   hour your prompt cache lives. It always exits 0, and its last lines say
+   why it woke, then the heartbeat, so the notice that it finished is
+   enough to read. Post the heartbeat line, act, and start the next wait;
+   one beside another is refused (exit 2).
+   In a T3 Code chat (its `schedule_task` tool is defined, perhaps
+   deferred: search for it once), set a timer too, right after attaching,
+   for the night you don't start the next wait or it dies: one interval
+   task, `schedule: {type: "interval", everyMs: 3300000}` (55 minutes),
+   `bindToCurrentThread: true`, `freshSession: false`, titled "Oversee
+   check-in", with this prompt, your ID in it:
+
+       Run `just fleet wait --check --as <your ID>` and do what its last
+       line says.
+
+   While your wait runs, the check is one line and there's nothing to post;
+   otherwise it reads what you missed and has you start a wait. A quiet
+   wait the timer checks in on runs up to 110 minutes, so the two don't
+   both wake you. Tell the owner the timer's title; delete it
+   (`delete_scheduled_task`) when you stop.
    Note what you decide, what you tell the owner and what you're waiting for
    as you go (`just fleet note --as <your ID> "…"`): it's what the next
    overseer catches up from if this thread dies.
@@ -386,7 +379,8 @@ end-of-run report sums them up in one line.
    - **"woke: news"** (wake-now events, listed under "for the owner:"): a new
      question or gate, a unit gone stuck, a first publish, CI broken, a
      machine idle 30 minutes, a usage pause or resume, an out-of-memory kill
-     (below), a machine short of memory (`oom`, `memory-low`). Handle each as above, telling the owner what they must hear, then
+     (below), a machine short of memory (`oom`, `memory-low`), finished work
+     kept from landing (`landing-waits`). Handle each as above, telling the owner what they must hear, then
      wait again. A line "(N more for the morning summary)" is not news: leave
      those for the report.
    - **"woke: a lane stopped"** (named under "stopped:", after the lane's
@@ -396,9 +390,8 @@ end-of-run report sums them up in one line.
    - **"unreachable"** (ssh couldn't reach a machine): its lanes may well be
      running. Say nothing unless it lasts 30 minutes; then tell the owner.
    - **Something due at a set time** ("check at 5 am", "pause at 7"): note
-     the time and do it on the first wake-up after it; they come at least
-     every 55 minutes (30 within the hour of a lane's stop time; 20 on a
-     timer). Never set
+     the time and do it on the first wake-up after it (a timer's check-in
+     is one); they come at least every 55 minutes. Never set
      a `sleep` timer for it: background commands
      are stopped after 2 hours, so a long one dies silently before it fires.
 4. **Decide** from that lane's last log line (`just fleet state <machine>`):

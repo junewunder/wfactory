@@ -1,11 +1,12 @@
 // fleet wait: until a lane stops, news comes or the time runs out, then what it found. With
-// --check, at once: what changed since this overseer's last check (a timer's wake, not a wait).
+// --check, at once, for a timer's wake: whether this overseer's wait runs (then that's all it
+// says), else what changed since its last check, and to start a wait.
 import fs from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { spawnSync } from "node:child_process";
 import { epoch, expandHome, hm, tryLock, ymdHm } from "./sys.ts";
 import type { LaneAsk, MachineAsk, MachineSeen } from "./daemon.ts";
-import { QUIET_MINUTES, beat, beatOf, stake } from "./fleet-beat.ts";
+import { QUIET_MINUTES, beat, beatOf, dur, stake } from "./fleet-beat.ts";
 import { state } from "./fleet-lanes.ts";
 import { cat, chomp, firstQuestions, gb, lines, say } from "./fleet-util.ts";
 import type { Fleet, Lane } from "./fleet-ctx.ts";
@@ -16,6 +17,11 @@ import type { Fleet, Lane } from "./fleet-ctx.ts";
 export interface Checked { at: string; lanes: Record<string, { running: boolean; count: number }> }
 export const checkFile = (as: string) => `runs/.check-${(as || "-").replace(/[^A-Za-z0-9._-]/g, "_")}.json`;
 export const laneKey = (l: Lane) => `${l.m}\t${l.n}\t${l.d}`;
+const safe = (as: string) => (as || "-").replace(/[^A-Za-z0-9._-]/g, "_");
+// When a timer's check last came for this overseer (epoch seconds), which a quiet wait reads.
+const tickFile = (as: string) => `runs/.tick-${safe(as)}`;
+// A wait this long past its time (seconds) hasn't returned and won't: a check ends it.
+const OVERDUE = 600;
 
 // fleet wait [--minutes N | --check] [--as <id>].
 export async function wait(f: Fleet, args: string[]): Promise<number> {
@@ -30,14 +36,39 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
   if (check && mins) { console.error("fleet: --check doesn't wait, so it takes no --minutes"); return 2; }
   // One wait per overseer: a second would wake it twice, and outlive what it was for.
   fs.mkdirSync("runs", { recursive: true });
-  const lockFile = `runs/.wait-${(as || "-").replace(/[^A-Za-z0-9._-]/g, "_")}.lock`;
-  const held = tryLock(lockFile);
+  const lockFile = `runs/.wait-${safe(as)}.lock`;
+  const who = as ? `overseer ${as}` : "this overseer";
+  const again = `just fleet wait${as ? ` --as ${as}` : ""}`;
+  let held = tryLock(lockFile), ended = "";
+  // The lock's holder says who it is: its pid, when it started, and "check" or (a wait, once it
+  // knows) when it returns at the latest.
   if (held === null) {
-    const [pid = "?", since = "?"] = chomp(cat(lockFile)).split(" ");
-    console.error(`fleet: a wait for ${as ? `overseer ${as}` : "this overseer"} is already running (pid ${pid}, since ${since}): it wakes you when it returns, so don't start another. If it's a stray, end it first (kill ${pid}).`);
-    return 2;
-  }
-  fs.ftruncateSync(held, 0); fs.writeSync(held, `${process.pid} ${hm()}\n`);
+    const [pid = "?", since = "?", until = ""] = chomp(cat(lockFile)).split(" ");
+    if (!check || until === "check") {
+      console.error(`fleet: a ${until === "check" ? "check" : "wait"} for ${who} is already running (pid ${pid}, since ${since}): ${until === "check" ? "it's over in a moment, so try again then" : `it wakes you when it returns, so don't start another. If it's a stray, end it first (kill ${pid})`}.`);
+      return 2;
+    }
+    // A timer's check that finds the wait running: the wait has the lanes and wakes the overseer
+    // for anything, so this says so and no more (no lane is read). It notes that a timer came,
+    // which keeps a quiet wait from waking the overseer beside it (below).
+    fs.writeFileSync(tickFile(as), `${epoch()}\n`);
+    const due = Number(until) || 0;
+    if (!due || epoch() <= due + OVERDUE) {
+      say(`watching: the wait for ${who} is running (pid ${pid}, since ${since}${due ? `, back by ${hm(new Date(due * 1000))} at the latest` : ""}) and wakes you as soon as anything happens. Nothing to do: end your turn, and post nothing.`);
+      return 0;
+    }
+    // Past its time and not back: it hangs, and nobody watches the lanes. Ended here; what
+    // happened meanwhile is read below, as for a wait that died.
+    try { process.kill(Number(pid), "SIGTERM"); } catch {}
+    for (let i = 0; i < 50 && held === null; i++) { await sleep(100); held = tryLock(lockFile); }
+    if (held === null) {
+      say(`the wait for ${who} (pid ${pid}) was due back by ${hm(new Date(due * 1000))} and hasn't returned, and it couldn't be ended: end it (kill -9 ${pid}), then start one in the background: ${again}`);
+      return 0;
+    }
+    ended = `the wait for ${who} (pid ${pid}) was due back by ${hm(new Date(due * 1000))} and hadn't returned: ended`;
+  } else if (check) fs.writeFileSync(tickFile(as), `${epoch()}\n`);
+  const since = hm();
+  fs.ftruncateSync(held, 0); fs.writeSync(held, `${process.pid} ${since}${check ? " check" : ""}\n`);
   const every = Number(env.FACTORY_WAIT_EVERY) > 0 ? Number(env.FACTORY_WAIT_EVERY) : 60;
   const L = allLanes();
   const key = laneKey;
@@ -146,19 +177,36 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
   // How long: what was asked, else 30 minutes while anything is at stake and QUIET_MINUTES when nothing
   // is (every machine answers, nothing waits on the owner, every running lane is busy, memory
   // is above the floor, no lane is within the hour of its stop time).
-  let atStake = "";
+  let atStake = "", quiet = 0;
   if (!mins && !check) {
     const b = beatOf(f);
     atStake = stake({ news: news.length, away: b.away.length, forYou: b.forYou, waiting: b.waiting, low: b.low.length, deadlines, now: t0 });
-    mins = atStake ? "30" : String(QUIET_MINUTES);
+    // (FACTORY_WAIT_QUIET: the quiet time in minutes, for tests.)
+    if (!atStake) quiet = (Number(env.FACTORY_WAIT_QUIET) > 0 ? Number(env.FACTORY_WAIT_QUIET) : QUIET_MINUTES) * 60;
+    mins = atStake ? "30" : String(quiet / 60);
   }
-  const end = check ? t0 : t0 + Math.floor(Number(mins) * 60);
+  let end = check ? t0 : t0 + Math.floor(Number(mins) * 60);
+  // A quiet wait's time is there to wake the overseer inside the hour its prompt cache lives. Where
+  // a timer checks in (the tick file above), the timer's wake did that, so the wait watches on
+  // until the same length after that check-in and 3 minutes (58 in all, so the next check-in comes
+  // first, and a timer that died still leaves a wake inside the hour), and no longer than twice
+  // its time in all: a background command is stopped at two hours.
+  const over = () => {
+    if (epoch() < end) return false;
+    if (!quiet) return true;
+    const tick = Number(chomp(cat(tickFile(as)))) || 0;
+    const e = Math.min(t0 + 2 * quiet, tick + quiet + Math.ceil(quiet / 18));
+    if (e <= end) return true;
+    end = e;
+    return epoch() >= end;
+  };
+  if (!check) { fs.ftruncateSync(held, 0); fs.writeSync(held, `${process.pid} ${since} ${quiet ? t0 + 2 * quiet : end}\n`); }
   const nap = async (s: number) => { try { await sleep(s * 1000, undefined, { signal: ac.signal }); } catch {} };
   // Each machine's daemon is asked to answer once one of its lanes stops or logs an event, or
   // the machine has news; one that can't be reached is asked again every FACTORY_WAIT_EVERY
   // seconds.
   const machineWatch = async (m: string) => {
-    while (!ac.signal.aborted && epoch() < end && !news.length) {
+    while (!ac.signal.aborted && !over() && !news.length) {
       const ls = L.filter((l) => l.m === m && was.get(key(l)));
       const first = ls.some((l) => seen.get(key(l)) === "-");
       const r = await watchOn(m, first ? { op: "look", lanes: ls.map(ask), machine: mAsk(m) }
@@ -178,7 +226,7 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
   // The overseer that waits (--as): a newer one attached (fleet attach) replaces it.
   const overseerWatch = async () => {
     if (!as) return;
-    while (!ac.signal.aborted && epoch() < end) {
+    while (!ac.signal.aborted && !over()) {
       const r = spawnSync("factory/tracker", ["overseer", "--json"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
       try { const o = JSON.parse(r.stdout); if (o && o.id && o.id !== as) { replaced = o; ac.abort(); return; } } catch {}
       await nap(every);
@@ -193,7 +241,7 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
   } else {
     if (news.length) ac.abort();
     // Until something wakes it, or the time runs out (with no lane running, that's all).
-    const timer = nap(Math.max(0, end - epoch())).then(() => ac.abort());
+    const timer = (async () => { while (!ac.signal.aborted && !over()) await nap(Math.max(1, end - epoch())); ac.abort(); })();
     await Promise.all([...ms.map(machineWatch), overseerWatch()]);
     await timer;
   }
@@ -211,6 +259,7 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
   // What it found comes first, and why it woke and the heartbeat last, so the end of its output
   // (all a finished background command shows) is enough. Every way of waking exits 0 (a
   // background command's failure status would read as something gone wrong).
+  if (ended) say(ended);
   if (r) {
     const line = `woke: replaced by another overseer: ${r.id} on ${r.host}, since ${r.at}`;
     say("This thread no longer oversees the factory: stop here, and don't wait again. The lanes go on; the new overseer has them.");
@@ -225,8 +274,9 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
     for (const l of news) { const k = l.split("\t")[3] ?? ""; kinds.set(k, (kinds.get(k) ?? 0) + 1); }
     why = `woke: news: ${[...kinds].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, c]) => `${k}${c > 1 ? ` ×${c}` : ""}`).join(", ")}`;
   } else if (check) why = last.at ? `woke: time: nothing to act on since the last check (${last.at})` : "woke: time: a first check, counting from now";
+  else if (quiet && end > t0 + quiet) why = `woke: time: ${dur(epoch() - t0)} passed with nothing to act on (past ${mins} min: your timer checked in meanwhile)`;
   else why = `woke: time: ${mins} min passed with nothing to act on${atStake ? ` (30, not ${QUIET_MINUTES}: ${atStake})` : ""}`;
-  note(as, `wait: ${why}`);
+  note(as, `${check ? "check: no wait was running; " : "wait: "}${why}`);
   if (stopped.length) {
     const sm = [...new Set(stopped.map((s) => s.split("/")[0]))].sort();
     process.stdout.write(lines(state(f, sm, true)).map((l) => l + "\n").join(""));
@@ -240,5 +290,7 @@ export async function wait(f: Fleet, args: string[]): Promise<number> {
   if (later) say(`(${later} more for the morning summary: \`just fleet summary\`)`);
   say(why);
   beat(f);
+  // A check that found no wait: the lanes were unwatched, and are again once this returns.
+  if (check) say(`no wait is running for ${who}: act on the above, then start one in the background: ${again}`);
   return 0;
 }

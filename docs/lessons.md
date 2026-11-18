@@ -429,6 +429,40 @@ counted as such. `fleet summary` ends with the card for its run, so the
 report quotes figures it didn't work out. The predictions went: a ledger
 used zero times in two factories was upkeep for nothing.
 
+### 42. A timer that never forgot, and never had anything to say (the mod and recompiler factories, November)
+
+**What happened.** An overseer kept awake by a background wait handled a
+wake one night, didn't start the next wait, and heard nothing for two hours
+while the lanes died. So in a chat app with scheduled tasks a 20-minute
+timer replaced the wait, each wake a check of what had changed since the
+last. Over the next two weeks the timer did what it was for and little
+else. In one factory it woke the overseer 109 times in two days, and one
+thread holds 47 heartbeats saying nothing was for the owner. News waited
+for the next tick, up to 20 minutes. And one night in the mod factory a
+finished unit's landing check waited over two hours for its turn in one
+laptop's memory budget, behind a standing reservation for an editor, while
+every check-in said the lanes were busy and nothing was for the owner: the
+lane's last log line still named the unit its session had finished.
+
+**What it cost.** A wake every 20 minutes through quiet nights, each a
+line the owner read as noise; news up to 20 minutes late; and two hours of
+a lane, its finished work unlanded, behind a heartbeat that said all was
+well.
+
+**The rule.** Give each job to what does it well, and have the commands
+say which state things are in. The wait wakes the overseer, because it
+hears news as it comes. The timer stays as the net under it, at 55
+minutes: its check says in one line that the wait is running, or reads
+what was missed and gives the command that starts one, and it ends a wait
+that's past its time and not back. A quiet wait that a timer checks in on
+watches past its own 55 minutes, so a quiet hour has one wake and not two.
+And busy isn't a state to take on trust: a lane whose landing check has
+waited half an hour for memory is news (`landing-waits`), and the
+heartbeat says so where it said nothing was for the owner. Half an hour,
+because in the two factories' records a landing took 3 to 11 minutes at
+the median and nine in ten were over inside 30, and a wait for memory was
+under 10 minutes or over 45.
+
 ## The code
 
 ### 20. One copy of the loop, deployed
