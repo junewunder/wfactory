@@ -832,7 +832,7 @@ and where they'd be satisfied. The satisfied line is asked again over
 real output at the probe, the trials and every ramp review. Once the
 owner says start, the agent stops only at gates and real questions.
 
-### 42. The owner's own passes did most of the work, and the skill had no word for them (the mod factory)
+### 43. The owner's own passes did most of the work, and the skill had no word for them (the mod factory)
 
 **What happened.** Over two weeks the mod factory's owner ran eight passes
 over the tracker by hand, with the lanes off: one thread as foreman, a
