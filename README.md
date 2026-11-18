@@ -1,14 +1,20 @@
 # wfactory
 
-wfactory runs Claude Code unattended through a backlog of similar work, one
-headless session per unit, and lets a check you trust decide when each unit
-is done. It's an ordinary TypeScript program with no model in it: a
-tracker, a loop and the checks. It installs as a Claude Code skill that
-helps you set a factory up.
+wfactory helps you set up a factory for your own project, and then runs
+it. A factory is a backlog of similar units of work that Claude Code works
+through unattended, one headless session per unit, where a check you trust
+decides when each unit is done.
 
-A run goes like this. Tell your agent **"oversee"**, and a Claude session,
-the overseer, starts the lanes (a lane runs one session at a time) and
-reports to you.
+Setting up is a conversation with your agent. It works with you to find the
+check, split the work into units and try the first few by hand. Everything
+underneath is already built: the tracker, the loop that runs the sessions,
+review before merge, and the usage and memory limits. That part is an
+ordinary TypeScript program with no model in it, installed as a Claude Code
+skill.
+
+Once a factory is set up, a run goes like this. Tell your agent
+**"oversee"**, and a Claude session, the overseer, starts the lanes (a lane
+runs one session at a time) and reports to you.
 
 1. A lane claims the next unit from the tracker.
 2. It starts one headless `claude -p` session on that unit, on its own
