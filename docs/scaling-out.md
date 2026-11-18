@@ -222,7 +222,8 @@ from it), and a lane that finds it free runs the CI rather than a unit that
 wants it. The loop runs the
 steps itself, no session: on origin's main, one at a time, each step's `cmd`
 with `{group}` and the group's params filled in, exit 0 = passed, under its
-`timeout` (minutes, default 120), tried again `retries` times (default 1).
+`timeout` (minutes, default 120), a failing step tried again `retries` times
+(default 1; a step out of time or killed isn't tried again in the same run).
 Each step is a heavy job (`just capped`): it takes its share of the
 machine's memory budget (its `mem`, which is also its cap, else its past
 peaks, and 4G before it has any: give a big step its `mem`) and a heavy-job
@@ -238,7 +239,9 @@ isn't so (say the group's outputs in `work/` belong to a session in another
 lane), exits **79** with its last line saying what: the run is given back,
 due again, with nothing filed, and the lane takes other work for a while (as
 with no turn in the memory budget, which is exit 75 from `just capped`;
-don't use 75 for this). The loop logs that line as the reason. The tracker
+don't use 75 for this). The loop logs that line as the reason, and the
+second run in a row not run for the same reason is kept as "couldn't run"
+for an hour, so the step needn't count its own refusals. The tracker
 itself already holds a group's CI while a live session on this machine is
 working on it (`just tracker busy --live` names those groups).
 The output's last line per step is the pass's evidence, and a failure's
@@ -246,8 +249,12 @@ headline, before the lines that came ahead of it; the whole log is in
 `runs/ci-*.log`. A failed step whose `on_fail` is `unit` (the default for
 steps that don't ship) files `<group>/ci-fix` for the lanes; one whose
 `on_fail` is `owner` (the default for steps that ship) files nothing and is
-raised to the owner. A failure that holds back a publish is a `ci-broken`
-event, any other a `ci-broken-noship`; the first one known failing is also a
+raised to the owner. A step that ran out of time, was killed, or twice
+didn't run (exit 79) for the same reason isn't a failure: the group's CI
+"couldn't run" (a `ci-norun` event, for the morning summary), nothing is
+filed, and it's tried again when something changes. A failure that holds
+back a publish and is the owner's to look at is a `ci-broken`
+event, any other (the lanes have its fix, or nothing it publishes waits) a `ci-broken-noship`; the first one known failing is also a
 `ci-known-failing`, and each after it is only a `ci-known-failing-again`; both name the group's units that
 aren't done, with their state, since a step can fail for want of a stuck
 unit's work. A pass that ran a step that ships is `ci-published` the first

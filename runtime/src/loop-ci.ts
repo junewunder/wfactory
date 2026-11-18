@@ -4,7 +4,10 @@
 // takes every resource its steps use as it starts (ci-next offers it only once they're all free)
 // and gives each back after the last step that uses it: it never waits mid-way for one. Pass or fail goes to the tracker; a failure whose step is the lanes' to fix
 // files <group>/ci-fix (the tracker does that); a step that exits 79 didn't run (a condition it
-// needs unmet, its last line says which): given back, due again. A run cut short (pause asap, a signal) records
+// needs unmet, its last line says which): given back, due again, and kept as "couldn't run" the
+// second time in a row. A step out of time or killed by a signal didn't get to a verdict either:
+// "couldn't run" (tracker ci-norun), nothing filed, not tried again in the same run, and a failure
+// only if its next run ends the same way. A run cut short (pause asap, a signal to the lane) records
 // nothing: it reads as due again, and the next run starts from the first step. With data on the
 // store, what a run rebuilt is copied back as it ends (store.sh clean --up), so the next run or unit
 // on another machine doesn't rebuild it again.
@@ -52,7 +55,7 @@ export function ciUnrun(inLc: boolean) {
   if (r.code !== 0) return "";
   let a: Json[];
   try { a = JSON.parse(r.out); if (!Array.isArray(a)) return ""; } catch { return ""; }
-  const l = a.filter((c) => c.state === "due" || c.state === "broken" || c.state === "known" || (inLc && c.state === "stale")).map((c) => `${c.title} (${c.state})`).join(", ");
+  const l = a.filter((c) => c.state === "due" || c.state === "broken" || c.state === "known" || c.state === "norun" || (inLc && c.state === "stale")).map((c) => `${c.title} (${c.state === "norun" ? "couldn't run" : c.state})`).join(", ");
   return l ? `; CI not passed: ${l}` : "";
 }
 
@@ -72,7 +75,9 @@ export function ciNext(j: Json): CiNext {
   };
 }
 
-type Outcome = "pass" | "fail" | "memory" | "unmet" | "cut";
+// time, killed: a step that ran out of time, or was killed by a signal (its memory cap, the
+// machine's): it got to no verdict, so the run couldn't run, which isn't a failure.
+type Outcome = "pass" | "fail" | "time" | "killed" | "memory" | "unmet" | "cut";
 // What a step ended with, besides passing (0) or a step's own exit status.
 const TIME_UP = 124;    // its time limit (timeout's status)
 const QUEUED = 75;      // capped's exit when it found no turn in the machine's memory budget in time
@@ -181,13 +186,13 @@ export class CiRun {
   // is a step's output, so bare IDs in it are written as {unit:…} instead of refused. A busy lock
   // is waited out, not a try (#109: four tries of 30 s each lost a finished result). The tracker's
   // answer, or null.
-  private async record(args: string[]): Promise<string | null> {
+  private async record(args: string[], short = 4): Promise<string | null> {
     const l = this.l, group = this.j.group;
     let out = "";
     const wait = Number(process.env.FACTORY_RETRY_WAIT || 3);
     for (let k = 1; k <= 4; k++) {
       // The last try with only the evidence (the group's steps may have changed during the run).
-      const r = trWait(k === 4 ? args.slice(0, 4) : args, log, { FACTORY_TAG: l.tag, FACTORY_ACTOR: "loop", FACTORY_CI_EVIDENCE: "loop" });
+      const r = trWait(k === 4 ? args.slice(0, short) : args, log, { FACTORY_TAG: l.tag, FACTORY_ACTOR: "loop", FACTORY_CI_EVIDENCE: "loop" });
       out = (r.out + r.err).replace(/\n+$/, "");
       if (r.code === 0) return out;
       if (k !== 4) await l.pause(k * wait);
@@ -240,9 +245,12 @@ export class CiRun {
         if (rc === CUT) { out = "cut"; break outer; }
         if (rc === NO_TURN) { out = "memory"; break outer; }
         if (rc === UNMET) { out = "unmet"; break outer; }
+        // Out of time, or killed: not tried again here (another whole time limit for the same end).
+        if (rc === TIME_UP) { out = "time"; break outer; }
+        if (rc >= 128) { out = "killed"; break outer; }
         if (left <= 0) { out = "fail"; break outer; }
         left--;
-        log(`ci: ${step} failed (${rc === TIME_UP ? `out of time after ${tmo} min` : `exit ${rc}`}); trying again in ${process.env.FACTORY_CI_RETRY_WAIT || 300}s`);
+        log(`ci: ${step} failed (exit ${rc}); trying again in ${process.env.FACTORY_CI_RETRY_WAIT || 300}s`);
         if (!(await l.nap(Number(process.env.FACTORY_CI_RETRY_WAIT || 300)))) { out = "cut"; break outer; }
       }
       evid.push(`${step}: ${ciTail(lf, 1)}`);
@@ -258,10 +266,10 @@ export class CiRun {
     // What the run rebuilt goes back to the store, passed or failed: a later run (or unit) on
     // another machine would rebuild it again otherwise, and it's main's, as a pass's is, and as the
     // next run here would find it. So does a run given back after steps that ran. Not a run whose
-    // last step was stopped mid-way: one cut short (pause asap, the stop time), or a failure that
-    // was a step killed (out of time, or by a signal: its memory cap). What it wrote stays here,
+    // last step was stopped mid-way: one cut short (pause asap, the stop time), or a step killed
+    // (out of time, or by a signal: its memory cap). What it wrote stays here,
     // in the copy's listing, and the store keeps the copy it had, not half-written outputs.
-    const killed = out === "cut" || (out === "fail" && (rc === TIME_UP || rc >= 128));
+    const killed = out === "cut" || out === "time" || out === "killed";
     const back = async () => {
       if (!dg) return;
       const up = killed ? [] : ["--up", (commit && git("rev-parse", "--short", commit)) || commit];
@@ -303,25 +311,25 @@ export class CiRun {
         return "passed";
       }
       case "fail": {
-        const e = `${step} failed (${rc === TIME_UP ? `out of time after ${tmo} min` : `exit ${rc}`}, tried ${tries} time${tries === 1 ? "" : "s"}): ${ciFailText(lf)}`;
+        const e = `${step} failed (exit ${rc}, tried ${tries} time${tries === 1 ? "" : "s"}): ${ciFailText(lf)}`;
         const fix = (await this.record(["ci-fail", group, "--evidence", e, "--step", step, "--log", `${pwd()}/${lf}`, ...secs, ...(commit ? ["--commit", commit] : [])])) ?? "";
-        log(`ci: ${title} (${group}) broken: ${e}`);
-        log(`  ${fix}`);
-        // CI runs once a group is done for the night, which a stuck unit or one waiting on the owner counts
-        // as: name those, since a step failing for want of their work is their problem, not CI's.
-        // Stuck ones and ones waiting on the owner first: those are the likely cause.
-        const ls = trOut(["status", group]).split("\n").filter((x) => x.startsWith("  - ")).map((x) => x.slice(4));
-        const firsts = ls.filter((x) => /\): (stuck|waiting on you)/.test(x)), rest = ls.filter((x) => !/\): (stuck|waiting on you)/.test(x));
-        let undone = [...firsts, ...rest].slice(0, 5).join("|").replace(/\|/g, "; ");
-        undone = undone ? ` Its units not done: ${undone}.` : "";
-        const after = fix.includes("CI broken. ") ? fix.slice(fix.indexOf("CI broken. ") + "CI broken. ".length) : fix;
-        // Still known failing: the owner heard it once (ci-known-failing); the rest are for the summary.
-        if (fix.includes("is still known failing")) l.event("ci-known-failing-again", `${title} (${group}): CI failed again, still known failing: ${e}. ${after}${undone}`);
-        else if (ships) l.event("ci-broken", `${title} (${group}): CI is broken, so it isn't published: ${e}. ${after}${undone} Tell the owner now: \`just tracker ci-retry ${group}\`, \`just tracker publish off\`, or fix it and push`);
-        else l.event("ci-broken-noship", `${title} (${group}): CI is broken (nothing it publishes waits on it; for the morning summary): ${e}. ${after}${undone}`);
-        // Failing again after its fix was done marks it known failing: news once, when it starts.
-        if (fix.includes("is known failing now")) l.event("ci-known-failing", `${title} (${group}): ${after} Nothing to unstick: say it in the report, with the reason`);
-        return `broken: ${step}`;
+        return this.broken(e, fix, step, ships);
+      }
+      case "time":
+      case "killed": {
+        // No verdict on the group's work: the tracker keeps it as "couldn't run" and files nothing;
+        // the second run in a row to end so on this step it records as a failure after all.
+        const sig = rc - 128;
+        const why = out === "time" ? `${step} ran out of time after ${tmo} min` : `${step} was killed by signal ${sig} (its memory cap or the machine's, if 9)`;
+        const last = ciTail(lf, 1);
+        const e = `${why}${last ? `; its last line: ${last}` : " with no output"}`;
+        const args = ["ci-norun", group, "--why", e, "--step", step, "--kind", out, "--log", `${pwd()}/${lf}`, ...secs, ...(commit ? ["--commit", commit] : [])];
+        const said = (await this.record(args, args.length)) ?? "";
+        if (said.includes("CI broken. ")) return this.broken(e, said, step, ships);
+        log(`ci: ${title} (${group}) couldn't run: ${e}`);
+        log(`  ${said}`);
+        if (said) l.event("ci-norun", `${title} (${group}): CI couldn't run, which is no verdict on its work (nothing is filed; for the morning summary): ${e}`);
+        return `couldn't run: ${why}`;
       }
       case "memory":
         // Given back, and not claimed again for a while: the lane goes on with other groups' work
@@ -331,10 +339,19 @@ export class CiRun {
         log(`ci: ${title} (${group}): ${step} found no turn in the machine's memory budget (${ciTail(lf, 1)}); the run is given back, due again, and the lane takes other work for ${l.o.idleWait} min`);
         return `given back at ${step}: no room in the memory budget`;
       case "unmet": {
-        // As with no turn: given back, due again, and the lane takes other work a while.
-        ciUnclaim(l, group);
-        l.ciBackoff = epoch() + mins(l.o.idleWait);
+        // As with no turn: given back, due again, and the lane takes other work a while. The
+        // tracker counts it: not run twice in a row for the same reason, it's kept as "couldn't
+        // run" and isn't tried every few minutes while the condition lasts.
         const why = ciTail(lf, 1) || "it gave no reason";
+        const args = ["ci-norun", group, "--why", why, "--step", step, "--kind", "unmet", ...(commit ? ["--commit", commit] : [])];
+        const said = (await this.record(args, args.length)) ?? "";
+        l.ciBackoff = epoch() + mins(l.o.idleWait);
+        if (said.includes("couldn't run")) {
+          log(`ci: ${title} (${group}): ${step} didn't run again, the same condition unmet: ${why}; it's kept as couldn't run, nothing filed`);
+          log(`  ${said}`);
+          l.event("ci-norun", `${title} (${group}): CI couldn't run, its ${step} step not run twice in a row for the same reason (nothing is filed; for the morning summary): ${why}`);
+          return `couldn't run: ${step} not run (${why})`;
+        }
         log(`ci: ${title} (${group}): ${step} didn't run, a condition it needs unmet: ${why}; the run is given back, due again, and the lane takes other work for ${l.o.idleWait} min`);
         return `given back at ${step}: not run (${why})`;
       }
@@ -345,5 +362,32 @@ export class CiRun {
         return `cut short at ${step}`;
       }
     }
+  }
+
+  // A failure on record (fix: the tracker's answer, what it filed): the log, and the overseer's event.
+  private broken(e: string, fix: string, step: string, ships: boolean): string {
+    const { l, j } = this, { group, title } = j;
+    log(`ci: ${title} (${group}) broken: ${e}`);
+    log(`  ${fix}`);
+    // CI runs once a group is done for the night, which a stuck unit or one waiting on the owner counts
+    // as: name those, since a step failing for want of their work is their problem, not CI's.
+    // Stuck ones and ones waiting on the owner first: those are the likely cause.
+    const ls = trOut(["status", group]).split("\n").filter((x) => x.startsWith("  - ")).map((x) => x.slice(4));
+    const firsts = ls.filter((x) => /\): (stuck|waiting on you)/.test(x)), rest = ls.filter((x) => !/\): (stuck|waiting on you)/.test(x));
+    let undone = [...firsts, ...rest].slice(0, 5).join("|").replace(/\|/g, "; ");
+    undone = undone ? ` Its units not done: ${undone}.` : "";
+    const after = fix.includes("CI broken. ") ? fix.slice(fix.indexOf("CI broken. ") + "CI broken. ".length) : fix;
+    // The owner hears now only of a failure that's theirs: a step that holds back a publish and
+    // whose failure nobody else has (on_fail owner, or the tracker filed nothing). One the lanes
+    // have the fix of is theirs to cure, and news for the morning summary.
+    const owners = !after || after.includes("is the owner's to look at") || after.includes("It's tried again once main moves");
+    // Still known failing: the owner heard it once (ci-known-failing); the rest are for the summary.
+    if (fix.includes("is still known failing")) l.event("ci-known-failing-again", `${title} (${group}): CI failed again, still known failing: ${e}. ${after}${undone}`);
+    else if (ships && owners) l.event("ci-broken", `${title} (${group}): CI is broken, so it isn't published: ${e}. ${after}${undone} Tell the owner now: \`just tracker ci-retry ${group}\`, \`just tracker publish off\`, or fix it and push`);
+    else if (ships) l.event("ci-broken-noship", `${title} (${group}): CI is broken, so it isn't published until it's fixed, which is the lanes' to do (for the morning summary): ${e}. ${after}${undone}`);
+    else l.event("ci-broken-noship", `${title} (${group}): CI is broken (nothing it publishes waits on it; for the morning summary): ${e}. ${after}${undone}`);
+    // Failing again after its fix was done marks it known failing: news once, when it starts.
+    if (fix.includes("is known failing now")) l.event("ci-known-failing", `${title} (${group}): ${after} Nothing to unstick: say it in the report, with the reason`);
+    return `broken: ${step}`;
   }
 }

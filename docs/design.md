@@ -401,7 +401,18 @@ state:
   where every group's heavy steps at once can run the machine out of memory;
 - **broken:** failed since the last pass. It's tried again once main has
   moved and 6 hours have passed, when a unit of the group is done, or after
-  `ci-retry`;
+  `ci-retry`. While its fix is in a session, in review or waiting to land, it
+  waits for the fix to reach main: a run before that fails the same way;
+- **couldn't run:** the last run got to no verdict. A step ran out of time,
+  was killed by a signal, or twice in a row said it didn't run (exit 79) for
+  the same reason. None of these says the group's work is wrong (a slower
+  machine, a cold cache, a memory cap, another unit's files in the copy), so
+  nothing is filed and nothing held, and the morning summary says "couldn't
+  run", not "failed". It's tried again when something changes (a unit of the
+  group done, a change from outside, a step's command, `ci-retry`, or time:
+  an hour for a step not run, 6 hours once main has moved for the others).
+  A step out of time or killed on two runs in a row counts as failing after
+  all, so a step that never ends still reaches a fix;
 - **known failing:** broken again on the same step after its `<group>/ci-fix`
   was done. A failure a fix didn't cure isn't the end of the world, and
   sticking the fix only left the group for the overseer to get moving, so
@@ -456,12 +467,23 @@ or its fix is open (or every unit of a group that already fails would be
 held), and a timeout lands the unit: the lane mustn't be held by a queue
 for a heavy-job slot, and night CI still covers it.
 
+CI's steps run main's code on the copy of the group's data on that machine.
+A unit whose outputs are in that copy and whose code isn't on main yet (in
+a session, in review, waiting to land; the store marks them) would have
+the steps test neither main nor the unit, so due CI waits there until it
+lands. One stuck or waiting on the owner holds nothing: CI would wait on
+the owner.
+
 A pass records the steps that ran, the commit tested, the start of the
 run and how long it took, so a unit finished during the run makes CI stale
 again. A run cut short is recorded as cut off, so the morning summary can
 tell "cut off" from "never started". Steps that ship default to `on_fail: owner` (raise
 it, file nothing); other steps default to `on_fail: unit`, which files a
-`<group>/ci-fix` unit for the lanes.
+`<group>/ci-fix` unit for the lanes. Its card says what changed since the
+step last passed (the group's units finished since, and the latest change
+from outside with its range of main). The owner is told at once only of a
+failure that holds back a publish and is theirs to look at; one the lanes
+have the fix of goes in the morning summary.
 
 Last call (default 30 minutes before the stop) holds back only what would
 make CI here run again: units of a

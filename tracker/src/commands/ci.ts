@@ -5,10 +5,10 @@ import { codeHead, load, log, mutate } from "../store.ts";
 import { NetError, die, list, now, parseArgs, str } from "../text.ts";
 import { autoIds, checkText, resolve } from "../names.ts";
 import { capsOk, claimAlive, dataGroup, dropLease, leaseOf, liveLease, takeLease } from "../machine.ts";
-import { ciCmds, ciData, ciFixPassed, ciFixUnit, ciLand, ciSplit, ciOutcome, ciPick, ciPlan, ciRunRecord, ciStartUses, ciState, ciSteps, ciText, ciTouch, ciUnits, publishing, short, type CiPick } from "../ci.ts";
+import { ciCmds, ciData, ciFixPassed, ciFixUnit, ciLand, ciSplit, ciOutcome, ciPick, ciPlan, ciRunRecord, ciStartUses, ciState, ciSteps, ciText, ciTouch, ciUnits, norunNow, publishing, short, type CiPick } from "../ci.ts";
 import { derive, scopeGroups } from "../status.ts";
 import { C } from "./registry.ts";
-import type { Group, State } from "../types.ts";
+import type { CiNorun, Group, State } from "../types.ts";
 
 const ciGroup = (T: State, id: string | undefined): Group => {
   const g = T.groupById.get(id!) || die(`no group "${id ?? ""}" (${T.groups.map((x) => x.id).join(", ")})`);
@@ -44,7 +44,7 @@ C.ci = (a) => {
     const t = typeof o.since === "string" ? Date.parse(o.since) : NaN;
     if (Number.isNaN(t)) die(`--since needs a time (got ${typeof o.since === "string" ? `'${o.since}'` : "nothing"})`);
     const rows = groups.map((g) => [g, ciOutcome(T, g, t)] as const).filter(([, x]) => x);
-    const ORDER = ["failed", "cut", "never", "running", "passed"];
+    const ORDER = ["failed", "norun", "cut", "never", "running", "passed"];
     rows.sort((x, y) => ORDER.indexOf(x[1]!.s) - ORDER.indexOf(y[1]!.s));
     if (!rows.length) console.log("no group's CI needed to run");
     for (const [g, x] of rows) console.log(`  ${g.title} (${g.id}): ${x!.text}`);
@@ -93,12 +93,22 @@ C["ci-pass"] = (a) => {
     const done = units.filter((u) => derive(T, u).s === "done" && (!run || !(u.record!.at > run.at))).map((u) => u.id);
     const open = units.filter((u) => !done.includes(u.id) && u.record?.state !== "dropped").map((u) => u.id);
     g.ci!.passed = { commit: ciCommit(T, g, o), at, by: ctx.TAG, evidence, steps, done, open, cmds: ciCmds(T, g, steps), ...secsOf(o) };
-    delete g.ci!.failed; delete g.ci!.running; delete g.ci!.cut;
+    delete g.ci!.failed; delete g.ci!.running; delete g.ci!.cut; delete g.ci!.norun;
     T.dirty.add("group:" + g.id); log(T, "ci-pass", null, `${g.title}: CI passed (${g.ci!.passed.steps.join(", ")})`);
     console.log(`${g.title}: CI passed at ${short(g.ci!.passed.commit)}${fixed ? `. ${fixed}` : ""}`);
     return 0;
   });
 };
+// A run failed: the failure on record, and what's filed for it (ci.ts ciFixUnit). What to say.
+function failed(T: State, g: Group, x: { step: string | null; evidence: string; commit: string | undefined; logp?: string; secs: { secs?: number } }) {
+  const was = g.ci!.failed;   // the failure a done ci-fix was for
+  const ran = g.ci!.running?.at;   // when this run started
+  g.ci!.failed = { commit: x.commit, at: now(), by: ctx.TAG, step: x.step || undefined, evidence: x.evidence, cmds: ciCmds(T, g, ciSteps(T, g)), ...(x.logp ? { log: x.logp, host: ctx.HOST } : {}), ...x.secs };
+  delete g.ci!.running; delete g.ci!.cut; delete g.ci!.norun;
+  T.dirty.add("group:" + g.id); log(T, "ci-fail", null, `${g.title}: CI failed: ${x.evidence}`);
+  const fix = x.step ? ciFixUnit(T, g, x.step, x.commit, x.evidence, x.logp ?? null, was, ran) : "";
+  return `${g.title}: CI broken. ${fix || "It's tried again once main moves and 6 hours pass, or now with `just tracker ci-retry " + g.id + "`."}`;
+}
 C["ci-fail"] = (a) => {
   const o = parseArgs(a);
   return mutate((T) => {
@@ -107,16 +117,50 @@ C["ci-fail"] = (a) => {
     const evidence = ctx.env.FACTORY_CI_EVIDENCE === "loop" ? autoIds(T, o.evidence as string) : checkText(T, "--evidence", o.evidence as string);
     const step = str(o.step) ?? null;
     if (step && !(g.ci!.steps || []).includes(step)) die(`--step ${step}: ${g.title}'s CI has no such step (${(g.ci!.steps || []).join(", ")})`);
-    const commit = ciCommit(T, g, o);
-    const was = g.ci!.failed;   // the failure a done ci-fix was for
-    const ran = g.ci!.running?.at;   // when this run started
-    g.ci!.failed = { commit, at: now(), by: ctx.TAG, step: step || undefined, evidence, cmds: ciCmds(T, g, ciSteps(T, g)), ...(str(o.log) ? { log: str(o.log), host: ctx.HOST } : {}), ...secsOf(o) };
-    delete g.ci!.running; delete g.ci!.cut;
-    T.dirty.add("group:" + g.id); log(T, "ci-fail", null, `${g.title}: CI failed: ${evidence}`);
-    const fix = step ? ciFixUnit(T, g, step, commit, evidence, str(o.log) ?? null, was, ran) : "";
-    console.log(`${g.title}: CI broken. ${fix || "It's tried again once main moves and 6 hours pass, or now with `just tracker ci-retry " + g.id + "`."}`);
+    console.log(failed(T, g, { step, evidence, commit: ciCommit(T, g, o), logp: str(o.log), secs: secsOf(o) }));
     return 0;
   });
+};
+// A run that couldn't run to a result (the loop's): a step out of time (--kind time), killed by a
+// signal (killed), or one that said it didn't run (unmet, its exit 79). None is a verdict on the
+// group's work, so nothing is filed and the group isn't broken. Unmet: given back, due again (with
+// the lease its claim took), and the second run in a row not run for the same reason is kept as
+// couldn't run (ci.ts norunHolds), so a condition that stays isn't tried every few minutes. Out of
+// time or killed: kept as couldn't run at once; the second run in a row to end so on the same step
+// is a failure after all (a step that never ends is somebody's to fix), filed as ci-fail files it.
+const NORUN_KINDS = ["time", "killed", "unmet"] as const;
+// (A reason's digits and temp paths vary run to run: "after 61 s", "/tmp/x.123".)
+const sameWhy = (a: string, b: string) => { const k = (x: string) => x.replace(/\/tmp\/\S*/g, "/tmp/…").replace(/\d+/g, "N"); return k(a) === k(b); };
+C["ci-norun"] = (a) => {
+  const o = parseArgs(a);
+  return mutate((T) => {
+    const g = ciGroup(T, o._[0]);
+    const r = g.ci!.running;
+    if (!r || r.by !== ctx.TAG) die(`${g.title}'s CI isn't running in this session (${ctx.TAG})`);
+    const kind = NORUN_KINDS.find((k) => k === o.kind) || die(`ci-norun needs --kind ${NORUN_KINDS.join("|")} (got ${typeof o.kind === "string" ? `'${o.kind}'` : "nothing"})`);
+    const step = str(o.step) || die(`ci-norun needs --step <step>: the step that didn't run to a result`);
+    if (typeof o.why !== "string" || !o.why.trim()) die(`ci-norun needs --why "…": why it couldn't run (the step's last line, "out of time after 60 min")`);
+    const why = ctx.env.FACTORY_CI_EVIDENCE === "loop" ? autoIds(T, o.why as string) : checkText(T, "--why", o.why as string);
+    const commit = ciCommit(T, g, o), was = norunNow(g);
+    const again = !!was && was.step === step && was.kind === kind && (kind !== "unmet" || sameWhy(was.why, why));
+    const n = again ? was!.n + 1 : 1;
+    if (kind !== "unmet" && n >= 2) {
+      console.log(failed(T, g, { step: (g.ci!.steps || []).includes(step) ? step : null, evidence: `${why}; ${n} runs in a row ended so on ${step}, so it counts as failing`, commit, logp: str(o.log), secs: secsOf(o) }));
+      return 0;
+    }
+    const x: CiNorun = { at: now(), ran: r!.at, by: ctx.TAG, host: ctx.HOST, step, kind, why, n, commit, cmds: ciCmds(T, g, ciSteps(T, g)), ...(str(o.log) ? { log: str(o.log) } : {}) };
+    g.ci!.norun = x;
+    delete g.ci!.running; delete g.ci!.cut;
+    T.dirty.add("group:" + g.id); T._memo = null;
+    const held = kind !== "unmet" || n >= 2;
+    log(T, "ci-norun", null, `${g.title}: CI couldn't run (${step}${n > 1 ? `, ${n} runs in a row` : ""}): ${why}`);
+    // Given back: the lease its claim took goes back too, as for a run not started (ci-unclaim).
+    if (kind === "unmet") giveBackLease(T, g, false);
+    console.log(held
+      ? `${g.title}: CI couldn't run${n > 1 ? ` (${n} runs in a row)` : ""}. Nothing is filed and nothing held: that's no verdict on the group's work. It's tried again when a unit of the group is done or a change outside it touches it, ${kind === "unmet" ? "in an hour" : "once main moves and 6 hours pass"}, or now with \`just tracker ci-retry ${g.id}\`.${kind === "unmet" ? "" : ` If ${step} ends the same way then, it counts as failing.`}`
+      : `${g.title}: CI given back, due again.`);
+    return 0;
+  }, { strict: true });
 };
 // The due CI this lane runs next (the loop calls it before \`next\`, so CI comes first).
 // --claim records it running and takes its group's lease, in one push.
@@ -165,15 +209,22 @@ C["ci-unclaim"] = (a) => mutate((T) => {
   if (step && !(g.ci!.steps || []).includes(step)) die(`--step ${step}: ${g.title}'s CI has no such step (${(g.ci!.steps || []).join(", ")})`);
   if (cut) g.ci!.cut = { at: r!.at, by: r!.by, host: r!.host, ...(step ? { step } : {}), why: cut };
   T.dirty.add("group:" + g.id); log(T, "ci-unclaim", null, cut ? `${g.title}: CI cut off${step ? ` at ${step}` : ""}: ${cut}` : `${g.title}: CI given back unstarted`);
-  const dg = ciData(T, g), l = dg && leaseOf(T, dg);
-  const others = [...T.byId.values()].some((x) => dataGroup(T, x) === dg && x.record?.state === "claimed" && x.record.host === ctx.HOST && claimAlive(T, x.record));
-  if (l && l.host === ctx.HOST && (l.by === ctx.TAG || o["release-lease"]) && !others) dropLease(T, dg!, o["release-lease"] ? "no room here for its data" : "its CI was given back");
+  giveBackLease(T, g, !!o["release-lease"]);
   return 0;
 });
+// A run given back gives back the lease its claim took (noRoom: one taken earlier too), unless a
+// session here is working on the group's data.
+function giveBackLease(T: State, g: Group, noRoom: boolean) {
+  const dg = ciData(T, g), l = dg && leaseOf(T, dg);
+  const others = [...T.byId.values()].some((x) => dataGroup(T, x) === dg && x.record?.state === "claimed" && x.record.host === ctx.HOST && claimAlive(T, x.record));
+  if (l && l.host === ctx.HOST && (l.by === ctx.TAG || noRoom) && !others) dropLease(T, dg!, noRoom ? "no room here for its data" : "its CI was given back");
+}
 C["ci-retry"] = (a) => mutate((T) => {
   const g = ciGroup(T, a[0]);
-  if (!g.ci!.failed) die(`${g.title}'s CI isn't broken (${ciText(T, g)})`);
-  g.ci!.failed!.retry = g.ci!.failed!.at;
+  const n = norunNow(g);
+  if (!g.ci!.failed && !n) die(`${g.title}'s CI isn't broken (${ciText(T, g)})`);
+  if (n) n.retry = n.at;
+  if (g.ci!.failed) g.ci!.failed.retry = g.ci!.failed.at;
   T.dirty.add("group:" + g.id); log(T, "ci-retry", null, `${g.title}: CI to be tried again`);
   T._memo = null;
   console.log(`${g.title}: ${ciText(T, g)}`);

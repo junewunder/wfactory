@@ -290,7 +290,7 @@ export function score(R: Records, since: number | null): Card {
     const t = titleCi(e.text);
     if (t === null) continue;
     if (e.cmd === "ci-start") { started.set(t, (/: CI started \((.*)\)$/.exec(e.text)?.[1] ?? "").split(", ").filter(Boolean)); continue; }
-    if (!inP(atOf(e))) { if (e.cmd === "ci-pass" || e.cmd === "ci-fail" || e.cmd === "ci-unclaim") started.delete(t); continue; }
+    if (!inP(atOf(e))) { if (e.cmd === "ci-pass" || e.cmd === "ci-fail" || e.cmd === "ci-unclaim" || e.cmd === "ci-norun") started.delete(t); continue; }
     if (e.cmd === "ci-pass") {
       runs++;
       for (const s of (/: CI passed \((.*)\)$/.exec(e.text)?.[1] ?? "").split(", ").filter(Boolean)) add(reach, s);
@@ -305,7 +305,7 @@ export function score(R: Records, since: number | null): Card {
         add(fail, s);
       }
       started.delete(t);
-    } else if (e.cmd === "ci-unclaim") started.delete(t);
+    } else if (e.cmd === "ci-unclaim" || e.cmd === "ci-norun") started.delete(t);   // (no verdict: not a run that passed or failed)
   }
   figures["ci.runs"] = runs;
   figures["ci.failed.count"] = failed;

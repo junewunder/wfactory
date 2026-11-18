@@ -175,10 +175,10 @@ export const EVENTS_WAKE = `question ci-published ci-broken ci-known-failing ci-
 // The bad news, whichever tier it's in: what \`fleet summary\` and the report put first.
 export const EVENTS_PROBLEM = `ci-broken ci-known-failing ci-unrecorded ci-affected-failed land-check-unrun landing-waits oom-kill stuck main-broken review-skipped
   stuck-merge stuck-merging stuck-branch inbox-unread silent restart-failed lost-lease store-down store-torn gone-lane-left resume-refused
-  resume-failed oom memory-low ci-broken-noship ci-known-failing-again store-aside-old resume-skipped land-check-timeout idle`.split(/\s+/);
+  resume-failed oom memory-low ci-broken-noship ci-norun ci-known-failing-again store-aside-old resume-skipped land-check-timeout idle`.split(/\s+/);
 // The problem kinds that happen in a unit's session or landing: \`fleet summary\` says under each
 // which unit, and what became of it (or "unit: unknown"). Other kinds get that line only when
 // their line names a unit.
 export const EVENTS_OF_A_UNIT = `oom-kill stuck review-skipped stuck-merge stuck-merging stuck-branch inbox-unread silent land-check-unrun
   land-check-timeout resume-refused resume-failed resume-skipped`.split(/\s+/);
-export const EVENTS_SUMMARY = "ci-republished ci-broken-noship ci-known-failing-again store-aside store-aside-old store-aside-removed store-aside-kept lane-stop held-back restarted wrap-up wrapped-up factory-edits tracker-edits resume-skipped land-check-timeout gone-lane-merged".split(" ");
+export const EVENTS_SUMMARY = "ci-republished ci-broken-noship ci-norun ci-known-failing-again store-aside store-aside-old store-aside-removed store-aside-kept lane-stop held-back restarted wrap-up wrapped-up factory-edits tracker-edits resume-skipped land-check-timeout gone-lane-merged".split(" ");

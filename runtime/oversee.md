@@ -181,13 +181,13 @@ lands; say so, and that `just tracker merged --branch <branch>` clears it.
   event: "The lexer: CI passed and published"). A republish (`ci-republished`)
   isn't one: it goes in the morning summary;
 - a `ci-broken` event that says to tell the owner now (CI that holds back a
-  publish): what failed, its last lines, and the options: `just tracker
+  publish, and nobody else's to fix): what failed, its last lines, and the options: `just tracker
   ci-retry <group>`, `just tracker publish off`, or a fix pushed to main.
   The event names the group's units that aren't done, with their state:
   read those first. A step that failed because a unit it waits on is stuck
   (no build yet, because the unit making it was refused) is that unit's
   problem: tell the owner the cause, not the symptom. A `ci-broken-noship`
-  (nothing it publishes waits on it) goes in the morning summary. During last call,
+  (the lanes have its fix) or `ci-norun` goes in the morning summary. During last call,
   once failures show a pattern (the same step failing for several groups),
   stop sending one each: send one message naming the step, the groups and
   the shared cause, and put any later ones in the report. (Groups failing
