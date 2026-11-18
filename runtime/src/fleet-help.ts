@@ -25,10 +25,17 @@ Usage:
                                           the --hours from now to <time> ("09:00", "9am",
                                           "tomorrow 9am"; a time of day already past is
                                           tomorrow's). --lanes N: N lanes on each machine named,
-                                          for this run only; docs/machines.md keeps its count.
+                                          for this run only; docs/machines.md keeps its count,
+                                          and the start says the command that makes N its count.
                                           Lane clones past N with no loop running and nothing
                                           origin lacks are deleted (a later start clones them
-                                          again, with a cold target/)
+                                          again, with a cold target/). A machine with a day and a
+                                          night count ("2, 4 at night") starts the more of them;
+                                          a lane past the count for the time of day waits between
+                                          units (the profile's "night"), and its clone stays
+  factory/fleet.sh lanes [<machine> <count>]
+                                          each machine's lane count in docs/machines.md, or one's
+                                          set there ("2", "2, 4 at night"), committed and pushed
   factory/fleet.sh attach [--as ID]       this thread oversees the factory now (the newest
                                           to attach wins): prints its ID, then what the lanes
                                           and the last overseer logged since that one's last
@@ -73,8 +80,8 @@ Usage:
                                           CI that passed; since T ("09:00", "-24 hours"; default:
                                           since this checkout's last fleet start), then the check-in
                                           offer when one is due (tracker prune --due), and last the
-                                          scorecard's three worst lines and any prediction that came
-                                          due (just scorecard, this machine's lanes); with --done,
+                                          scorecard for the run (just scorecard --since T, this
+                                          machine's lanes); with --done,
                                           how many units were done since then
   factory/fleet.sh beat                   one heartbeat line: lanes busy, waiting, stopped; what each
                                           busy one works on, for how long, and when its session's
@@ -106,9 +113,8 @@ Usage:
                                           a headless desktop), and remove lane clones past
                                           docs/machines.md's count that hold nothing origin
                                           lacks. The overseer's last step.
-  factory/fleet.sh usage                  how much of the plan is left, where the week's line is
-                                          and until when the lanes pause for it, as each
-                                          machine's transcripts last saw it; trust the newest
+  factory/fleet.sh usage                  how much of the plan is left, as each machine's
+                                          transcripts last saw it; trust the newest
   factory/fleet.sh run <machine> <command…>   run a command in that machine's checkout
 
 Examples:
@@ -148,15 +154,15 @@ non-login ssh shell lacks.`;
 // The two tiers of events (Events, above). Wake now: what the owner must hear, or the overseer must
 // act on, before the morning. Summary: what only the end-of-run report needs.
 export const EVENTS_WAKE = `question ci-published ci-broken ci-known-failing ci-unrecorded ci-affected-failed land-check-unrun oom-kill stuck idle usage-pause usage-resume
-  main-broken review-skipped stuck-merge stuck-merging stuck-branch inbox-unread silent restart-failed lost-lease lease-kept store-up store-down store-torn store-aside-unfiled gone-lane-left
+  main-broken review-skipped stuck-merge stuck-merging stuck-branch inbox-unread silent restart-failed lost-lease lease-kept store-up store-down store-torn gone-lane-left
   resumed resume-refused resume-failed oom memory-low`.split(/\s+/);
 // The bad news, whichever tier it's in: what \`fleet summary\` and the report put first.
 export const EVENTS_PROBLEM = `ci-broken ci-known-failing ci-unrecorded ci-affected-failed land-check-unrun oom-kill stuck main-broken review-skipped
-  stuck-merge stuck-merging stuck-branch inbox-unread silent restart-failed lost-lease store-down store-torn store-aside-unfiled gone-lane-left resume-refused
+  stuck-merge stuck-merging stuck-branch inbox-unread silent restart-failed lost-lease store-down store-torn gone-lane-left resume-refused
   resume-failed oom memory-low ci-broken-noship ci-norun ci-known-failing-again store-aside-old resume-skipped land-check-timeout idle`.split(/\s+/);
 // The problem kinds that happen in a unit's session or landing: \`fleet summary\` says under each
 // which unit, and what became of it (or "unit: unknown"). Other kinds get that line only when
 // their line names a unit.
 export const EVENTS_OF_A_UNIT = `oom-kill stuck review-skipped stuck-merge stuck-merging stuck-branch inbox-unread silent land-check-unrun
   land-check-timeout resume-refused resume-failed resume-skipped`.split(/\s+/);
-export const EVENTS_SUMMARY = "ci-republished ci-broken-noship ci-norun ci-known-failing-again store-aside store-aside-old lane-stop held-back restarted wrap-up wrapped-up factory-edits tracker-edits resume-skipped land-check-timeout gone-lane-merged".split(" ");
+export const EVENTS_SUMMARY = "ci-republished ci-broken-noship ci-norun ci-known-failing-again store-aside store-aside-old store-aside-removed store-aside-kept lane-stop held-back restarted wrap-up wrapped-up factory-edits tracker-edits resume-skipped land-check-timeout gone-lane-merged".split(" ");

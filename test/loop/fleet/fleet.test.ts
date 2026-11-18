@@ -442,8 +442,7 @@ describe("a machine ssh can't reach", () => {
     usage = out(["usage"]);
     has(usage, `${HOST}: usage (as of`);
   });
-  test("  with the week's figure", () => { has(usage, "week 6% used"); });
-  test("  and where the week's line is", () => { has(usage, "week 6% used, the line is at 72.3%; resets"); });
+  test("  with the week's figure", () => { has(usage, "week 6% used, resets"); });
   test("  an unreachable machine says so", () => { has(usage, "ghost: unreachable"); });
   test("  and it points at the newest", () => { has(usage, `newest: ${HOST}'s`); });
   test("usage.sh in a lane clone reads the checkout's and other lanes' runs too", () => {

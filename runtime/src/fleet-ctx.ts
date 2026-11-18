@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { FIELDS, machineRows, type Field } from "./machines.ts";
+import { FIELDS, laneCount, laneMax, machineRows, type Field } from "./machines.ts";
 import { answer, project, type Answer } from "./oversee.ts";
 import { expandHome, pwd, shq, ymdHm } from "./sys.ts";
 import { platform, remote } from "./os.ts";
@@ -41,7 +41,11 @@ export function openFleet(env: NodeJS.ProcessEnv, floop: string) {
   const known = (m: string) => NAMES.includes(m);
   const field = (m: string, k: Field) => rows.find((r) => r[0] === m)?.[FIELDS.indexOf(k)] ?? "";
   const checkout = (m: string) => field(m, "checkout") || PWD;
-  const lanes = (m: string) => Number(field(m, "lanes") || "1");
+  // Its Lanes cell: one count, or a day count and a night count (machines.ts); null if it's neither.
+  const laneSpec = (m: string) => laneCount(field(m, "lanes") || "1");
+  // The lanes it runs, and the clones it keeps: with a day and a night count, the more of the two
+  // (a lane past the count for the time of day waits between units: loop-lanes.ts).
+  const lanes = (m: string) => { const c = laneSpec(m); return c ? laneMax(c) : NaN; };
   const loopArg = floop ? [floop] : [];
   const fromDeploy = env.FACTORY_SKILL_FROM === "deploy";
   // On the copy just deployed, not the one this command started with (unless chosen by hand).
@@ -211,7 +215,7 @@ export function openFleet(env: NodeJS.ProcessEnv, floop: string) {
   // The project's loops ("" the factory's own): a clone's lanes run as one unit per loop.
   const loopNames = ["", ...Object.keys((project().loops ?? {}) as object)];
 
-  return { env, floop, PWD, ME, NAMES, hasOrigin, known, field, checkout, lanes, loopArg, fromDeploy, deployed, takeMachines,
+  return { env, floop, PWD, ME, NAMES, hasOrigin, known, field, checkout, laneSpec, lanes, loopArg, fromDeploy, deployed, takeMachines,
     on, sh, note, watchOn, updateSkill, tier, onlyTier, service, laneState, LANES_FILE, MEM_FILE, told, tell, overrides, setOverride,
     runLanes, laneDir, allLanes, each, memOf, floorOf, loopNames };
 }

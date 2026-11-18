@@ -177,9 +177,7 @@ and looks again, until its deadline. It stops when:
   - an iteration fails for a reason other than a usage limit or the memory cap
 On a usage limit it sleeps (--limit-wait) and retries, until --hours runs out.
 Under 8% of the 5-hour window left (factory/usage.sh, the profile's "pause
-below") it pauses between units and resumes at the reset. Ahead of the week's
-line (the share of the week gone by, less the profile's "keep back", 15%) it
-pauses between units until the line reaches what's used (factory/usage.sh --help).
+below") it pauses between units and resumes at the reset.
 Restart. \`just fleet restart\` asks a lane to start again on the newest deployed copy of this
 skill (runs/.restart): it does so as soon as the unit it's on ends, or at once if it's waiting
 for work, and never waits for the machine's other lanes. It starts the new copy in place of
@@ -214,7 +212,7 @@ it; the overseer hears it once, from the first (fleet.sh, Events).
 
 Usage:
   factory/loop.sh [<loop>] [--max N] [--hours H] [--model M] [--effort E] [--mem SIZE]
-                  [--limit-wait MIN] [--idle-wait MIN] [--last-call MIN] [--no-wait] [--no-awake] [--dry-run]
+                  [--limit-wait MIN] [--idle-wait MIN] [--last-call MIN] [--lanes COUNT] [--no-wait] [--no-awake] [--dry-run]
 
 Examples:
   just loop                       # until done/gated/stuck, up to 8 hours
@@ -240,6 +238,10 @@ Options:
                    "last_call", else 30. 0: none (\`just fleet last-call\` still starts one).
                    Its "last_call_grace" (default 15) minutes set the wrap-up at its start
                    (Last call, above).
+  --lanes COUNT    The machine's lane count, as docs/machines.md's Lanes gives it (fleet start
+                   passes it on): "2, 4 at night" makes a lane past the count for the time of
+                   day wait between units until the count takes it in (the profile's "night",
+                   default 22:00-07:00). One count, or none, never waits.
   --no-wait        Stop when there's nothing to do instead of waiting.
   --no-awake       Don't keep the machine awake. By default the loop holds a
                    systemd-inhibit lock on sleep, idle and the lid switch while

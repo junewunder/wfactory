@@ -98,9 +98,8 @@ export function scopeGroups(T: State): Group[] {
   const L = ctx.env.LOOP;
   if (!L || L === "all" || !Object.keys(loops).length) return T.groups;
   const l = loops[L] || die(`no loop "${L}" (${Object.keys(loops).join(", ")})`);
-  // The loop's own merges (a lane's merge unit) belong to whichever loop the lane runs, and so do
-  // the units that sort what a copy down set aside (group aside, each pinned to its machine).
-  return T.groups.filter((g) => (l.groups || []).includes(g.id) || g.id === "merge" || g.id === "aside");
+  // The loop's own merges (a lane's merge unit) belong to whichever loop the lane runs.
+  return T.groups.filter((g) => (l.groups || []).includes(g.id) || g.id === "merge");
 }
 // A unit filed for one lane (a merge only that lane can settle) is offered to it alone.
 const laneOk = (u: Unit) => !u.lane || u.lane === ctx.env.FACTORY_LANE;

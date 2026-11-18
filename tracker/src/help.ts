@@ -11,7 +11,6 @@ State lives in the repo's tracker/ folder as JSON, written only by this CLI:
   tracker/templates/<t>.json  unit templates ("add lexer" makes its units)
   tracker/questions.json      questions for the owner, open and answered
   tracker/decisions.json      the owner's answers and agents' judgement calls
-  tracker/predictions.json    changes expected to move a scorecard figure (just scorecard expect)
   tracker/leases.json         which machine leases which group's data, and each machine's heartbeat
   tracker/log.jsonl           one line per write (merge=union)
   .tracker/                   gitignored: probe cache, view.html, lock, and
@@ -56,9 +55,9 @@ For agents:
   review <id> --evidence "…" [--dry-run]   hand to a second checker
   block <id> (--on q/<slug> | --why "…")
   reopen <id> [--note "…"]              back to ready
-  drop <id> --why "…"
-  park <id | selector> --why "…"        the owner set it aside: not offered, not waited on
-  unpark <id | selector>                back to ready (also lifts the owner's "later" on it)
+  drop <id | selector> … --why "…" [--dry-run]   several units, one write, one commit
+  park <id | selector> … --why "…" [--dry-run]   the owner set them aside: not offered, not waited on
+  unpark <id | selector> … [--dry-run]  back to ready (also lifts the owner's "later" on it)
   note <id> "…" [--dry-run]             for the next attempt (keeps 3)
   ask --title "…?" --context "…" --option "a | label | what it changes" …
       --default a --blocks <selector> … [--scope <selector> …] [--force]
@@ -109,10 +108,9 @@ Setting up:
   leases | lease holder|mine|idle|beat|take|release   group data leases
   data <group> | --unit <id> | --all    where a group's data lives (factory/store.sh)
   rebuilt [add <glob> --why "…"]        files a pipeline step rebuilds: a copy down doesn't keep them
-  state <id> [--branch|--by|--host]     one unit's status key, for scripts
-  expect <name> --test "< 0.1" --by D --why "…"   just scorecard expect: a figure a change should move
-  expect-settle <id> --note "…"         just scorecard settle: a prediction read and closed
+  state <id> [--branch|--by|--host|--landed]   one unit's status key, for scripts
   aside-set <id> <set> | --clear        store.sh: where its unfinished outputs were set aside
+  aside-retire [<id>…]                  store.sh: drop the units an older version filed to sort a set-aside copy
   busy [--except <id>] [--live]         groups with outputs here not on main yet (checks skip them)
   dir                                   where the state's tracker/ folder is
   memory [--check]                      rebuild memory/MEMORY.md from the memory files
@@ -187,12 +185,6 @@ const UNIT_FLAGS = `Unit flags: --title "…" (60 characters at most) --detail "
   --data <group>|none|default (whose data it works on; default: its own group's, if that has data)
   --reads input:part,…|none|default (the read-only inputs it needs copied down; default: store.reads)`;
 export const HELP: Record<string, string> = {
-  expect: `expect <name> --test "<op> <value>" --by YYYY-MM-DD --why "…"
-A prediction that a change moves a scorecard figure: the figure's name, the test it should pass
-(op one of < <= > >= =), the date it's judged on (today or later) and why. Prints its id. Use
-\`just scorecard expect\`, which checks the name is one of the scorecard's figures first.`,
-  "expect-settle": `expect-settle <id> --note "…"
-Close a prediction once its result is read: the scorecard stops showing it. Use \`just scorecard settle\`.`,
   next: `next [--claim] [--group G] [--skip-uses resource,…] [--skip-groups group,…] [--skip-units id,…] [--time-left S]
   [--last-call-in S --last-call-groups group,… --last-call-uses resource,…] [--json]
 The unit to work now, with its card. --claim claims it for this session.
@@ -271,14 +263,24 @@ Hand a unit to a later session for its independent check. Evidence as for done.`
 The unit waits on the owner's question, or is stuck on something else (say what).`,
   reopen: `reopen <id> [--note "…"]
 Put a unit back to ready, clearing its record.`,
-  drop: `drop <id> --why "…"
-Drop a unit for good.`,
-  park: `park <id | selector> --why "…"
+  drop: `drop <id | selector> … --why "…" [--dry-run]
+Drop units for good. Name several (IDs, and selectors: group:<g>, tag:<t>, a glob); one --why covers
+them all, and they go in one write: one commit and push, a log line per unit. Every unit is checked
+first: an unknown ID, a unit already done or dropped, or one in progress leaves all as they were,
+and the message names each (a selector leaves out the done and dropped ones it reaches). It says how
+many units and in which groups, and --dry-run lists them without writing. One ID alone is dropped
+whatever its state, as always.`,
+  park: `park <id | selector> … --why "…" [--dry-run]
 The owner set this work aside: it isn't offered, isn't waited on, and isn't counted as
-anything for the owner to do. Selectors: group:<g>, tag:<t>, a glob. Undo with unpark.`,
-  unpark: `unpark <id | selector>
-Bring parked units back to ready. A unit the owner put off (ask --parks) shows as parked while the
-decision holds, even after a reopen; unpark is what brings it back.`,
+anything for the owner to do. Selectors: group:<g>, tag:<t>, a glob. Name several, and
+they're parked in one write (one commit and push, a log line per unit) after every unit is
+checked: an unknown ID, a unit already done or dropped, or one in progress leaves all as they
+were, and the message names each. It says how many units and in which groups; --dry-run lists
+them without writing. Undo with unpark.`,
+  unpark: `unpark <id | selector> … [--dry-run]
+Bring parked units back to ready, several in one write as park does: a unit named by ID that
+isn't parked leaves all as they were. A unit the owner put off (ask --parks) shows as parked while
+the decision holds, even after a reopen; unpark is what brings it back.`,
   note: `note <id> "…" [--dry-run]
 What the next attempt must know (280 characters at most, {unit:<id>} counting as the
 ID; the last 3 are kept). Name units as {unit:<id>}; a bare ID is written so, with a
@@ -423,13 +425,20 @@ store.sh, when it puts the store's copy back over an unfinished unit's outputs: 
 work/.store/aside/ they went to on this machine, the commit its branch was on (they were built from
 it) and the session; the unit's card says so. --mixed: the set holds other work too, so it's never
 put back. --clear: they're back in work/, or the set is gone.`,
-  state: `state <id> [--branch | --by | --host]
+  state: `state <id> [--branch | --by | --host | --landed]
 Print one unit's status key (ready, doing, interrupted, merging, done, …), for scripts.
 --branch: the branch its record names instead (empty if none). --by: the session its record names.
---host: the machine it's pinned to, its own or its group's (empty if any).`,
+--host: the machine it's pinned to, its own or its group's (empty if any). --landed: when the
+branch it's done by landed on main (empty if it isn't done, or is done some other way: by hand,
+or reopened and done again without a landing).`,
   merged: `merged <id>… | --branch <branch>
 loop.sh, after merging a unit's branch into main and pushing: the unit stops showing as merging,
-and what needs it can start.`,
+what needs it can start, and its record says when it landed (\`state --landed\`).`,
+  "aside-retire": `aside-retire [<id>…]
+store.sh: drops the units an older version filed to sort a set-aside copy (the store settles those
+copies by rule now, and no session works one): the open ones of the group aside pinned to this
+machine, and any named. One a session is working, or whose branch is landing, is printed and left
+for the next look. Writes nothing when there's none.`,
   "review-fix": `review-fix <branch> --findings "…"
 loop.sh, when its review of a finished branch asks for fixes before it lands: the units waiting to
 merge on it go back to ready with the findings on their card (and a note saying so), and the next

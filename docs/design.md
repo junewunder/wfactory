@@ -31,7 +31,6 @@ tracker/
   questions.json      open and answered questions
   decisions.json      every decision, the owner's and agents'
   leases.json         which machine holds which group's data
-  predictions.json    changes expected to move a scorecard figure, by a date
   log.jsonl           append-only events
 .tracker/             gitignored: the computed cache, the viewer, the state clone
 ```
@@ -191,28 +190,18 @@ reset time, for the 5-hour window and the week. Under the profile's "pause
 below" of the 5-hour window, every lane pauses between units and resumes at
 the reset.
 
-The week is paced against a line. A fixed floor under the week's figure
-(stop with 15% left) ended weeks early and left their last share unused, and
-with nothing in its place a week either ran out before its reset, the lanes
-sitting until someone noticed, or ended with a share unused, so the owner
-paced by hand. The line: at any moment the lanes may have used the share of
-the week that has gone by, times what's left once the owner's share is kept
-back (the profile's "keep back", 15% by default; the week began 7 days before
-its reset). Ahead of the line, every lane pauses between units until the
-moment the line reaches what's used; on it or behind it, they carry on. That
-moment is worked out from the reading and the clock when the lane pauses, so
-a paused lane resumes without a new session to produce a reading. Lanes on
-the line reach the reset with the share kept back left and nothing else
-(with 0 kept back, nothing at all), which is what the floor got wrong; the
-unit tests run such a week to its end. Readings come in whole percents of
-the week, so lanes that could work faster than the line pause each time the
-reading passes it, for as long as the line takes to reach it (up to about 2
-hours a percent, with 15 kept back).
+The week is shown, never acted on. A fixed floor under it (stop with 15%
+left) ended weeks early with their last share unused, and the line that
+replaced it (the share of the week gone by, less a share kept back) paused
+the lanes on the nights the owner meant the week to be spent, and at its end
+held back group CI, which uses no model, until the reset (lesson 39). Both
+assumed an owner who wants some of the week kept; the owner may want it all
+spent, and holds the lanes back by hand (a stop time, `just pause`) when not.
 
 The plan is shared by every factory on a machine, and a factory reads only
 its own lanes' transcripts. So each lane writes the newest reading it sees
 to one file in the machine's wfactory state folder, and every factory's
-lanes there act on the newest in it, for both windows. Nothing keeps a list
+lanes there act on the newest in it. Nothing keeps a list
 of the factories. The owner's interactive sessions leave no reading on disk
 (their transcripts carry no `rate_limit_event`; the CLI shows the figures
 only to a status line command), so what they use is seen at the next
@@ -331,6 +320,12 @@ isn't told them again), and attach and the summary list each once.
 - A copy down over a copy not proven to be on the store moves what it
   replaces into `work/.store/aside/`. That's how a migration deletes nothing
   locally.
+- What's set aside is settled by a rule, with no unit and no question
+  (lesson 41). A set is removed only when the store's own record names the
+  units whose outputs it holds and the tracker's record says each has landed
+  on main or is dropped: main rebuilds those. Anything short of that stays,
+  with a line in the morning summary; a person or an audit removes it, never
+  a guess.
 - A store without its `stamps/` folder (a dataset not mounted, a wrong path)
   is an outage, never "nothing there yet".
 - Every rsync has an I/O timeout, and ssh a keepalive and BatchMode, so a
@@ -536,11 +531,13 @@ of context, which makes review the cheap place for a project's standards
 ## The scorecard
 
 `just scorecard` (`runtime/src/scorecard*.ts`) says where a run's sessions
-and time went: sessions that finished no unit and how they ended, units
-claimed over and over, the review, waiting and CI, and the cost of a
-finished unit. Each line carries the share of the period's session cost or
-lane time it accounts for, and they're ranked by it, so the first three are
-the worst; `fleet summary` ends with those.
+and time went: the sessions, what each finished or what became of it, and
+the units done, in lines that add up as they stand; then sessions whose
+work was lost, units claimed over and over, the review, waiting and CI,
+and the cost of a finished unit. A line that is waste carries the share of
+the period's session cost or lane time it accounts for, and they're ranked
+by it. `fleet summary` ends with the card for its run, so the morning
+report quotes it instead of doing its own sums (lesson 38).
 
 - **From the records only.** It reads the tracker's log, the lanes' run
   index and events and the heavy-job history, and nothing else: no model,
@@ -553,13 +550,13 @@ the worst; `fleet summary` ends with those.
   waited for is in a log line's words only, so it isn't counted). A record
   it doesn't understand is counted as unknown and named, so a new kind of
   event shows up instead of vanishing from the figures.
-- **Predictions are tracker data.** A change states the figure it should
-  move, by when and why (`just scorecard expect`), on main beside the
-  decisions, so the scorecard can say "held" or "missed" once the date has
-  passed, on any machine, until someone reads it and settles it.
+- **Only lost work is waste.** A session killed over memory, cut off or
+  ended for going silent lost its work. A unit sent back by the review or
+  handed back keeps its branch for the next session, a question waits on
+  the owner, and a unit given back unstarted cost next to nothing: those
+  are said as what they are, with their cost and no share (lesson 38).
 - **This machine's lanes.** The run index and events stay in each lane's
   clone, so the session, cost, waiting and review figures cover the machine
-  it runs on; units and CI come from the log, every machine's.
-- **A prediction is judged on its own period**, from when it was made to
-  the end of its date, not on the card's: a figure taken over everything
-  recorded would mostly be the time before the change.
+  it runs on; units and CI come from the log, every machine's. Removing a
+  clone moves them to the checkout's `runs/removed-clones/` first, and the
+  card reads them there; loop claims here with no record are counted.

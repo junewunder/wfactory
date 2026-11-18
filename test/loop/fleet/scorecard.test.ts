@@ -1,5 +1,5 @@
-// fleet summary ends with the scorecard's three worst lines (runtime/src/scorecard.ts), from this
-// machine's records since the run started: sessions the tracker recorded (claimed by tags of
+// fleet summary ends with the scorecard's lines (runtime/src/scorecard.ts), from this machine's
+// records since the run started, so the morning report quotes figures that add up: sessions the tracker recorded (claimed by tags of
 // their own, one given back unstarted, one handed back with its work kept, one done), rows for them
 // in the checkout's run index, and a usage pause in its events. No lane runs.
 // Run: node --test test/loop/fleet/
@@ -20,7 +20,7 @@ const hm = (t: Date) => `${local(t, "-")} ${p2(t.getHours())}:${p2(t.getMinutes(
 
 describe("fleet summary: the scorecard last", () => {
   let sum = "", card = "";
-  test("fleet summary ends with the scorecard's three worst lines", () => {
+  test("fleet summary ends with the scorecard's lines for the run", () => {
     for (const [id, title] of [["g/a", "Unit a"], ["g/b", "Unit b"], ["g/c", "Unit c"]]) w.setup(["add-unit", id, "--title", title], F);
     as("t1", ["claim", "g/a"]); as("t1", ["unclaim", "g/a", "--unstarted"]);
     as("t2", ["claim", "g/b"]); fs.writeFileSync(path.join(F, "b.txt"), "work\n"); as("t2", ["unclaim", "g/b"]);
@@ -37,15 +37,18 @@ describe("fleet summary: the scorecard last", () => {
     assert.equal(r.code, 0, r.stdout);
     sum = r.stdout;
     card = w.just(["scorecard", "--since", since], F).stdout;
-    const worst = card.split("\n").slice(1, 4);
-    assert.deepEqual(sum.replace(/\n+$/, "").split("\n").slice(-4), [
-      `Scorecard, its three worst lines (this machine's lanes since ${since}; \`just scorecard --since "${since}"\` has the rest):`,
-      ...worst.map((l) => `  ${l}`),
+    // Every line of the card but those on what isn't recorded, after its header.
+    const c = card.replace(/\n+$/, "").split("\n"), lines = c.slice(1).filter((l) => !l.includes(": not recorded ("));
+    assert.deepEqual(sum.replace(/\n+$/, "").split("\n").slice(-(lines.length + 1)), [
+      `Scorecard (\`just scorecard --since "${since}"\`): ${c[0]}`,
+      ...lines.map((l) => `  ${l}`),
     ]);
   });
-  test("  which are the sessions that finished no unit, by their share of the cost", () => {
-    has(sum, "  35% of cost       Sessions that finished no unit: 2 of 3 (67%), $3.50");
-    has(sum, "  30% of cost       Sessions that handed their unit back, work kept: 1 (33% of sessions), $3.00");
+  // The report's figures, which add up without a sum: sessions, what each finished or became of.
+  test("  first the sessions and what became of each, and the units done", () => {
+    has(sum, "  Sessions: 3, $10.00: 1 finished their unit (1 done), 2 finished none: 1 left their work for a later session to carry on, 1 gave their unit back unstarted\n");
+    has(sum, "  Units done: 1 in the tracker's log (every machine, each once), 1 of them by this machine's sessions\n");
   });
+  test("  no waste: no session lost its work", () => { has(sum, "  0% of cost        Waste: sessions that lost their work: 0 of 3 (0%), $0.00\n"); });
   test("  and the usage pause, by its share of lane time", () => { has(sum, "  24% of lane time  Waiting in the usage pause: 10 min"); });
 });

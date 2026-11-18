@@ -259,7 +259,7 @@ options with what each changes, and the default you'll take without an
 answer.
 
 **The morning summary** holds what the owner only needs once, in the end-of-run
-report: republishes, set-asides (`store-aside`, `store-aside-old`), CI broken
+report: republishes, set-asides (the `store-aside` kinds), CI broken
 where nothing it publishes waits, last call's wrap-ups, units held back as
 too long for the time before last call (`held-back`: "held back: 5 units
 using the editor, too little time before last call"), routine lane stops,
@@ -496,15 +496,10 @@ end-of-run report sums them up in one line.
        the night), with the numbers;
      - what's waiting on the owner: the questions and gates (`just
        questions`), and what `just next` would do once they answer.
-   - Where the run's sessions and time went: `just fleet summary` ends
-     with the scorecard's three worst lines (each with its share of the
-     session cost or lane time), and any prediction that came due, held or
-     missed, with its figure. Give them as they are; `just scorecard
-     --since <start>` has the rest, from the records alone. A missed
-     prediction says a change didn't do what it was for: name the change.
-   - Then what got done: `just fleet summary --done` for the count, never
-     a count of your own; `just log --since <start>` for what; and the CI
-     that passed and published (the end of `just fleet summary`);
+   - Where the run's sessions and time went, and the count of what got
+     done: the scorecard that ends `just fleet summary`, its lines as they
+     are, never a figure of your own; `just log --since <start>` for what
+     was done, and the CI that passed and published;
    - the rest of the morning summary (`just fleet summary`, "The rest"):
      republishes, set-asides and the like, a line per kind;
    - what you changed and why, and the quiet log in one line;
@@ -589,11 +584,9 @@ status` what each machine has cached. All quiet, logged only: leases taken,
 copied, released, old groups deleted to make room, and `store-aside-old`
 (a copy down over a copy nobody worked on, unstamped or changed, that only replaced
 files with newer ones from the store: older copies only, deleted at once).
-A `store-aside` set comes with a unit that sorts it, pinned to that
-machine, in the group `aside` (no gates, no parks: don't give it needs or
-park it); it's lane work, not the owner's, and never a question for them. For the end-of-run report,
-`just store aside` on each machine lists what's still set aside and the
-unit sorting each. Tell the owner about:
+A set-aside copy is settled by rule (`just store --help`), never by a unit
+or a question: `store-aside-removed` and `store-aside-kept` are the report's
+lines for it. Tell the owner about:
 - `lost-lease`, `lease-kept`, `store-up` or `store-down` events (data that
   didn't reach the store, or a lease that moved under a running lane), with
   what happens next. A failed copy back is tried again at each look; a
@@ -601,11 +594,7 @@ unit sorting each. Tell the owner about:
 - `store-empty` (a machine's empty copy wasn't copied back over the store's
   files: data put on the store by hand without a copy down there) and
   `store-moved` (a machine owed a copy back, but the store moved on after its
-  lease lapsed: its copy is set aside at its next copy down, with a unit);
-- `store-aside-unfiled` (a set got no unit: the tracker refused it; the
-  next idle look tries again, and `just store aside` on that machine shows
-  whether it did): tell the owner if the reason won't go away by itself. Also a
-  sorting unit that goes stuck,
+  lease lapsed: its copy is set aside at its next copy down),
   and `store-torn` (a group on the store is a copy back
   that never finished; its last good state is in the store's snapshots, if
   it keeps any);
@@ -672,36 +661,11 @@ ping, and never something to put back by hand.
 ## The usage pause
 
 The lanes watch the plan's usage themselves (`factory/usage.sh`, from the
-`rate_limit_event` lines in their transcripts), and pause between units for
-either of two reasons. The event says which, and when the lanes are back.
-
-- **The 5-hour window:** with under 8% of it left (the profile's "pause
-  below"), every lane pauses and resumes when the window resets.
-- **The week's line:** the lanes may have used the share of the week that
-  has gone by, less the share kept back for the owner (the profile's "keep
-  back", 15% by default). Ahead of that line, every lane pauses until the
-  line reaches what's used, a time worked out when it pauses, so it resumes
-  with no new reading. With more used than the lanes may use at all (85%,
-  with 15 kept back), that's the week's reset. `just usage` shows it: "week
-  62% used, the line is at 58.3%: lanes pause until Thu 14:00".
-
-Each pause and resume shows up in `just fleet wait` as news. Tell the owner
-one line at each pause ("Usage: lanes paused at 92% of the 5-hour window;
-back at 14:00", "Usage: the week is at 62% with its line at 58%; lanes back
-Thu 14:00") and one at each resume. Readings come in whole percents of the
-week, so lanes that work faster than the line pause each time the reading
-passes it, for as long as the line takes to reach it (up to about 2 hours a
-percent, with 15 kept back): that's the pacing working, not a fault. A
-paused lane looks at the reading again each minute: a newer one with more
-used moves its time (a new pause event, with no resume in between), and one
-that no longer has it ahead resumes it.
-
-The reading is one per machine: every factory's lanes there write the newest
-they see to the machine's wfactory state folder and act on the newest in it,
-so lanes here may pause on what another factory's lanes read (`just usage`
-says whose). The owner's own interactive sessions leave no reading; what
-they use shows at the next session's. Don't work around a week pause
-(pausing and starting the lanes changes nothing: they check as they start).
-The share kept back is the owner's setting, in their profile: if they want
-the lanes to have more of the week, they change "keep back" (0 keeps nothing
-back, `off` stops the pacing), and the lanes act on it within a minute.
+`rate_limit_event` lines in their transcripts): with under 8% of the 5-hour
+window left (the profile's "pause below"), every lane pauses between units
+and resumes when the window resets. Each shows up in `just fleet wait` as
+news. Tell the owner one line at each pause ("Usage: lanes paused at 92% of
+the 5-hour window; back at 14:00") and one at each resume. The reading is
+one per machine, so lanes here may pause on what another factory's lanes
+read (`just usage` says whose). Nothing acts on the week's figure: holding
+the lanes back for it is the owner's call.

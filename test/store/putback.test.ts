@@ -1,5 +1,5 @@
 // Putting the store's copy back over an unfinished unit's outputs: it waits for another lane's
-// session on the group; outputs it can't tell apart from finished ones go aside as a set to sort;
+// session on the group; outputs it can't tell apart from finished ones go aside as one set;
 // a store that moved on, or is torn, older session marks, a CI run, a copy back still owed, and
 // nothing on the store yet. Run: node --test test/store/
 // Setup goes before a test's checks (or in an after() hook), so a failing check can't skip it.
@@ -17,14 +17,8 @@ const ok = (args: string[], env: NodeJS.ProcessEnv = {}) => { const r = store(a,
 const G = (x: string) => a.at(`work/.store/groups/${x}`);
 const out9 = (x: string) => a.at(`work/out/f9/${x}`);
 const pid = String(process.pid);
-// The sets aside of a group dropped, and the units that sort them.
-const sortdrop = (g: string) => {
-  for (const x of asides(a, g)) {
-    const u = chomp(readOr(path.join(x, ".unit")));
-    if (u) a.run("factory/tracker", ["drop", u, "--why", "test"]);
-    fs.rmSync(x, { recursive: true, force: true });
-  }
-};
+// The sets aside of a group dropped.
+const sortdrop = (g: string) => { for (const x of asides(a, g)) fs.rmSync(x, { recursive: true, force: true }); };
 const done = (id: string, env: NodeJS.ProcessEnv = {}) => a.setup(["done", id, "--evidence", "test"], env);
 group("f9");
 a.setup(["lease", "take", "f9"]);
@@ -33,7 +27,7 @@ write(out9("base.txt"), "base\n"); ok(["end", "f9", "f9/s1", "c"]);
 
 // Two lanes on one group: an unfinished unit's put-back waits for the other lane's session. If that
 // unit lands meanwhile, its outputs can't be told apart from the unfinished ones: both go aside, as
-// a set with a unit to sort it, and neither reaches the store.
+// one set naming both units, and neither reaches the store.
 describe("two lanes on one group", () => {
   test("an unfinished unit's put-back waits for another lane's session on the group", () => {
     add("f9/a"); add("f9/b");
@@ -51,8 +45,8 @@ describe("two lanes on one group", () => {
     assert.ok(!fs.existsSync(st("groups/f9/out/a.txt")) && !fs.existsSync(st("groups/f9/out/b.txt")));
   });
   test("  the store's copy is put back here", () => { assert.ok(!fs.existsSync(out9("a.txt")) && !fs.existsSync(out9("b.txt"))); });
-  test("  both are kept aside, in a set to sort", () => { assert.equal(asideLines(a, "f9", ".kind", "out/a.txt", "out/b.txt"), "check A B"); });
-  test("  with a unit, and an event that says why", () => { has(a.events(), "mixed with finished f9/b"); });
+  test("  both are kept aside, in one set for the two units", () => { assert.equal(asideLines(a, "f9", ".kind", "out/a.txt", "out/b.txt"), "units A B"); });
+  test("  with an event that says why, and no unit to sort it", () => { has(a.events(), "mixed with finished f9/b"); hasnt(a.events(), "a unit sorts it"); });
   after(() => { sortdrop("f9"); drop("f9/a"); });
 });
 
@@ -96,7 +90,7 @@ describe("older session marks", () => {
     try { ok(["release-idle"]); } finally { await lock.release(); }
     assert.ok(fs.existsSync(G("f9.dirty.a-lane1")));
   });
-  test("  and ended once it doesn't: put back, with a unit to sort it (no unit named)", () => {
+  test("  and ended once it doesn't: put back (no unit named)", () => {
     ok(["release-idle"]);
     assert.ok(!fs.existsSync(G("f9.dirty.a-lane1")), "the mark is still there");
     assert.ok(!fs.existsSync(out9("d.txt")), "not put back");
@@ -105,7 +99,7 @@ describe("older session marks", () => {
 });
 
 // A finished unit's copy back still owed (origin out of reach) when an unfinished unit's put-back
-// runs: the finished work is in the copy too, so the set is one to sort, never deleted with the unit.
+// runs: the finished work is in the copy too, so nothing accounts for all of the set: never deleted with the unit.
 describe("a copy back still owed under a put-back", () => {
   test("(f9/f's copy back is owed)", () => {
     ok(["take", "f9", "--new"]);
@@ -133,11 +127,15 @@ describe("a copy back still owed under a put-back", () => {
     ok(["release-idle"]);
     assert.ok(!fs.existsSync(out9("u.txt")));
   });
-  test("  the owed finished work goes aside to sort, not deleted with the unfinished unit", () => { assert.equal(asideLines(a, "f9", ".kind", "out/f.txt"), "check F"); });
-  after(() => { sortdrop("f9"); drop("f9/u"); a.setup(["lease", "release", "f9"]); });
+  test("  the owed finished work goes aside with it", () => { assert.equal(asideLines(a, "f9", ".kind", "out/f.txt"), "check F"); });
+  test("  and isn't deleted with the unfinished unit, dropped", () => {
+    drop("f9/u"); ok(["aside", "sort"]);
+    assert.equal(asideLines(a, "f9", ".kind", "out/f.txt"), "check F");
+  });
+  after(() => { sortdrop("f9"); a.setup(["lease", "release", "f9"]); });
 });
 
-// Nothing on the store yet: an unfinished unit's outputs (with anything else here) all go aside, to sort.
+// Nothing on the store yet: an unfinished unit's outputs (with anything else here) all go aside.
 describe("a put-back with nothing on the store", () => {
   test("a put-back with nothing on the store sets everything here aside, and stamps nothing", () => {
     group("f10");
@@ -147,7 +145,7 @@ describe("a put-back with nothing on the store", () => {
     assert.ok(!fs.existsSync(a.at("work/out/f10/u.txt")), "u.txt still here");
     assert.ok(!fs.existsSync(st("stamps/f10.json")), "stamped");
   });
-  test("  kept, to sort", () => { has(asideRead(a, "f10", "out/u.txt"), "U"); });
+  test("  kept, as a set nothing accounts for", () => { assert.equal(asideLines(a, "f10", ".kind", "out/u.txt"), "check U"); });
   test("  and the lease goes", () => {
     sortdrop("f10"); drop("f10/u");
     ok(["release-idle"]);
