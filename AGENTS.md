@@ -12,9 +12,10 @@ everything else is the code those two run.
 
 - `runtime/`: the loop, lanes, fleet, long jobs, heavy-job slots, memory
   caps, the store, usage, the profile reader, the recipes (`factory.just`),
-  and the two prompts (`prompt.md` for worker sessions, `oversee.md` for the
+  and the prompts (`prompt.md` for worker sessions, `oversee.md` for the
   overseer, with `oversee-card.md` its short card, what `just oversee-guide`
-  prints). Each machine runs a deployed copy (`scripts/deploy.sh`). The
+  prints, and `worker.md` for a sweep's or a sprint's worker, what `just
+  worker-guide` prints ahead of `prompt.md`). Each machine runs a deployed copy (`scripts/deploy.sh`). The
   port to TypeScript is under way: `main.ts` runs the ported commands
   (`src/`: machines, profile, usage, inbox, heavy, capped, long, lane, store,
   oversee, fleet, loop, and the machine's daemon in `src/daemon.ts`;
@@ -80,6 +81,11 @@ everything else is the code those two run.
   searchable) holds replays of a real project's opening on a new version of
   the skill: an answer key, the owner's day-one persona, and how the replay
   was run. Each folder's README says how to run the next one.
+- `docs/sweep.md` and `docs/sprint.md` are the two modes in which the
+  owner works a factory by hand with the lanes off, each a recipe SKILL.md
+  points to. Both end a worker's unit the same way (the foreman's read and
+  merge, and what that merge has been checked by): a change to one's goes
+  in the other's too. What a worker does is in `runtime/worker.md`, once.
 - The other step files (`docs/scaffold.md`, `docs/design-questions.md`,
   `docs/pilot.md`) and `docs/scaling-out.md` are SKILL.md moved out, read
   only when an agent reaches that step, so SKILL.md holds what every mode

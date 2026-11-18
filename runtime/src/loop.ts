@@ -18,7 +18,7 @@ import { memoryTurn, type MemTurn } from "./heavy.ts";
 import { measured } from "./capped.ts";
 import { platform } from "./os.ts";
 import { dropRecord } from "./daemon.ts";
-import { tr, trOut, trWait } from "./tr.ts";
+import { lanesOff, tr, trOut, trWait } from "./tr.ts";
 import { usagePause } from "./loop-usage.ts";
 import { lanesRest } from "./loop-lanes.ts";
 import { HELP } from "./loop-help.ts";
@@ -32,7 +32,7 @@ import { configure, dryRun, options, runClock, sessionPrompt, takeCheckout, type
 import { sessionAdd, sessionBase, workUnit } from "./loop-unit.ts";
 import { affectedLines, ciAffected } from "./loop-affected.ts";
 import { runReview } from "./review.ts";
-import { exe, exists, hmAt, killTree, probeCmd, rm } from "./loop-util.ts";
+import { exe, exists, hmAt, json, killTree, probeCmd, read, rm } from "./loop-util.ts";
 
 export { HELP };
 const HERE = path.dirname(path.dirname(fileURLToPath(import.meta.url)));   // the skill's runtime/, as deployed
@@ -353,6 +353,13 @@ export class Loop {
       k.refresh();
       if (epoch() >= k.deadline) { this.stop(`out of time (${k.stopAt ? `the stop time, ${k.stopAt}, not ` : ""}--hours ${o.hours})${ciUnrun(k.inLc)}`); break; }
       if (exists("runs/.pause")) { rm("runs/.pause", "runs/.pause-now"); this.stop("paused at a good point (just pause)"); break; }
+      // Held off for work done by hand (`just fleet off`, on any machine): as a pause. (Read from
+      // the state's own file, which the look before brought up to date: no tracker call until
+      // it's there.)
+      if (json(read(path.join(this.cfg.tdir, "project.json")))?.lanes_off) {
+        const why = lanesOff();
+        if (why) { rm("runs/.pause", "runs/.pause-now"); this.stop(`paused at a good point: ${why}`); break; }
+      }
       // Not while main is red outside last call: the lane stops below anyway, and a restarted one
       // would start with red unknown and take units until a landing failed again (#118). Its next
       // start is on the newest copy anyway.

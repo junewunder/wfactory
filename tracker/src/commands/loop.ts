@@ -5,14 +5,14 @@ import { ctx, git } from "../ctx.ts";
 import { applyProbe, probesFirst } from "../probes.ts";
 import { load, loadCache, log, mutate, originLeases, readLog, saveCache, stateDir, touch } from "../store.ts";
 import { procStart } from "../proc.ts";
-import { NetError, die, list, now, parseArgs, plural, str } from "../text.ts";
-import { MAX_NOTE, addNote, fixIds, groupTitle, name, resolve } from "../names.ts";
+import { NetError, die, list, now, parseArgs, plural, since, str, strs } from "../text.ts";
+import { MAX_NOTE, addNote, checkText, fixIds, groupTitle, name, resolve } from "../names.ts";
 import { beatRecords, beatsHere, claimAlive, dataGroup, dropLease, groupData, newerIn, heldHere, landingMine, leaseAge, leaseOf, liveLease, lockHeld, takeLease } from "../machine.ts";
 import { busyGroups, ciKeepsLease } from "../ci.ts";
 import { SETTLED, derive, hostOk, sentence } from "../status.ts";
 import { gaveBackLine } from "../sessions.ts";
 import { C } from "./registry.ts";
-import type { CiRun, Group, Note, Overseer, State, Unit, UnitRecord } from "../types.ts";
+import type { CiRun, Group, LanesOff, Note, Overseer, State, Unit, UnitRecord } from "../types.ts";
 
 C.where = (a) => {
   const T = load();
@@ -202,6 +202,47 @@ C["lanes-stopped"] = (a) => mutate((T) => {
   log(T, "lanes-stopped", null, `${ctx.HOST}: the last lane stopped and tidied up${failed ? `, except: ${failed}` : ""}; the machine may sleep now`);
   return 0;
 });
+// The lanes held off, for work done by hand beside the factory (a sweep, a sprint): `fleet off`
+// records it and pauses the lanes, `fleet on` lifts it. While it holds, `fleet start` and the loop
+// refuse to start a lane and a running loop stops after its unit, on every machine, since the
+// record is main's. --were "<machine> <lanes> [<stop time, epoch seconds>]": the lanes running
+// when it was set. A second `off` keeps the first's record: the lanes it would find are already
+// stopping. --why: the one line a refusal gives, or nothing when they aren't held off.
+const offWhy = (h: LanesOff) => `the lanes are held off for ${h.for} (since ${since(h.at)}): no lane runs beside it. \`just fleet on\` lifts it once that's over`;
+C.lanes = (a) => {
+  const o = parseArgs(a, ["were"]);
+  const sub = o._[0];
+  if (sub === undefined) {
+    const h = load().project.lanes_off;
+    if (o.json) console.log(JSON.stringify(h ?? null));
+    else if (o.why) { if (h) console.log(offWhy(h)); }
+    else console.log(h ? offWhy(h) : "the lanes aren't held off");
+    return 0;
+  }
+  if (sub !== "off" && sub !== "on") die('usage: lanes [--why | --json] | lanes off --for "…" [--were "<machine> <lanes> [<until>]"]… | lanes on');
+  return mutate((T) => {
+    const h = T.project.lanes_off;
+    if (sub === "on") {
+      if (!h) { console.log("the lanes weren't held off"); return 0; }
+      delete T.project.lanes_off;
+      T.dirty.add("project"); log(T, "lanes", null, `the lanes may start again: ${h.for} is over`);
+      console.log(`the lanes may start again (they were held off for ${h.for} since ${since(h.at)})`);
+      return 0;
+    }
+    if (h) { console.log(`already so: ${offWhy(h)}`); return 0; }
+    const what = (str(o.for) ?? "").trim() || die('lanes off needs --for "…": what runs in the lanes\' place (a sweep of shared work, a sprint)');
+    checkText(T, "--for", what);
+    const were = strs(o.were).map((w) => {
+      const [machine, lanes, until] = String(w).trim().split(/\s+/);
+      if (!machine || !/^[1-9][0-9]*$/.test(lanes ?? "") || (until !== undefined && !/^[0-9]+$/.test(until))) die(`lanes off --were takes "<machine> <lanes> [<stop time, epoch seconds>]" (got "${w}")`);
+      return { machine, lanes: Number(lanes), ...(until ? { until: Number(until) } : {}) };
+    });
+    T.project.lanes_off = { at: now(), by: ctx.TAG, for: what, were };
+    T.dirty.add("project"); log(T, "lanes", null, `the lanes are held off for ${what}`);
+    console.log(offWhy(T.project.lanes_off));
+    return 0;
+  });
+};
 // A claim given back. --unstarted: the loop claimed a unit it can't work after all, before its
 // session (no room in the cache for its data, CI wants its resource). Else it's the session's own:
 // one that did work (commits since the claim, changes in its tree or its group's data), or picked
