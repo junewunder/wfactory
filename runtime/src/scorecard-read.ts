@@ -39,7 +39,7 @@ export interface Records {
 // ones still in logs. A test keeps the list whole.
 export const LOG_CMDS = new Set(`add add-group add-unit answer aside-set ask block check check-ready checked-in ci-fail ci-fix-shared
   ci-known ci-pass ci-retry ci-split ci-start ci-touch ci-unclaim claim decide done drop edit edit-group expect expect-settle focus
-  landing lanes-stopped lease merged note overseer park pass prune priority publish rebuilt release rename reopen review settle sync
+  landing lanes lanes-stopped lease merged note overseer park pass prune priority publish rebuilt release rename reopen review settle sync
   unclaim unpark withdraw ci-lost`.split(/\s+/));
 // Every kind of event the lanes and daemons write (EVENTS_* in fleet-help.ts and the kinds no tier
 // names), and an older one. A project's own kinds (tracker/project.json "events") count too.

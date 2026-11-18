@@ -1,4 +1,4 @@
-// The recipes in factory.just that do more than run one command: runs, prompt, oversee-guide, until,
+// The recipes in factory.just that do more than run one command: runs, prompt, worker-guide, oversee-guide, until,
 // view-image.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -74,6 +74,16 @@ function withLocal(file: string, local: string): number {
 export const promptCli = (args: string[]) => args[0] === "-h" || args[0] === "--help"
   ? (console.log("prompt: the loop's worker prompt (the skill's runtime/prompt.md), then factory/prompt.local.md (just prompt)."), 0)
   : withLocal("prompt.md", "factory/prompt.local.md");
+
+// A sweep's or a sprint's worker's guide (the skill's runtime/worker.md), then what it builds on:
+// the loop's worker prompt and the project's own rules.
+export function workerGuideCli(args: string[]): number {
+  if (args[0] === "-h" || args[0] === "--help") { console.log("worker-guide: the guide for a sweep's or a sprint's worker (the skill's runtime/worker.md), then the loop's worker prompt (runtime/prompt.md) and factory/prompt.local.md (just worker-guide)."); return 0; }
+  const text = read(path.join(HERE, "worker.md"));
+  if (text === null) { console.error(`worker.md: not found in ${HERE}`); return 1; }
+  process.stdout.write(`${text}\n---\n\n`);
+  return withLocal("prompt.md", "factory/prompt.local.md");
+}
 
 // The overseer's card (the skill's runtime/oversee-card.md: the rules, and what to do at each
 // wake), or with --full the whole guide (runtime/oversee.md); then this project's additions.

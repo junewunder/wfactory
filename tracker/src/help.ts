@@ -44,7 +44,7 @@ Usage: tracker <command> [args]   (just <command> in a factory repo)
 
 For agents:
   next [--claim] [--group G] [--skip-uses r,…] [--json]   the unit to work, with its context
-  claim <id>                            claim a unit you were told to work
+  claim <id> [--branch [B]]             claim a unit you were told to work (--branch: on a branch someone merges later)
   queue [-n N] [--json]                 what each machine's lanes take next, and why
   show <id> [--full|--why-all] [--json] a unit, group, question or decision
                                         (--json on a decision: who made it, and whether it still stands)
@@ -103,6 +103,7 @@ Setting up:
   land-fail <branch> --evidence "…"    loop.sh: its check before landing failed; back to ready (stuck the 3rd time)
   unclaim <id> [--unstarted]            give back this session's claim (its work kept, if it did any)
   lanes-stopped [--failed "…"]          loop.sh: this machine's last lane stopped and tidied up
+  lanes [off --for "…" | on]            hold the lanes off while work is done by hand (just fleet off | on)
   held-at <host> <time> [--json]        the units whose sessions on host were open then (fleet summary)
   overseer [take <id>]                  which thread oversees the factory (fleet attach)
   leases | lease holder|mine|idle|beat|take|release   group data leases
@@ -231,11 +232,15 @@ offers there now, as the loop sees it (new leases allowed), after any due CI a l
 first; a unit two machines list goes to the
 first lane to ask. Other machines' lane locks and resources can't be seen from here, so they're
 taken as free.`,
-  claim: `claim <id>
+  claim: `claim <id> [--branch [<name>]]
 Claim a unit you were told to work (next --claim picks and claims in one go). A check whose
 checks.ready hook says it can't be judged yet isn't claimed (exit 1): it waits on what the hook named. With FACTORY_BRANCHES, a
 unit claimed by a session that already holds one goes on that one's branch, the branch it's working on,
-and lands with it.`,
+and lands with it.
+--branch: for a session outside the loop that works the unit on a branch someone else merges (a
+sweep's or a sprint's worker): the claim records that branch (the one this checkout is on, or
+<name>), so the unit recorded done shows as merging, and what needs it waits, until the branch is
+on main and whoever merged it runs \`merged --branch <name>\`.`,
   show: `show <id | group | q/<slug> | d/<slug>> [--full | --why-all] [--json]
 A unit's card, a group's units, a question with its options, or a decision. Notes from
 earlier attempts come right after what done means.
@@ -428,7 +433,15 @@ Print one unit's status key (ready, doing, interrupted, merging, done, …), for
 --host: the machine it's pinned to, its own or its group's (empty if any).`,
   merged: `merged <id>… | --branch <branch>
 loop.sh, after merging a unit's branch into main and pushing: the unit stops showing as merging,
-and what needs it can start.`,
+and what needs it can start. Also whoever merges a branch claimed with \`claim --branch\`.`,
+  lanes: `lanes [--why | --json] | lanes off --for "…" [--were "<machine> <lanes> [<until>]"]… | lanes on
+The lanes held off, for work done by hand beside the factory (a sweep, a sprint). \`just fleet off\`
+and \`just fleet on\` run these, with the lanes that were running. While it holds, \`fleet start\` and
+the loop refuse to start a lane, and a running loop stops after its unit, on every machine (the
+record is main's). off: --for says what runs in the lanes' place; --were, the lanes running then and
+their stop time (epoch seconds), for whoever starts them again. A second off keeps the first's
+record. No subcommand: whether they're held off (--why: the one line a refusal gives, nothing when
+they aren't; --json: the record, or null).`,
   "review-fix": `review-fix <branch> --findings "…"
 loop.sh, when its review of a finished branch asks for fixes before it lands: the units waiting to
 merge on it go back to ready with the findings on their card (and a note saying so), and the next

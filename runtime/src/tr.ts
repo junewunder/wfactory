@@ -85,3 +85,10 @@ export function openingOpen(run: (args: string[]) => TrOut = tr): string {
   if (s === "dropped") return `the opening's gate was dropped, so it can't be passed: \`just reopen ${OPENING_GATE}\`, then the owner passes it`;
   return `the opening isn't over: lanes start once the owner passes its gate (\`just pass ${OPENING_GATE}\`); see docs/factory.md, "The opening"`;
 }
+
+// The lanes held off while work is done by hand beside the factory (the tracker's `lanes`, set by
+// `just fleet off`): what to say while they are, or "" when they aren't.
+export function lanesOff(run: (args: string[]) => TrOut = tr): string {
+  const r = run(["lanes", "--why"]);
+  return r.code === 0 ? r.out.trim() : "";
+}

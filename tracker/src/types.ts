@@ -260,6 +260,10 @@ export interface Project {
   // before the stop.
   min_unit_minutes?: number;
   publish?: string;
+  // The lanes held off (`lanes off`) for work done by hand beside the factory (a sweep, a sprint):
+  // while it's set no lane starts, and a running one stops after its unit. were: the lanes
+  // running when it was set, with their stop times, for whoever starts them again.
+  lanes_off?: LanesOff;
   // Check-ins with the owner (prune --checked-in): when the last was, every how many days of runs
   // one is offered (default 3), and how many decisions on one open unit's card make one due at
   // once (default 40).
@@ -270,6 +274,8 @@ export interface Project {
   checkin_days?: number;
   prune_at?: number;
 }
+
+export interface LanesOff { at: string; by: string; for: string; were: { machine: string; lanes: number; until?: number }[] }
 
 export interface Option {
   key: string;

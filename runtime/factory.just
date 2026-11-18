@@ -138,7 +138,7 @@ oversee *args:
 pause *args:
     @factory/oversee.sh pause "$@"
 
-# Every machine's lanes from one session (docs/machines.md): start | wait | summary | beat | state | events | pause | pause-now | restart | last-call | stop-at | tell | stop | tidy | usage | run (factory/fleet.sh --help).
+# Every machine's lanes from one session (docs/machines.md): start | wait | summary | beat | state | events | pause | pause-now | off | on | restart | last-call | stop-at | tell | stop | tidy | usage | run (factory/fleet.sh --help).
 [positional-arguments]
 fleet *args:
     @factory/fleet.sh "$@"
@@ -174,6 +174,10 @@ oversee-guide *args:
 # The loop's worker prompt (the skill's runtime/prompt.md), then this project's own rules.
 prompt:
     @"${FACTORY_NODE:-node}" "{{source_directory()}}/main.mjs" prompt
+
+# The guide for a sweep's or a sprint's worker (the skill's runtime/worker.md), then the loop's worker prompt and this project's own rules.
+worker-guide:
+    @"${FACTORY_NODE:-node}" "{{source_directory()}}/main.mjs" worker-guide
 
 # Deploy the newest pushed wfactory skill on this machine (`just fleet start` does it on every machine it starts).
 skill-deploy:

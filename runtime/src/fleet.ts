@@ -1,8 +1,8 @@
 // Every machine's lanes from one overseeing session (factory/fleet.sh): each lane is
 // factory/oversee.sh in its own clone, run here for this machine and over ssh for the others.
 // This is the CLI; what every command works from is fleet-ctx.ts, and the commands are in
-// fleet-lanes.ts (start, restart, stop, tidy, tell…), fleet-wait.ts, fleet-journal.ts (attach,
-// note, summary, events) and fleet-beat.ts (the heartbeat).
+// fleet-lanes.ts (start, restart, stop, tidy, tell…), fleet-hold.ts (off, on), fleet-wait.ts,
+// fleet-journal.ts (attach, note, summary, events) and fleet-beat.ts (the heartbeat).
 import { enterRoot, asksHelp } from "./sys.ts";
 import { HELP } from "./fleet-help.ts";
 import { openFleet } from "./fleet-ctx.ts";
@@ -10,6 +10,7 @@ import { beat } from "./fleet-beat.ts";
 import { attach, events, noteCmd, summary } from "./fleet-journal.ts";
 import { restart, run, start, state, stopAt, tell, tidy, usage } from "./fleet-lanes.ts";
 import { wait } from "./fleet-wait.ts";
+import { off, onAgain } from "./fleet-hold.ts";
 
 export { HELP, EVENTS_SUMMARY, EVENTS_WAKE } from "./fleet-help.ts";
 export { QUIET_MINUTES, dur, forYou, stake } from "./fleet-beat.ts";
@@ -38,6 +39,8 @@ export async function fleetCli(argv: string[], env: NodeJS.ProcessEnv = process.
     case "pause": each(takeMachines(args).ms, ["pause"]); return 0;
     case "pause-now": each(takeMachines(args).ms, ["pause", "--now"]); return 0;
     case "last-call": each(takeMachines(args).ms, ["last-call"]); return 0;
+    case "off": return off(f, args);
+    case "on": return onAgain(f);
     case "restart": return restart(f, args);
     case "stop-at": return stopAt(f, args);
     case "tell": return tell(f, args);
@@ -51,7 +54,7 @@ export async function fleetCli(argv: string[], env: NodeJS.ProcessEnv = process.
     case "usage": return usage(f, args);
     case "run": return run(f, args);
     default:
-      console.error(`fleet: unknown command ${cmd} (start | attach | wait | note | summary | beat | state | events | pause | pause-now | restart | last-call | stop-at | tell | stop | tidy | usage | run)`);
+      console.error(`fleet: unknown command ${cmd} (start | attach | wait | note | summary | beat | state | events | pause | pause-now | off | on | restart | last-call | stop-at | tell | stop | tidy | usage | run)`);
       return 2;
   }
 }

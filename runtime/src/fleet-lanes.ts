@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { epoch, ymdHm, ymdHms } from "./sys.ts";
 import { platform, remote } from "./os.ts";
-import { openingOpen, trWait } from "./tr.ts";
+import { lanesOff, openingOpen, trWait } from "./tr.ts";
 import { project } from "./oversee.ts";
 import { CLONES, DROP_CLONE, PULL_CHECKOUT, PULL_LANE, TIDY_LANE, TIDY_MACHINE } from "./fleet-scripts.ts";
 import { cat, chomp, chomp1, lines, say, timeAt } from "./fleet-util.ts";
@@ -79,6 +79,8 @@ export function start(f: Fleet, args: string[]): number {
   const { ME, NAMES, checkout, lanes, loopArg, deployed, takeMachines, on, sh, updateSkill, laneState, LANES_FILE, MEM_FILE, setOverride, allLanes } = f;
   // A busy tracker lock is waited out: it isn't the opening over (#109).
   { const why = openingOpen((a) => trWait(a, (m) => console.error(`fleet: ${m}`))); if (why) { console.error(`fleet: ${why}`); return 2; } }
+  // Nor while they're held off for work done by hand (fleet-hold.ts).
+  { const why = lanesOff((a) => trWait(a, (m) => console.error(`fleet: ${m}`))); if (why) { console.error(`fleet: ${why}`); return 2; } }
   let { ms, rest } = takeMachines(args, [ME]);
   if (rest.length && !rest[0].startsWith("-")) { console.error(`fleet: no machine ${rest[0]} in docs/machines.md (${NAMES.join(" ")})`); return 2; }
   // --lanes N: this many lanes on each machine named, for this start only (the machines file

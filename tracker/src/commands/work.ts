@@ -1,10 +1,10 @@
 // The commands agents work units with: next, claim, show, find, status, the records (done, review,
 // block, reopen, drop, park, note), probes and the log.
 import { spawnSync } from "node:child_process";
-import { ctx } from "../ctx.ts";
+import { ctx, git } from "../ctx.ts";
 import { claimPid, procStart } from "../proc.ts";
 import { load, loadCache, log, mutate, readLog, saveCache, hasState, touch } from "../store.ts";
-import { NetError, die, list, now, parseArgs, plural, str, type Args } from "../text.ts";
+import { NetError, die, list, now, parseArgs, plural, since, str, type Args } from "../text.ts";
 import { addNote, checkEvidence, checkNote, checkText, expand, findD, findQ, groupTitle, isOpen, matches, name, rankUnits, resolve, selected } from "../names.ts";
 import { beatsHere, dataGroup, landingOf, leaseAge, leasedHere, liveLease, resTitle, takeLease } from "../machine.ts";
 import { applyProbe, describeProbe, probeDue, probeOf, probesFirst } from "../probes.ts";
@@ -104,7 +104,9 @@ function vet(id: string, v: { vetted: Set<string>; left: number }): boolean {
   return false;
 }
 
-export function claimUnit(T: State, u: Unit) {
+// onBranch (claim --branch): a session outside the loop works the unit on that branch, which
+// someone merges later (a sweep's or a sprint's worker, merged by its foreman).
+export function claimUnit(T: State, u: Unit, onBranch?: string) {
   const { env, TAG, HOST, ROOT } = ctx;
   const r = u.record || ({} as Partial<UnitRecord>);
   const d = derive(T, u).s;
@@ -122,7 +124,7 @@ export function claimUnit(T: State, u: Unit) {
   // branch named for it (a merge unit's) or work pushed to its own branch keeps that branch.
   const own = TAG === "manual" || (left && r.pushed) ? undefined
     : [...T.byId.values()].find((x) => x !== u && x.record?.by === TAG && x.record.branch && !x.record.handedBack && ["claimed", "done", "review"].includes(x.record.state))?.record!.branch;
-  const branch = env.FACTORY_BRANCHES ? u.branch || own || `unit/${u.id}` : undefined;
+  const branch = onBranch || (env.FACTORY_BRANCHES ? u.branch || own || `unit/${u.id}` : undefined);
   // Claiming a unit in review is checking it: who worked it and their evidence stay with the
   // claim, so the checker can record it done, and a check that doesn't finish puts it back.
   const reviewing = d === "review" ? { by: r.by, at: r.at, evidence: r.evidence } : left ? r.reviewing : undefined;
@@ -142,18 +144,28 @@ export function claimUnit(T: State, u: Unit) {
 }
 
 C.claim = (a) => {
+  const o = parseArgs(a);
+  // (--branch before the ID took it as its value.)
+  const id = o._[0] ?? str(o.branch);
+  // --branch [name]: worked on that branch (default: the one this checkout is on), outside the loop.
+  let branch: string | undefined;
+  if (o.branch !== undefined) {
+    branch = o._[0] !== undefined && typeof o.branch === "string" ? o.branch : (git(["-C", ctx.cwd, "branch", "--show-current"]).stdout || "").trim();
+    if (!branch) die("claim --branch: this checkout is on no branch; name one (`claim <id> --branch <name>`)");
+    if (branch === ctx.MAIN) die(`claim --branch: this checkout is on ${ctx.MAIN}, where work needs no merge; make the unit's branch first, or claim without --branch`);
+  }
   // A check its check-ready hook says can't be judged yet isn't claimed (checks.ts).
-  const T0 = load(), u0 = resolve(T0, a[0]);
+  const T0 = load(), u0 = resolve(T0, id);
   if (unvetted(T0, u0, new Set()) && !vet(u0.id, { vetted: new Set(), left: 1 })) return 1;
-  return claimOne(a);
+  return claimOne(id, branch);
 };
-const claimOne = (a: string[]) => mutate((T) => {
-  const u = resolve(T, a[0]);
+const claimOne = (id: string | undefined, branch?: string) => mutate((T) => {
+  const u = resolve(T, id);
   const s = derive(T, u).s;
   if (s === "done" || s === "dropped") die(`${name(u)} is ${s}; \`just reopen ${u.id}\` first if it really needs more work`);
   if (s === "doing" && u.record!.by !== ctx.TAG) die(`${name(u)} is in progress in session ${u.record!.by}${u.record!.host ? " on " + u.record!.host : ""}`);
-  claimUnit(T, u);
-  console.log(`claimed ${name(u)}`);
+  claimUnit(T, u, branch);
+  console.log(`claimed ${name(u)}${branch ? ` on ${branch}: recorded done, it waits to merge until that branch is on ${ctx.MAIN} and \`just tracker merged --branch ${branch}\` says so` : ""}`);
 }, { strict: true });
 
 C.show = (a) => {
@@ -253,6 +265,8 @@ C.status = (a) => {
   if (cis.length) console.log(`CI: ${["broken", "running", "due"].map((k) => { const gs = cis.filter(([, s]) => s === k); return gs.length ? `${gs.length} ${k} (${gs.slice(0, 4).map(([g]) => g.title).join(", ")}${gs.length > 4 ? ", …" : ""})` : ""; }).filter(Boolean).join(", ")}`);
   // Known failing: each group with its reason, since there's nothing in the queue to show it.
   for (const [g, c] of cs) if (c.s === "known") console.log(`CI known failing: ${g.title} (${g.id}): ${c.why}`);
+  const off = T.project.lanes_off;
+  if (off) console.log(`Lanes: held off for ${off.for} (since ${since(off.at)}); \`just fleet on\` lifts it`);
   const p = pick(T);
   console.log(p.code === 0 ? `Next: ${name(p.unit)}` : `Next: ${idleWhy(T, p)}`);
   return 0;
