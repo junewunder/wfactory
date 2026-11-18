@@ -795,15 +795,15 @@ stands. Such an exception applies the owner's call, so lesson 4
 without the owner's decision. Matching everything first is the owner's call, as a phase they
 start, after hearing what it costs.
 
-### 38. The lanes held back a week the owner wanted spent (the mod factory and another, November)
+### 39. The lanes held back a week the owner wanted spent (the recompiler factory and the mod factory, November)
 
 **What happened.** A fixed floor under the week's usage had ended weeks
 early, so the lanes were given a line in its place: at any moment they
 could have used the share of the week gone by, less 15% kept back for the
 owner, and while ahead of it every lane paused between units. It acted
 three times in its first two days. On a night the owner had usage to use
-up before the week's reset, it paused every lane, and the owner switched
-it off nine minutes later. On another such night it paused one laptop's
+up before the week's reset, it paused every lane of the recompiler
+factory, and the owner switched it off nine minutes later. On another such night it paused one laptop's
 lane for about 4 of 8.7 hours, because that laptop's profile still had it
 on. At 99% of the week used it paused the mod factory's lanes on both
 laptops until the reset, and with them group CI, a step that uses no

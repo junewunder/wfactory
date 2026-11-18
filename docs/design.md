@@ -194,7 +194,7 @@ The week is shown, never acted on. A fixed floor under it (stop with 15%
 left) ended weeks early with their last share unused, and the line that
 replaced it (the share of the week gone by, less a share kept back) paused
 the lanes on the nights the owner meant the week to be spent, and at its end
-held back group CI, which uses no model, until the reset (lesson 38). Both
+held back group CI, which uses no model, until the reset (lesson 39). Both
 assumed an owner who wants some of the week kept; the owner may want it all
 spent, and holds the lanes back by hand (a stop time, `just pause`) when not.
 
