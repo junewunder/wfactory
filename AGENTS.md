@@ -98,19 +98,19 @@ everything else is the code those two run.
 ## Tests
 
 ```bash
-node --test test/ tracker/test/ runtime/test/   # every suite, side by side, about a minute
+node --test test/ tracker/test/ runtime/test/   # every suite, side by side, about 3.5 minutes
 npm run typecheck               # tsc --noEmit, seconds (npm install first, once)
 ```
 
 Or one suite at a time:
 
 ```bash
-node --test tracker/test/       # the tracker CLI, about 13 seconds
-node --test test/scripts/       # init, the profile, factory-diff, to-stubs, the recipes, the scorecard, about 6 seconds
-node --test test/branches/      # lanes racing on a local bare origin, about 12 seconds
-node --test test/store/         # group data on a local store, moved by lease, about 24 seconds
-node --test test/loop/          # the loop, lanes, fleet, long jobs, the daemon, with a fake claude, about 38 seconds
-node --test runtime/test/       # unit tests of single modules (landing, session), about 4 seconds
+node --test tracker/test/       # the tracker CLI, about 30 seconds
+node --test test/scripts/       # init, the profile, factory-diff, to-stubs, the recipes, the scorecard, about 3 seconds
+node --test test/branches/      # lanes racing on a local bare origin, about a minute
+node --test test/store/         # group data on a local store, moved by lease, about 2.5 minutes
+node --test test/loop/          # the loop, lanes, fleet, long jobs, the daemon, with a fake claude, about 2.5 minutes
+node --test runtime/test/       # unit tests of single modules (landing, session), about 16 seconds
 ```
 
 The suites and the type check must pass at every commit. They need Linux
