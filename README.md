@@ -32,6 +32,11 @@ for you to work through decisions with an agent.
 
 It's early: I use it every day, but few others have installed it yet.
 
+## Example project
+
+[gbaa](https://github.com/junewunder/gbaa), a static recompiler from Game
+Boy Advance games to native Rust, runs as a factory checked against the
+emulator mGBA. Its tracker and [factory spec](https://github.com/junewunder/gbaa/blob/main/docs/factory.md) are public.
 
 ## Install
 
@@ -76,8 +81,8 @@ every lane now.
 
 ## Who it's for
 
-It's for one person with a personal project, one Claude Max plan and one
-machine, who wants to find out what running a code factory is like without
+It's for one person with a personal project, one Claude Max plan and a few
+machines, who wants to find out what running a code factory is like without
 building one first. The tracker, the loop, the review and the merging are
 already there, and so are my defaults for how to run one. Start from my
 judgment and change what you disagree with.
@@ -97,10 +102,6 @@ and a few trial units, then pilots two or three with you watching, then
 runs more of them unattended a step at a time. After that it's gardening: a few days of running,
 then a few days of looking at what came out, weeding, and fixing the check
 or the factory's spec, the rules its agents work from.
-
-[gbaa](https://github.com/junewunder/gbaa), a static recompiler from Game
-Boy Advance games to native Rust, runs as a factory checked against the
-emulator mGBA. Its tracker and [factory spec](https://github.com/junewunder/gbaa/blob/main/docs/factory.md) are public.
 
 ## Read next
 
