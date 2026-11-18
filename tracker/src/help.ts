@@ -107,8 +107,9 @@ Setting up:
   leases | lease holder|mine|idle|beat|take|release   group data leases
   data <group> | --unit <id> | --all    where a group's data lives (factory/store.sh)
   rebuilt [add <glob> --why "…"]        files a pipeline step rebuilds: a copy down doesn't keep them
-  state <id> [--branch|--by|--host]     one unit's status key, for scripts
+  state <id> [--branch|--by|--host|--landed]   one unit's status key, for scripts
   aside-set <id> <set> | --clear        store.sh: where its unfinished outputs were set aside
+  aside-retire [<id>…]                  store.sh: drop the units an older version filed to sort a set-aside copy
   busy [--except <id>] [--live]         groups with outputs here not on main yet (checks skip them)
   dir                                   where the state's tracker/ folder is
   memory [--check]                      rebuild memory/MEMORY.md from the memory files
@@ -423,13 +424,20 @@ store.sh, when it puts the store's copy back over an unfinished unit's outputs: 
 work/.store/aside/ they went to on this machine, the commit its branch was on (they were built from
 it) and the session; the unit's card says so. --mixed: the set holds other work too, so it's never
 put back. --clear: they're back in work/, or the set is gone.`,
-  state: `state <id> [--branch | --by | --host]
+  state: `state <id> [--branch | --by | --host | --landed]
 Print one unit's status key (ready, doing, interrupted, merging, done, …), for scripts.
 --branch: the branch its record names instead (empty if none). --by: the session its record names.
---host: the machine it's pinned to, its own or its group's (empty if any).`,
+--host: the machine it's pinned to, its own or its group's (empty if any). --landed: when the
+branch it's done by landed on main (empty if it isn't done, or is done some other way: by hand,
+or reopened and done again without a landing).`,
   merged: `merged <id>… | --branch <branch>
 loop.sh, after merging a unit's branch into main and pushing: the unit stops showing as merging,
-and what needs it can start.`,
+what needs it can start, and its record says when it landed (\`state --landed\`).`,
+  "aside-retire": `aside-retire [<id>…]
+store.sh: drops the units an older version filed to sort a set-aside copy (the store settles those
+copies by rule now, and no session works one): the open ones of the group aside pinned to this
+machine, and any named. One a session is working, or whose branch is landing, is printed and left
+for the next look. Writes nothing when there's none.`,
   "review-fix": `review-fix <branch> --findings "…"
 loop.sh, when its review of a finished branch asks for fixes before it lands: the units waiting to
 merge on it go back to ready with the findings on their card (and a note saying so), and the next

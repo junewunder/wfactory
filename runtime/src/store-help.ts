@@ -21,7 +21,7 @@ are copied back once its branch is on main. A unit whose branch waits to land
 (main broken, a merge unit) has its outputs held here, and copied back when it
 lands. An unfinished unit (handed back, interrupted, a question, a lane killed
 mid-session) gets the store's copy put back over the copy here, and what that
-replaces is kept in aside/ until the unit is done or dropped, and the unit's
+replaces is kept in aside/ until the unit has landed or is dropped, and the unit's
 card says where. When the same unit is claimed again on this machine, its set
 goes back into the copy here before its session (restore), if the set holds
 that unit's outputs alone, they were built from the commit its branch is on
@@ -66,18 +66,23 @@ On this machine (work/.store/, shared by the lanes):
                           older copy, or a CI run's: groups/<g>.list).
                           Its .kind says "older" when the copy here wasn't worked on and
                           the copy down only replaced files with newer ones from the
-                          store: deleted at once (event store-aside-old). Else "check":
-                          a unit, aside/<g>-<host>-<time> pinned to this machine, sorts
-                          it (event store-aside; .unit names the unit), in a group of its
-                          own (aside): no gates or parks, at its data group's priority, and
-                          filed too for a group that keeps no data any more. "unmerged": what putting
-                          the store's copy back replaced, the outputs of the units in .units (.from:
-                          each one's session and branch commit, as its lane knew them when it ended;
-                          .base: the stamp of the copy they were made over);
-                          deleted by \`aside sort\` once they're all done or dropped, or by restore.
-                          One to sort ("check", with a unit) once a unit it holds is parked or
-                          pinned to another machine, or at the end of the next run of the lanes here
-                          (.night: marked at the end of the first) with its unit not claimed here since
+                          store: deleted at once (event store-aside-old). "unmerged": what
+                          putting the store's copy back replaced, the outputs of the units in
+                          .units (.from: each one's session and branch commit, as its lane knew
+                          them when it ended; .base: the stamp of the copy they were made over);
+                          put back by restore. "units": the same with finished units' outputs
+                          that hadn't reached the store, which can't be told apart: never put
+                          back. Else "check": nothing recorded whose work all of it is (event
+                          store-aside).
+                          No unit is filed for a set and no session sorts one. The rule
+                          (\`aside sort\`): an "unmerged" or "units" set is deleted once every
+                          unit it names is dropped, or done with its branch landed on main by
+                          the tracker's record of the landing (event store-aside-removed);
+                          done by hand, still merging or reopened doesn't count, nor does a
+                          set without its .units or .from. Every other set stays, and each run
+                          of the lanes here it outlasts whole ends with one line for the
+                          morning summary (event store-aside-kept; .night marks a set the
+                          last run ended with): what it holds, how old it is, why it stays
 
 Why a copy differs from the store's: it was there before the store (older outputs, an
 older pipeline's layout), or something wrote the group's folders without its lease (a
@@ -149,13 +154,14 @@ Usage:
                                                  here has files. Run again after a failure, it carries on:
                                                  stamps a move cut short, or copies down a seeded group
   factory/store.sh status                        groups here: size, current, worked on, leased
-  factory/store.sh aside                         list what's set aside here, and the unit sorting each
-  factory/store.sh aside sort                    delete older-only sets, and file a unit for each other set
-                                                 that has none (one without a kind too); release-idle and
-                                                 leave run it, and so does each lane as it starts
+  factory/store.sh aside                         list what's set aside here, and what the rule says of each
+  factory/store.sh aside sort                    apply the rule: delete older-only sets and each set whose
+                                                 units have all landed or are dropped, and leave the rest;
+                                                 release-idle and leave run it, and so does each lane as
+                                                 it starts
   factory/store.sh aside audit <set>             each file in a set the store doesn't hold byte for byte:
                                                  store-newer (an older copy), aside-newer or not-on-store
-  factory/store.sh aside drop <set>              delete a set once sorted (its unit's last step)
+  factory/store.sh aside drop <set>              delete a set by hand (one the rule leaves)
   factory/store.sh init                          once, for a new store: make its stamps/ folder. A store
                                                  without one (a dataset not mounted, a wrong path) is
                                                  an outage, never "nothing there yet"

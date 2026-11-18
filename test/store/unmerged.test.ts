@@ -36,7 +36,7 @@ describe("a unit handed back unmerged: its outputs never reach the store", () =>
     b.setup(["lease", "release", "f8"]);
     hasnt(both(b), "f8/h2");
   });
-  test("  the set waits for the unit", () => { has(ok(a, ["aside"]).stdout, "the outputs of f8/h2, not on main"); });
+  test("  the set waits for the unit", () => { has(ok(a, ["aside"]).stdout, "stays: it holds the outputs of Unit h2 of f8 (f8/h2), not on main (interrupted)"); });
   test("  and goes once it's dropped", () => {
     f.drop("f8/h2");
     ok(a, ["aside", "sort"]);

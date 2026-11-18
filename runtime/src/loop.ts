@@ -327,8 +327,8 @@ export class Loop {
     let code = 0;
     try {
       if (cfg.branches) await this.land.pending();
-      // As each lane starts, what the copies here owe is settled and sets aside get their units, so a
-      // machine whose lanes only run briefly (or never wait idle) still sorts its sets.
+      // As each lane starts, what the copies here owe is settled and the rule is applied to what's set
+      // aside, so a machine whose lanes only run briefly (or never wait idle) still clears its sets.
       this.releaseIdle();
       code = await this.iterations();
     } catch (e) {

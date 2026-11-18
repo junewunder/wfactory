@@ -67,6 +67,10 @@ export interface UnitRecord extends Liveness {
   handedBack?: string;
   was?: string;
   via?: string;
+  // When its branch landed on main (merged): the tracker's record of the landing. It goes with the
+  // record: a later claim, a reopen or a done by hand writes a new one without it, so a unit done
+  // with this set is done by the work that landed (state --landed; the store goes by it).
+  landed?: string;
 }
 
 export interface SetAside {
@@ -75,7 +79,7 @@ export interface SetAside {
   at: string;
   commit?: string;
   by?: string;
-  mixed?: boolean;   // with other units' outputs, or a set to sort: never put back
+  mixed?: boolean;   // with other units' outputs, or work nothing accounts for: never put back
 }
 
 export interface Unit {

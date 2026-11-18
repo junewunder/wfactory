@@ -259,7 +259,7 @@ options with what each changes, and the default you'll take without an
 answer.
 
 **The morning summary** holds what the owner only needs once, in the end-of-run
-report: republishes, set-asides (`store-aside`, `store-aside-old`), CI broken
+report: republishes, set-asides (the `store-aside` kinds), CI broken
 where nothing it publishes waits, last call's wrap-ups, units held back as
 too long for the time before last call (`held-back`: "held back: 5 units
 using the editor, too little time before last call"), routine lane stops,
@@ -584,11 +584,9 @@ status` what each machine has cached. All quiet, logged only: leases taken,
 copied, released, old groups deleted to make room, and `store-aside-old`
 (a copy down over a copy nobody worked on, unstamped or changed, that only replaced
 files with newer ones from the store: older copies only, deleted at once).
-A `store-aside` set comes with a unit that sorts it, pinned to that
-machine, in the group `aside` (no gates, no parks: don't give it needs or
-park it); it's lane work, not the owner's, and never a question for them. For the end-of-run report,
-`just store aside` on each machine lists what's still set aside and the
-unit sorting each. Tell the owner about:
+A set-aside copy is settled by rule (`just store --help`), never by a unit
+or a question: `store-aside-removed` and `store-aside-kept` are the report's
+lines for it. Tell the owner about:
 - `lost-lease`, `lease-kept`, `store-up` or `store-down` events (data that
   didn't reach the store, or a lease that moved under a running lane), with
   what happens next. A failed copy back is tried again at each look; a
@@ -596,11 +594,7 @@ unit sorting each. Tell the owner about:
 - `store-empty` (a machine's empty copy wasn't copied back over the store's
   files: data put on the store by hand without a copy down there) and
   `store-moved` (a machine owed a copy back, but the store moved on after its
-  lease lapsed: its copy is set aside at its next copy down, with a unit);
-- `store-aside-unfiled` (a set got no unit: the tracker refused it; the
-  next idle look tries again, and `just store aside` on that machine shows
-  whether it did): tell the owner if the reason won't go away by itself. Also a
-  sorting unit that goes stuck,
+  lease lapsed: its copy is set aside at its next copy down),
   and `store-torn` (a group on the store is a copy back
   that never finished; its last good state is in the store's snapshots, if
   it keeps any);
