@@ -7,7 +7,7 @@ import fs from "node:fs";
 import { tempDir } from "../../test/lib/index.ts";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { Landing, UNRUN_RETELL_MS, type LaneCtx } from "../src/landing.ts";
+import { CHECK_RETRY_MS, FIX_IDLE_MS, Landing, UNRUN_RETELL_MS, type LaneCtx } from "../src/landing.ts";
 import type { TrOut } from "../src/tr.ts";
 import type { ReviewInput, Verdict } from "../src/review.ts";
 
@@ -39,11 +39,12 @@ type CiLandCheck = { group: string; title: string; cmd: string; timeout: number;
 type CiLand = { since: string; checks: CiLandCheck[]; skipped: { group: string; why: string }[]; why?: string };
 const G: CiLandCheck = { group: "g", title: "Group g", cmd: "factory/ci g land", timeout: 15, own: true };
 const LAND: CiLand = { since: "2026-10-26T01:00:00Z", checks: [G], skipped: [] };
-// The loop's side: a check that fails where a fail-check file is, a tracker that knows the
-// states it's given and accepts every write, and a review that passes unless told otherwise. The
+// The loop's side: a check that fails where a fail-check file is (or exits with what rc gives, when
+// that isn't 0), a tracker that knows the states it's given and accepts every write (a unit filed,
+// reopened, blocked or dropped takes that state), and a review that passes unless told otherwise. The
 // check before landing (ci.land) is none unless ciLand says (null: the tracker can't answer), and exits with what land() gives
 // (writing its output's last line), seeing the tree as it is; the ci.affected hook is counted.
-function landing(o: { fails?: () => boolean; review?: (r: ReviewInput) => Verdict; ciLand?: CiLand | null; land?: () => [number, string]; affectedBy?: string } = {}): [Landing, Fake] {
+function landing(o: { fails?: () => boolean; rc?: (log: string) => number; review?: (r: ReviewInput) => Verdict; ciLand?: CiLand | null; land?: () => [number, string]; affectedBy?: string } = {}): [Landing, Fake] {
   const f: Fake = { events: [], logs: [], calls: [], checks: [], states: new Map(), reviews: [], lands: [], affected: 0 };
   const ok = (out = ""): TrOut => ({ code: 0, out, err: "" });
   const c: LaneCtx = {
@@ -53,9 +54,9 @@ function landing(o: { fails?: () => boolean; review?: (r: ReviewInput) => Verdic
     halt: async () => {},
     check: async (log) => {
       f.checks.push(log);
-      const pass = !(o.fails ?? (() => fs.existsSync("fail-check")))();
-      fs.writeFileSync(log, pass ? "checked\n" : "1 check failed\n");
-      return pass;
+      const rc = o.rc?.(log) || ((o.fails ?? (() => fs.existsSync("fail-check")))() ? 1 : 0);
+      fs.writeFileSync(log, rc === 0 ? "checked\n" : rc === 1 ? "1 check failed\n" : `stopped at ${rc}\n`);
+      return rc;
     },
     tr: (a) => {
       f.calls.push(a);
@@ -64,6 +65,9 @@ function landing(o: { fails?: () => boolean; review?: (r: ReviewInput) => Verdic
       if (a[0] === "land-fail") return ok(f.states.get("land-fail") ?? `${a[1]} → ready, on its branch (the check before landing failed)\n`);
       if (a[0] === "state" && a[2] === "--branch" && f.states.has(`${a[1]} branch`)) return ok(`${f.states.get(`${a[1]} branch`)}\n`);
       if (a[0] === "state") { const s = f.states.get(a[1]); return s === undefined ? { code: 1, out: "", err: `no unit "${a[1]}"\n` } : ok(`${s}\n`); }
+      if (a[0] === "add-unit" || a[0] === "reopen") f.states.set(a[1], "ready");
+      if (a[0] === "block") f.states.set(a[1], "stuck");
+      if (a[0] === "drop") f.states.set(a[1], "dropped");
       return ok();
     },
     review: async (r) => { f.reviews.push(r); return o.review ? o.review(r) : { verdict: "pass" }; },
@@ -78,6 +82,8 @@ function landing(o: { fails?: () => boolean; review?: (r: ReviewInput) => Verdic
   };
   return [new Landing(c), f];
 }
+// The unit a lane files when main's own check fails in its clone (the fake lane is on host Box).
+const FIX = "merge/box-main-check";
 const unitBranch = (b: string, files: Record<string, string>) => {
   spawnSync("git", ["checkout", "-q", "-b", b, "origin/main"]);
   for (const [p, t] of Object.entries(files)) { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, t); }
@@ -144,7 +150,7 @@ test("a branch that conflicts with main needs a merge unit, and says which files
   assert.equal(r.here("git branch --list unit/g/c").replace(/^[* ]+/, ""), "unit/g/c");
 });
 
-test("a branch that fails the check, main passing alone: a merge unit; main failing alone too: the branch waits, and isn't checked again on that main", async () => {
+test("a branch that fails the check, main passing alone: a merge unit; main failing alone too: the branch waits, and isn't checked again on that main while the unit that's to fix it is open", async () => {
   const r = lane(); const [l, f] = landing();
   unitBranch("unit/g/breaks", { "fail-check": "" });
   assert.equal(await l.land("unit/g/breaks", "Unit breaks (g/breaks)"), 1);
@@ -159,12 +165,18 @@ test("a branch that fails the check, main passing alone: a merge unit; main fail
   assert.equal(await l.land("unit/g/waits", "Unit waits (g/waits)"), 3);
   assert.match(l.why, /^main itself fails `just check` \(1 check failed\)/);
   assert.equal(f.checks.length, 2);
+  // (finishUnit files the unit that's to find what fails.)
+  f.states.set(FIX, "ready");
   // The tracker writes to main again: main's code is the same, so the branch isn't checked again.
   r.elsewhere("git pull -q origin main && echo '{\"later\":1}' > tracker/state.json && git commit -qam 'tracker: a write' && git push -q origin main");
   f.checks.length = 0;
   assert.equal(await l.land("unit/g/waits", "Unit waits (g/waits)"), 3);
   assert.deepEqual(f.checks, []);
   assert.equal(l.why, "main itself fails `just check` (runs/main-check.log)");
+  // That unit done: what it fixed may be nothing in main's code, so the branch is checked again.
+  f.states.set(FIX, "done");
+  assert.equal(await l.land("unit/g/waits", "Unit waits (g/waits)"), 3);
+  assert.equal(f.checks.length, 2);
   // Main fixed: it lands.
   r.elsewhere("git pull -q origin main && git rm -q fail-check && git commit -qm fix && git push -q origin main");
   assert.equal(await l.land("unit/g/waits", "Unit waits (g/waits)"), 0);
@@ -240,26 +252,182 @@ test("a merge unit's ID: the lane and the unit, in lowercase, dashes for the res
   assert.equal(l.mergeSlug(`g/${"x".repeat(80)}`).length, 60);
 });
 
-test("main broken: the overseer hears once per broken main, not at every branch and look", async () => {
+// Main's own check failing in the lane's clone. Fourteen times in two weeks one factory's lanes
+// took that for a broken main and stopped; none of the fourteen came from main's code (the
+// tracker's data, a check killed or out of time, a file left in the work/ the lanes share). So a
+// session is sent to find what fails, and the lane goes on.
+test("main's check fails here: a unit is filed to find what fails, for this lane to take next; the lane goes on, and nobody is told main is broken", async () => {
   const r = lane(); const [l, f] = landing();
   r.elsewhere("touch fail-check && git add fail-check && git commit -qm 'break main' && git push -q origin main");
   f.states.set("g/w1", "merging").set("g/w2", "merging");
   unitBranch("unit/g/w1", { "w1.txt": "1\n" });
   await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  const add = f.calls.find((c) => c[0] === "add-unit");
+  assert.deepEqual(add?.slice(0, 4), ["add-unit", FIX, "--title", "Main's check fails on Box"]);
+  assert.ok(add?.includes("--lane") && add.includes("Box/2"));
+  assert.match(add![add!.indexOf("--detail") + 1], /^`just check` fails on origin\/main itself in Box lane 2's clone: main itself fails `just check` \(1 check failed\)\. .*Never weaken the check/);
+  assert.equal(fs.readFileSync("runs/.merge-unit", "utf8"), `${FIX}\n`);
+  assert.equal(l.red, "", "the lane takes units still");
+  assert.equal(f.events.length, 0);
+  // A second branch while that unit is open: nothing more is filed.
   spawnSync("git", ["checkout", "-q", "-f", "main"]);
   unitBranch("unit/g/w2", { "w2.txt": "2\n" });
   await l.finishUnit("g/w2", "unit/g/w2", "Unit w2 (g/w2)");
-  assert.deepEqual(f.events.map(([k]) => k), ["main-broken"]);
-  assert.match(f.events[0][1], /^main itself fails `just check` \(1 check failed\); Box lane 2 stops taking units, its finished branch pushed\. Stop the lanes, fix main, and start them again once main passes$/);
-  // Main is red: the loop takes no new units.
-  assert.match(l.red, /^main itself fails `just check`/);
+  assert.equal(f.calls.filter((c) => c[0] === "add-unit" || c[0] === "reopen").length, 1);
+  assert.equal(l.red, "");
+  assert.equal(f.events.length, 0);
   // Each waits, pushed for whoever's next, and the lane is back on main.
   assert.equal(r.origin("git show unit/g/w2:w2.txt"), "2");
   assert.equal(r.here("git rev-parse --abbrev-ref HEAD"), "main");
 });
 
-// With two lanes on a machine, another's unit is nearly always busy: main is red all the same.
-test("main failing while units here are busy is red too, and the overseer hears they may be why", async () => {
+test("  another lane's such unit is open: this lane files none, doesn't take it, and goes on", async () => {
+  const r = lane(); const [l, f] = landing();
+  r.elsewhere("touch fail-check && git add fail-check && git commit -qm 'break main' && git push -q origin main");
+  f.states.set("g/w1", "merging").set(FIX, "doing");
+  unitBranch("unit/g/w1", { "w1.txt": "1\n" });
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.equal(f.calls.filter((c) => ["add-unit", "reopen", "block"].includes(c[0])).length, 0);
+  assert.ok(!fs.existsSync("runs/.merge-unit"));
+  assert.equal(l.red, "");
+  assert.ok(f.logs.some((x) => x.includes(`Main's check fails on Box (${FIX}) is to put it right; finished branches wait for it, and the lane goes on`)));
+});
+
+test("  that unit was filed by a lane here that isn't running any more, with nobody at it: this lane takes it, so the branches don't wait on a unit no lane works", async () => {
+  const r = lane(); const [l, f] = landing();
+  l.c.TDIR = path.join(r.d, "tdir");
+  fs.mkdirSync(path.join(l.c.TDIR, "groups"), { recursive: true });
+  fs.writeFileSync(path.join(l.c.TDIR, "groups/merge.json"), JSON.stringify({ units: [{ id: FIX, title: "Main's check fails on Box", lane: "Box/1" }] }));
+  r.elsewhere("touch fail-check && git add fail-check && git commit -qm 'break main' && git push -q origin main");
+  f.states.set("g/w1", "merging").set(FIX, "ready");
+  unitBranch("unit/g/w1", { "w1.txt": "1\n" });
+  // Lane 1 running: it's left to it.
+  l.c.laneRunning = () => true;
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.ok(!fs.existsSync("runs/.merge-unit"));
+  l.c.laneRunning = () => false;
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.deepEqual(f.calls.find((c) => c[0] === "edit"), ["edit", FIX, "--lane", "Box/2"]);
+  assert.equal(fs.readFileSync("runs/.merge-unit", "utf8"), `${FIX}\n`);
+  assert.equal(l.red, "");
+});
+
+// The tracker refuses text that names a unit by its bare ID, and a check's last line may name one.
+test("  the check's last line is text the tracker refuses: the unit is filed without that line, not left unfiled", async () => {
+  const r = lane(); const [l, f] = landing();
+  const tr = l.c.tr;
+  l.c.tr = (a, add) => a[0] === "add-unit" && a.join(" ").includes("1 check failed") ? (f.calls.push(a), { code: 2, out: "", err: "--detail names g/x by a bare ID\n" }) : tr(a, add);
+  r.elsewhere("touch fail-check && git add fail-check && git commit -qm 'break main' && git push -q origin main");
+  f.states.set("g/w1", "merging");
+  unitBranch("unit/g/w1", { "w1.txt": "1\n" });
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  const adds = f.calls.filter((c) => c[0] === "add-unit");
+  assert.equal(adds.length, 2);
+  assert.match(adds[1].join(" "), /in Box lane 2's clone: main itself fails `just check`\. `runs\/main-check\.log` there has its output/);
+  assert.equal(f.states.get(FIX), "ready");
+  assert.equal(fs.readFileSync("runs/.merge-unit", "utf8"), `${FIX}\n`);
+});
+
+test("  what failed wasn't in git (a file left in work/): once that unit is done the waiting branch is checked again, and lands", async () => {
+  const r = lane(); const [l, f] = landing({ fails: () => fs.existsSync("../stray") });
+  fs.writeFileSync("../stray", "");
+  f.states.set("g/w1", "merging");
+  unitBranch("unit/g/w1", { "w1.txt": "1\n" });
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.equal(f.states.get(FIX), "ready");
+  // Its session removes the file and records it done, with nothing to commit.
+  fs.rmSync("../stray"); f.states.set(FIX, "done");
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.equal(onOrigin(r, "w1.txt"), "1");
+  assert.equal(f.events.length, 0);
+  assert.equal(l.red, "");
+});
+
+test("  still failing after two sessions looked: main is red, the lane takes no more units, and the overseer hears once", async () => {
+  const r = lane(); const [l, f] = landing();
+  r.elsewhere("touch fail-check && git add fail-check && git commit -qm 'break main' && git push -q origin main");
+  f.states.set("g/w1", "merging").set("g/w2", "merging");
+  unitBranch("unit/g/w1", { "w1.txt": "1\n" });
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  // The first session records it done; main still fails: the unit is reopened for a second.
+  f.states.set(FIX, "done");
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.equal(f.calls.filter((c) => c[0] === "reopen" && c[1] === FIX).length, 1);
+  assert.match(f.calls.find((c) => c[0] === "reopen")![3], /^`just check` still fails on Box: main itself fails/);
+  assert.equal(l.red, ""); assert.equal(f.events.length, 0);
+  // The second too: it's stuck, and main is red.
+  f.states.set(FIX, "done");
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.ok(f.calls.some((c) => c[0] === "block" && c[1] === FIX && /still fails on Box after 2 sessions/.test(c[3])));
+  assert.ok(!fs.existsSync("runs/.merge-unit"));
+  assert.match(l.red, /^main itself fails `just check`/);
+  assert.deepEqual(f.events.map(([k]) => k), ["main-broken"]);
+  assert.match(f.events[0][1], /^main itself fails `just check` \(1 check failed\); the unit filed to put it right \(merge\/box-main-check\) didn't put it right \(`just show merge\/box-main-check`\); Box lane 2 stops taking units, its finished branch pushed\. Stop the lanes, fix main, and start them again once main passes$/);
+  // Once per broken main, not at every branch and look.
+  spawnSync("git", ["checkout", "-q", "-f", "main"]);
+  unitBranch("unit/g/w2", { "w2.txt": "2\n" });
+  await l.finishUnit("g/w2", "unit/g/w2", "Unit w2 (g/w2)");
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.equal(f.events.length, 1);
+  assert.equal(r.origin("git show unit/g/w2:w2.txt"), "2");
+});
+
+test("  that unit's own branch failing the same way counts as a session that didn't fix it", async () => {
+  const r = lane(); const [l, f] = landing();
+  r.elsewhere("touch fail-check && git add fail-check && git commit -qm 'break main' && git push -q origin main");
+  const b = `unit/${FIX}`;
+  fs.writeFileSync("runs/.merge-tries-merge_box-main-check", "1\n");
+  f.states.set(FIX, "merging");
+  unitBranch(b, { "tried.txt": "x\n" });
+  await l.finishUnit(FIX, b, "Main's check fails on Box");
+  assert.equal(f.calls.filter((c) => c[0] === "reopen" && c[1] === FIX).length, 1);
+  assert.equal(l.red, "");
+  f.states.set(FIX, "merging");
+  await l.finishUnit(FIX, b, "Main's check fails on Box");
+  assert.equal(f.states.get(FIX), "stuck");
+  assert.notEqual(l.red, "");
+});
+
+test("  that unit waiting on the owner: the lanes can't fix it themselves, so main is red at once", async () => {
+  const r = lane(); const [l, f] = landing();
+  r.elsewhere("touch fail-check && git add fail-check && git commit -qm 'break main' && git push -q origin main");
+  f.states.set("g/w1", "merging").set(FIX, "you");
+  unitBranch("unit/g/w1", { "w1.txt": "1\n" });
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.notEqual(l.red, "");
+  assert.match(f.events[0][1], /\(merge\/box-main-check\) waits on the owner/);
+});
+
+// That unit open with no session at it (it doesn't fit before the stop, or its lane gave it back):
+// the lanes would pile finished work up behind it with nobody told.
+test("  that unit open an hour with no lane taking it: main is red, and the overseer hears that", async () => {
+  const r = lane(); const [l, f] = landing();
+  r.elsewhere("touch fail-check && git add fail-check && git commit -qm 'break main' && git push -q origin main");
+  f.states.set("g/w1", "merging");
+  unitBranch("unit/g/w1", { "w1.txt": "1\n" });
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  // Still ready at the next look, and at the one after: counted from the first.
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  const since = Number(fs.readFileSync("runs/.main-check-idle", "utf8"));
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.equal(Number(fs.readFileSync("runs/.main-check-idle", "utf8")), since);
+  assert.equal(l.red, "");
+  // A session at it: not counted.
+  f.states.set(FIX, "doing");
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.ok(!fs.existsSync("runs/.main-check-idle"));
+  // Given back, and an hour on nobody has taken it.
+  f.states.set(FIX, "interrupted");
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  fs.writeFileSync("runs/.main-check-idle", `${Date.now() - FIX_IDLE_MS - 60_000}\n`);
+  await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
+  assert.notEqual(l.red, "");
+  assert.match(f.events[0][1], /\(merge\/box-main-check\) has waited 1 h 1 min with no lane taking it \(`just show merge\/box-main-check`\); Box lane 2 stops taking units/);
+});
+
+// With two lanes on a machine, another's unit is nearly always busy: it goes the same way, and once
+// main is red the overseer hears those may be why.
+test("main's check failing while units here are busy: the same, and the overseer hears they may be why", async () => {
   const r = lane(); const [l, f] = landing();
   const tr = l.c.tr;
   l.c.tr = (a) => a[0] === "busy" ? { code: 0, out: "w\n", err: "" } : tr(a);
@@ -267,26 +435,87 @@ test("main failing while units here are busy is red too, and the overseer hears 
   f.states.set("g/b1", "merging");
   unitBranch("unit/g/b1", { "b1.txt": "1\n" });
   await l.finishUnit("g/b1", "unit/g/b1", "Unit b1 (g/b1)");
+  assert.equal(f.events.length, 0);
+  assert.match(f.calls.find((c) => c[0] === "add-unit")!.join(" "), /while units of w have outputs in work\/ that aren't on main yet/);
+  f.states.set(FIX, "stuck");
+  await l.finishUnit("g/b1", "unit/g/b1", "Unit b1 (g/b1)");
   assert.deepEqual(f.events.map(([k]) => k), ["main-broken"]);
   assert.match(f.events[0][1], /doesn't skip FACTORY_BUSY_GROUPS.*; Box lane 2 stops taking units/);
   assert.match(l.red, /^main itself fails `just check`, while units of w have outputs/);
 });
 
-test("main red, then a branch that fixes it lands: main isn't red any more", async () => {
+test("main red, then a branch that fixes it lands: main isn't red any more, and the stuck unit is dropped", async () => {
   const r = lane(); const [l, f] = landing();
+  // (The tracker's files, where the loop looks for that unit before it asks its state.)
+  l.c.TDIR = path.join(r.d, "tdir");
+  fs.mkdirSync(path.join(l.c.TDIR, "groups"), { recursive: true });
+  fs.writeFileSync(path.join(l.c.TDIR, "groups/merge.json"), JSON.stringify({ units: [{ id: FIX, title: "Main's check fails on Box", lane: "Box/2" }] }));
   r.elsewhere("touch fail-check && git add fail-check && git commit -qm 'break main' && git push -q origin main");
-  f.states.set("g/w1", "merging").set("g/fix", "merging");
+  f.states.set("g/w1", "merging").set("g/fix", "merging").set(FIX, "stuck");
   unitBranch("unit/g/w1", { "w1.txt": "1\n" });
   await l.finishUnit("g/w1", "unit/g/w1", "Unit w1 (g/w1)");
   assert.notEqual(l.red, "");
+  assert.match(f.events[0][1], /; Main's check fails on Box \(merge\/box-main-check\) didn't put it right/);
   spawnSync("git", ["checkout", "-q", "-f", "main"]);
   spawnSync("git", ["checkout", "-q", "-b", "unit/g/fix", "origin/main"]);
   sh(".", "git rm -q fail-check && git commit -qm fix");
   await l.finishUnit("g/fix", "unit/g/fix", "Unit fix (g/fix)");
   assert.equal(onOrigin(r, "fail-check"), null);
   assert.equal(l.red, "");
+  assert.deepEqual(f.calls.find((c) => c[0] === "drop")?.slice(0, 4), ["drop", FIX, "--why", "`just check` passes on Box again: {unit:g/fix} landed"]);
   // Main breaking again later (with the same code: a tool, say) is news again.
   assert.ok(!fs.existsSync("runs/.main-broken-told"));
+});
+
+// A check that never judged the tree says nothing of the branch, nor of main. (Five of that
+// factory's fourteen: main's check out of time on a slow machine, or killed while it waited for
+// memory an editor held.)
+for (const [rc, how] of [[124, "it ran out of time"], [75, "a heavy job in it couldn't get its turn (exit 75)"], [79, "it couldn't check (exit 79)"], [143, "it was killed (signal 15)"]] as const) {
+  test(`a check that gives no verdict (exit ${rc}): the branch waits, with no merge unit and no red main; the overseer hears once; it's checked again half an hour later`, async () => {
+    const r = lane(); let now = rc as number; const [l, f] = landing({ rc: () => now });
+    f.states.set("g/nv", "merging");
+    unitBranch("unit/g/nv", { "nv.txt": "n\n" });
+    await l.finishUnit("g/nv", "unit/g/nv", "Unit nv (g/nv)");
+    assert.deepEqual(f.checks, ["runs/land-check.log"], "main isn't checked: the branch's check said nothing");
+    assert.equal(f.calls.filter((c) => ["add-unit", "land-fail", "block"].includes(c[0])).length, 0);
+    assert.equal(l.red, "");
+    assert.equal(r.origin("git show unit/g/nv:nv.txt"), "n", "its branch is on origin");
+    assert.equal(r.here("git rev-parse --abbrev-ref HEAD"), "main");
+    assert.deepEqual(f.events.map(([k]) => k), ["check-unrun"]);
+    assert.ok(f.events[0][1].startsWith(`Unit nv (g/nv): \`just check\` gave no verdict on it: ${how} (stopped at ${rc}). That says nothing of the branch or of main, so Box lane 2 keeps taking units`), f.events[0][1]);
+    // The next look: not checked again yet, and nothing more told.
+    await l.finishUnit("g/nv", "unit/g/nv", "Unit nv (g/nv)");
+    assert.equal(f.checks.length, 1);
+    assert.equal(f.events.length, 1);
+    // Half an hour on it is; this time the check runs, and the branch lands.
+    fs.writeFileSync("runs/.check-unrun", fs.readFileSync("runs/.check-unrun", "utf8").replace(/\t(\d+)/, (_, t) => `\t${Number(t) - CHECK_RETRY_MS}`));
+    now = 0;
+    await l.finishUnit("g/nv", "unit/g/nv", "Unit nv (g/nv)");
+    assert.equal(onOrigin(r, "nv.txt"), "n");
+    assert.ok(!fs.existsSync("runs/.check-unrun-told"));
+  });
+}
+
+test("the branch's check fails and main's gives no verdict: whose fault it is can't be told, so it waits, and nothing is filed", async () => {
+  lane(); const [l, f] = landing({ rc: (log) => log.includes("main-check") ? 143 : 1 });
+  unitBranch("unit/g/half", { "h.txt": "h\n" });
+  assert.equal(await l.land("unit/g/half", "Unit half (g/half)"), 2);
+  assert.equal(l.why, "`just check` gave no verdict on main: it was killed (signal 15) (stopped at 143)");
+  assert.deepEqual(f.checks, ["runs/land-check.log", "runs/main-check.log"]);
+  assert.equal(f.calls.filter((c) => c[0] === "add-unit").length, 0);
+});
+
+test("held for want of a verdict: the overseer hears again two hours on, with how long", async () => {
+  lane(); const [l, f] = landing({ rc: () => 124 });
+  f.states.set("g/slow", "merging");
+  unitBranch("unit/g/slow", { "s.txt": "s\n" });
+  await l.finishUnit("g/slow", "unit/g/slow", "Unit slow (g/slow)");
+  const told = JSON.parse(fs.readFileSync("runs/.check-unrun-told", "utf8"));
+  fs.writeFileSync("runs/.check-unrun-told", JSON.stringify({ ...told, since: told.since - UNRUN_RETELL_MS - 60_000, told: told.told - UNRUN_RETELL_MS }));
+  fs.rmSync("runs/.check-unrun");
+  await l.finishUnit("g/slow", "unit/g/slow", "Unit slow (g/slow)");
+  assert.deepEqual(f.events.map(([k]) => k), ["check-unrun", "check-unrun"]);
+  assert.match(f.events[1][1], /landings have been held 2 h 1 min so far$/);
 });
 
 test("an unfinished unit that changed nothing: its branch is deleted, not pushed", async () => {
@@ -356,12 +585,12 @@ test("a branch that changes nothing outside tracker/ lands with no review", asyn
   assert.equal(f.reviews.length, 0);
 });
 
-test("main red: the branch waits, and no review is spent on it", async () => {
+test("main's check failing: the branch waits, and no review is spent on it", async () => {
   lane(); const [l, f] = landing({ fails: () => true });
   f.states.set("g/red", "done");
   unitBranch("unit/g/red", { "red.txt": "r\n" });
   await l.finishUnit("g/red", "unit/g/red", "Unit red (g/red)");
-  assert.ok(l.red);
+  assert.equal(f.states.get(FIX), "ready");
   assert.equal(f.reviews.length, 0);
 });
 

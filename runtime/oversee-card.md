@@ -53,12 +53,12 @@ its check says what to do.
 |---|---|
 | a question or gate | post it, with options and default (`just show q/<slug>`) |
 | `stuck` | what only they can fix; else `just reopen` with a note |
-| `main-broken`, a lane stopped with "main is red" | main's own check fails, so nothing lands: tell them now, `just fleet pause` every machine, fix main (or start a thread to), check it passes, then `just fleet start` (the guide's step 4, "main is red") |
+| `main-broken`, a lane stopped with "main is red" | main's check fails, the lane's fix unit too: tell them now, `just fleet pause` every machine, fix main (or start a thread), check it passes, `just fleet start` (guide step 4) |
 | `review-skipped` | one line; several in a row: the reviewer can't run (`review_model`, the CLI) |
 | `oom`, `memory-low` | which machine, what was killed or how little is left, what was running; the cap or the load is their call |
 | `oom-kill` | read the snapshot first (the guide's "Out-of-memory kills") |
 | `landing-waits` | `just heavy` there: end what's idle and ours, else one line |
-| `ci-published` (first), `ci-broken`, `ci-affected-failed`, `land-check-unrun` | one line; for broken, the failure and the options |
+| `ci-published` (first), `ci-broken`, `ci-affected-failed`, `land-check-unrun`, `check-unrun` | one line; for broken, the failure and the options |
 | `ci-known-failing` | one line: the group, the step and the reason; nothing to unstick, and it goes in the report |
 | `idle`, usage pause/resume | one line each |
 | `resumed`, `resume-refused`, `resume-failed`, `restart-failed` | what came back, or what didn't and why |

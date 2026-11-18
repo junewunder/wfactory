@@ -13,7 +13,9 @@ import { run, type Checkout } from "./inproc.ts";
 // the appended card (in its file, or on its command line when the inbox couldn't take it) ("Next: Title (group/slug)"), notes what it was given ($FACTORY_LOCKS:
 // args.seen, card.seen (its appended system prompt), stdin.seen, branch.seen, bash-timeout.seen, shell.seen, memory.seen, owner-shell.seen, env.seen (its environment, `env -0`)) and which copy of the skill ran it
 // (skill.<group>-<slug>.seen), appends "work on <unit>" to out/<group>-<slug>.txt, commits it and
-// records the unit done. FACTORY_FAKE_RL: a line to put in its transcript first (a
+// records the unit done. The unit filed when main's own check fails (merge/<host>-main-check)
+// instead runs $FACTORY_LOCKS/fix-hook on its branch, if there's one (what a session does to put
+// the check right), commits nothing itself, and records it done. FACTORY_FAKE_RL: a line to put in its transcript first (a
 // rate_limit_event, say). FACTORY_FAKE_LONG: leaves a long job (leftover) running. A unit held
 // ($FACTORY_LOCKS/hold.<group>-<slug>) works, its file written and not yet committed, until the
 // test lets it go (go.<group>-<slug>), at most 5 minutes; while held, held.<group>-<slug> has its pid.
@@ -37,6 +39,12 @@ git rev-parse --abbrev-ref HEAD > "$FACTORY_LOCKS/branch.seen"
 printf '%s\\n' "$card" > "$FACTORY_LOCKS/card.seen"
 echo '{"type":"system","subtype":"init"}'
 [ -z "\${FACTORY_FAKE_RL:-}" ] || echo "$FACTORY_FAKE_RL"
+if [[ "$id" == merge/*-main-check ]]; then
+  [ ! -x "$FACTORY_LOCKS/fix-hook" ] || "$FACTORY_LOCKS/fix-hook" >/dev/null 2>&1
+  just done "$id" --evidence "fake session: looked at what fails" >/dev/null 2>&1
+  echo '{"type":"result","is_error":false,"result":"did '"$id"'","num_turns":1,"total_cost_usd":0.01}'
+  exit 0
+fi
 mkdir -p out; f="out/$u.txt"; echo "work on $id" >> "$f"
 [ -z "\${FACTORY_FAKE_LONG:-}" ] || factory/long.sh start leftover -- sleep 300 >/dev/null
 echo "\${FACTORY_SKILL:-}" > "$FACTORY_LOCKS/skill.$u.seen"

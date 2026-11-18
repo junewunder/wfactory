@@ -6,7 +6,7 @@ import path from "node:path";
 import { log } from "./session.ts";
 import { sessionBase } from "./loop-unit.ts";
 import { epoch, stamp, tryLock, unlock } from "./sys.ts";
-import { addMergeUnit, dropMergeUnits, mergeUnits } from "./landing.ts";
+import { addMergeUnit, dropMergeUnits, fixUnitOf, mergeUnits } from "./landing.ts";
 import { laneCount, laneMax, machineGet } from "./machines.ts";
 import { TR_BUSY, tr, trWait } from "./tr.ts";
 import { CiRun, ciHeld, ciNext, ciUnrun } from "./loop-ci.ts";
@@ -49,6 +49,16 @@ function workFound(w: Waiting) {
 // branch (startBranch), where the lane that filed it pushed it (#134), with any commits it left
 // unpushed in its clone taken in (#172). A machine with no row in the
 // file says nothing of its lanes: nothing is taken over.
+// Is lane <n> of this machine running: its lane lock held? (Lane 1 may run in the checkout itself,
+// with no -lane1.)
+export function laneRunning(l: Loop, n: string) {
+  const base = l.checkout.replace(/-lane[0-9]+$/, "");
+  return (n === "1" ? [`lane-${base}.lock`, `lane-${base}-lane1.lock`] : [`lane-${base}-lane${n}.lock`]).some((f) => {
+    const fd = tryLock(`${process.env.FACTORY_LOCKS}/${f}`);
+    if (fd === null) return true;
+    unlock(fd); return false;
+  });
+}
 export function adoptMerges(l: Loop) {
   // (An empty cell, or no Lanes column, says nothing either.)
   // (A day count and a night count: the night's lanes are still its own by day, waiting for it.)
@@ -64,15 +74,10 @@ export function adoptMerges(l: Loop) {
     const id = String(u.id), st = trWait(["state", id], log);
     if (st.code !== 0 || ["done", "dropped"].includes(st.out.trim())) continue;
     // Running after all (started with more lanes than the file gives, for a night): it's still its own.
-    // (Lane 1 may run in the checkout itself, with no -lane1.)
-    const running = (m[2] === "1" ? [`lane-${base}.lock`, `lane-${base}-lane1.lock`] : [`lane-${base}-lane${m[2]}.lock`]).some((f) => {
-      const fd = tryLock(`${process.env.FACTORY_LOCKS}/${f}`);
-      if (fd === null) return true;
-      unlock(fd); return false;
-    });
-    if (running) continue;
+    if (laneRunning(l, m[2])) continue;
     const me = `${l.host}/${l.lane}`, looper = { FACTORY_TAG: l.tag, FACTORY_ACTOR: "loop" };
-    if (trWait(["edit", id, "--lane", me, "--title", `Merge main on ${l.host} lane ${l.lane}`], log, looper).code !== 0) { log(`tracker: couldn't take over ${id} from lane ${m[2]}`); continue; }
+    // (The machine's unit for main's own check, landing.ts fixMain, keeps its title: it names no lane.)
+    if (trWait(["edit", id, "--lane", me, ...(id === fixUnitOf(l.host) ? [] : ["--title", `Merge main on ${l.host} lane ${l.lane}`])], log, looper).code !== 0) { log(`tracker: couldn't take over ${id} from lane ${m[2]}`); continue; }
     trWait(["note", id, `Taken over by ${l.host} lane ${l.lane}: lane ${m[2]}, which filed it, isn't in docs/machines.md any more (${l.host} has ${lanes} lane${lanes === 1 ? "" : "s"}).`], log, looper);
     addMergeUnit(id);
     log(`${String(u.title ?? id)} (${id}) was lane ${m[2]}'s, which isn't in docs/machines.md any more: this lane takes it over, on origin's ${String(u.branch ?? "branch")}`);
@@ -105,10 +110,17 @@ export async function look(l: Loop): Promise<Look> {
   // claim lock, so the wait holds up no other lane here.
   let claim: number | null = null;
   const unclaim = () => { if (claim !== null) { unlock(claim); claim = null; } };
-  await l.memory(`the tracker's probes (${l.checkout})`, list(json(tr(["refresh", "--due"]).out)?.due), async (held) => {
-    claim = l.locks.claimLock();
+  // The wait has an end (loop.ts, memWait): past it the refresh is left for a later look, and the
+  // lane goes on to its claim. It isn't waited for again for half an hour (a look comes every few
+  // minutes).
+  const probes = `the tracker's probes (${l.checkout})`;
+  await l.memory(probes, list(json(tr(["refresh", "--due"]).out)?.due), async (held) => {
+    claim = l.locks.claimLock(); l.noMemUntil = 0;
     if ((await l.stoppable(["factory/tracker", "refresh"], { out: "ignore", env: { ...sessionBase(l.cfg.tdir, l.lane), ...held, FACTORY_ACTOR: process.env.FACTORY_ACTOR } })) !== 0) log("tracker refresh failed; carrying on");
-  });
+  }, "", { secs: epoch() < l.noMemUntil ? 0 : l.memWait(), none: (why) => {
+    claim = l.locks.claimLock();
+    if (epoch() >= l.noMemUntil) { l.noMemUntil = epoch() + 1800; log(`${probes}: ${why}; the checks whose inputs changed aren't rerun until there's room, and the lane goes on`); }
+  } });
   // Merge units of a lane on this machine that's gone become this lane's (under the claim lock, so
   // one lane takes each).
   if (c.branches) adoptMerges(l);

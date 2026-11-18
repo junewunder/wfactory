@@ -31,7 +31,8 @@ around them.
   times out or gives no verdict lets the branch land, and the overseer is
   told. In one factory it reviewed 593 branches and sent 45 back.
 - Work piles onto a broken main. While main fails its check, finished
-  branches wait and the lane that found it takes no new units.
+  branches wait and a session is sent to fix what fails; if two can't, the
+  lane that found it takes no new units.
   Code (`test/branches/broken-main.test.ts`).
 - Two lanes work the same unit. Claims race through git and exactly one
   wins, across machines too. Code (`test/branches/claims.test.ts`).

@@ -52,6 +52,13 @@ describe("a restart asked while main is red: the lane stops, not restarted", () 
     setup("drop", "g/rsf", "--why", "test");
     setup("add-unit", "g/rr", "--title", "Unit on a red main");
     setup("add-unit", "g/rr2", "--title", "Unit after the red main");
+    // Main is red once the unit the lane files for its failing check hasn't put it right
+    // (red-main.test.ts). Here that unit is stuck already, from before, so the landing that fails
+    // on main makes main red at once, with the restart asked.
+    const fix = `merge/${a.n.toLowerCase()}-main-check`;
+    setup("add-group", "merge", "--title", "Merges the loop couldn't do by itself", "--priority", "1000");
+    setup("add-unit", fix, "--title", `Main's check fails on ${a.n}`.slice(0, 60), "--lane", `${a.n}/1`, "--check", "recorded");
+    setup("block", fix, "--why", "two sessions didn't put it right");
     const h = hold(a.locks, "g/rr");
     const b = f.loopBg(["--hours", "0.05"]);
     await h.held();
