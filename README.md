@@ -76,12 +76,21 @@ every lane now.
 
 ## Who it's for
 
-It fits many units of the same kind of work, with a way to tell a good unit
-from a bad one without looking yourself (the check): a corpus to convert, a library to
-port, a test suite to make pass one case at a time. It's for one person
-with one machine, or a few machines that share only git; there's no server. For a
-handful of one-off tasks, or work nothing can check, the skill says so and
-won't build a factory that would produce confident junk.
+It's for one person with a personal project, one Claude Max plan and one
+machine, who wants to find out what running a code factory is like without
+building one first. The tracker, the loop, the review and the merging are
+already there, and so are my defaults for how to run one. Start from my
+judgment and change what you disagree with.
+
+With unlimited tokens, Claude can do a lot of this on its own. wfactory is
+built for when you have one plan: a lane runs one session at a time, and
+the check catches bad work before more gets built on it.
+
+The work has to fit: many units of the same kind, with a way to tell a good
+unit from a bad one without looking yourself (the check). A corpus to
+convert, a library to port, a test suite to make pass one case at a time.
+For a handful of one-off tasks, or work nothing can check, the skill says
+so and won't build a factory that would produce confident junk.
 
 Lanes don't start on day one. The skill first works with you on the check
 and a few trial units, then pilots two or three with you watching, then
