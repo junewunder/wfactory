@@ -11,12 +11,6 @@ export const hms = (d = new Date()) => `${p2(d.getHours())}:${p2(d.getMinutes())
 export const log = (s: string) => { process.stderr.write(`${hms()} loop: ${s}\n`); };
 const read = (f: string) => { try { return fs.readFileSync(f, "utf8"); } catch { return null; } };
 
-// The lane's stop time: <deadline>, or runs/.stop-at if the overseer set an earlier one.
-export function stopTime(deadline: number): number {
-  const s = (read("runs/.stop-at") ?? "").replace(/\n+$/, "");
-  return /^[0-9]+$/.test(s) && Number(s) < deadline ? Number(s) : deadline;
-}
-
 export interface SessionOpts {
   out: string;            // its stream-json transcript
   err: string;            // its stderr
@@ -25,7 +19,7 @@ export interface SessionOpts {
   stdin?: string;         // a file it reads on stdin (none: no stdin)
   env: NodeJS.ProcessEnv;
   stopFile?: string;      // "pause asap": the session is stopped at once when this appears
-  deadline?: number;      // the lane's stop time (epoch seconds; runs/.stop-at if earlier)
+  deadline?: number;      // the lane's stop time (epoch seconds)
   tick?: () => boolean | Promise<boolean>;   // called at every poll; false stops the session
   tickWhy?: string;       // what the log says when the tick stops it (else: the wrap-up time is over)
   silent?: number;        // seconds of a silent stream, with no tool call open, that end it (0 or none: never)
@@ -107,7 +101,7 @@ export async function runSession(o: SessionOpts, running: (r: Running | null) =>
     }
     if (o.stopFile && fs.existsSync(o.stopFile)) { end(2, "pause asap: ending the session"); break; }
     // Not one that has posted its result: that one is finishing, and the grace below ends it.
-    if (!since && o.deadline && epoch() >= stopTime(o.deadline) + overrun) { end(3, "past the stop time: ending the session"); break; }
+    if (!since && o.deadline && epoch() >= o.deadline + overrun) { end(3, "past the stop time: ending the session"); break; }
     if (stream.look()) heard = epoch();
     if (!since && stream.result) since = epoch();
     // After the result check: a session that has just finished isn't cut short.

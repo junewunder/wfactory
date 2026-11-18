@@ -64,7 +64,5 @@ its check says what to do.
 | `resumed`, `resume-refused`, `resume-failed`, `restart-failed` | what came back, or what didn't and why |
 | a machine contradicting `docs/machines.md` | what you saw |
 
-End of the run (the guide's steps 5, 6): delete your timer; tidy (`just fleet tidy` only
-for a machine with no "the last lane stopped" line), then report the
-bad news first, plainly ("none" if so), then what got done (`just
-fleet summary`, `--done` to count).
+End of the run: delete your timer, then the guide's steps 5 (tidy up) and
+6 (report from `just fleet summary`, bad news first).

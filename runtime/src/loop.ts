@@ -185,7 +185,6 @@ export class Loop {
     for (let left = end - epoch(); left > 0; left = end - epoch()) {
       if (exists("runs/.pause")) return false;
       if (restart && exists("runs/.restart")) return false;
-      this.clock.refresh();
       if (epoch() >= this.clock.deadline) return false;
       await this.pause(Math.min(left, 1));
     }
@@ -350,8 +349,7 @@ export class Loop {
   async iterations(): Promise<number> {
     const o = this.o, env = process.env, k = this.clock;
     while (this.i < o.max) {
-      k.refresh();
-      if (epoch() >= k.deadline) { this.stop(`out of time (${k.stopAt ? `the stop time, ${k.stopAt}, not ` : ""}--hours ${o.hours})${ciUnrun(k.inLc)}`); break; }
+      if (epoch() >= k.deadline) { this.stop(`out of time (--hours ${o.hours})${ciUnrun(k.inLc)}`); break; }
       if (exists("runs/.pause")) { rm("runs/.pause", "runs/.pause-now"); this.stop("paused at a good point (just pause)"); break; }
       // Held off for work done by hand (`just fleet off`, on any machine): as a pause. (Read from
       // the state's own file, which the look before brought up to date: no tracker call until

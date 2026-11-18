@@ -47,28 +47,7 @@ describe("last call is last_call minutes before the stop, with CI still to run h
     await r.end();
   });
   test("  the lane wrote its last call, for its stop time", () => { assert.deepEqual(wrote, { at: t0 + 6600, deadline: t0 + 7200, last_call: 10, written: t0 }); });
-  test("  its session isn't told before", () => { hasnt(before, "to wrap up by"); hasnt(before, "last call now at"); });
+  test("  its session isn't told before", () => { hasnt(before, "to wrap up by"); });
   test("  it's told at last call", () => { has(r.out(), `loop: last call: told W at the desk (gw/ed) to wrap up by ${hmAt(t0, 6601 + 900)}`); });
   test("  (its unit landed)", () => { assert.equal(state("gw/ed"), "done"); });
-});
-
-describe("the lane logs its last call when it moves by more than 5 minutes", () => {
-  let r: Run;
-  const t0 = nextSecond();
-  test("an earlier stop time moves it, and the lane says so", async () => {
-    setup("edit-group", "gw", "--ci", "none"); setup("edit-group", "gz", "--ci", "none");
-    setup("add-group", "gp", "--title", "Group P");
-    setup("add-unit", "gp/one", "--title", "P one"); setup("add-unit", "gp/two", "--title", "P two");
-    setup("edit-group", "gp", "--priority", "20");
-    const h = hold(a.locks, "gp/one");
-    r = loop(["--hours", "2", "--last-call", "10", "--max", "2"], {}, t0);
-    await h.held();
-    fs.writeFileSync(a.at("runs/.stop-at"), `${t0 + 3600}\n`);
-    await r.at(10);
-    h.go();
-    await r.end();
-    fs.rmSync(a.at("runs/.stop-at"), { force: true });
-  });
-  test("  the new time is logged", () => { has(r.out(), `loop: last call now at ${hmAt(t0, 3000)} (was ${hmAt(t0, 6600)})`); });
-  test("  and written", () => { const w = written(); assert.deepEqual([w.deadline, w.at], [t0 + 3600, t0 + 3000]); });
 });

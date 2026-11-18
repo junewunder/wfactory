@@ -321,8 +321,7 @@ found by that group's own CI, not sent back to the unit.
 
 **Last call.** CI that changed since its last run, near the end, still has
 to run before the lanes stop. So before the stop time (the lanes'
-`--hours`, or an earlier one the overseer sets with `just fleet stop-at
-09:00`) comes a last call: `"last_call"` minutes in `tracker/project.json`
+`--hours` or `--until`) comes a last call: `"last_call"` minutes in `tracker/project.json`
 (default 30, for the work in flight to land; at most half the run; 0 =
 none). No time is added for CI: it runs as it falls due through the night,
 and what hasn't run by the stop is named in the morning. Or now with `just

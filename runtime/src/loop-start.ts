@@ -175,9 +175,7 @@ export function takeCheckout(c: Config, checkout: string, rs: Restarted | null):
   rm("runs/inbox/current");
   // Inboxes are kept a week, for a look at what a session was told.
   try { for (const e of fs.readdirSync("runs/inbox")) { const p = `runs/inbox/${e}`; try { const st = fs.lstatSync(p); if (st.isDirectory() && Date.now() - st.mtimeMs > 8 * 86400_000) fs.rmSync(p, { recursive: true, force: true }); } catch {} } } catch {}
-  // A stop time the overseer set still holds for a lane restarted before it; one that's passed doesn't.
-  if (!(Number(cat("runs/.stop-at") ?? 0) > epoch())) rm("runs/.stop-at");
-  // So does a last call (`just fleet last-call`) the lane didn't finish: it ends when the lane stops
+  // A last call (`just fleet last-call`) the lane didn't finish still holds for a lane restarted: it ends when the lane stops
   // at its end (last call over, out of time, paused), and one over 12 hours old is from another run.
   try { if (Date.now() - fs.statSync("runs/.last-call").mtimeMs > 720 * 60_000) rm("runs/.last-call"); } catch {}
 

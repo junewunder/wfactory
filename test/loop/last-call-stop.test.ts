@@ -1,4 +1,4 @@
-// Last call before the stop time the overseer set (`just fleet stop-at`): the run ends with CI
+// Last call before the stop time: the run ends with CI
 // passed, before the stop time; and out of time with CI not passed, the stop says which groups.
 // The loop runs in this process with its clock mocked (inproc.ts): the sessions end at 3, 6, 9,
 // 12, 14 and 15 s, so last call is seen to begin at exactly half the run (15 s), not a second
@@ -6,9 +6,8 @@
 // Setup goes before a test's checks (or in an after() hook), so a failing check can't skip it.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import { has, hasnt } from "../lib/index.ts";
-import { hold, letGo, nextHeld, nextSecond, hmAt, hmsAt, type Run } from "./inproc.ts";
+import { hold, letGo, nextHeld, nextSecond, hmAt, hmsAt, hoursFor, type Run } from "./inproc.ts";
 import { loopFactory } from "./factory.ts";
 
 const f = loopFactory("stopat");
@@ -18,7 +17,7 @@ const N = ["one", "two", "three", "four", "five", "six", "seven"];
 // A stop in 30 s, with --last-call 1 (60 min): last call is at most half the run, so at 15 s.
 // Sessions of 3 s, then the fifth ends at 14 s (not yet last call: a sixth starts) and the sixth
 // at 15 s (last call: no seventh).
-describe("last call before the stop time the overseer set: the run ends with CI passed, before the stop time", () => {
+describe("last call before the stop time: the run ends with CI passed, before the stop time", () => {
   let r: Run;
   const order: string[] = [];
   test("a stop time: last call comes before it", async () => {
@@ -30,9 +29,7 @@ describe("last call before the stop time the overseer set: the run ends with CI 
     // time, and under load five of them can take longer than the 15 s the clock moves before last
     // call; a unit done at a moment the loop hasn't reached would leave CI stale for good.
     const t0 = nextSecond() + 60;
-    fs.mkdirSync(a.at("runs"), { recursive: true });
-    fs.writeFileSync(a.at("runs/.stop-at"), `${t0 + 30}\n`);
-    r = loop(["--hours", "1", "--last-call", "1"], {}, t0);
+    r = loop(["--hours", hoursFor(30), "--last-call", "1"], {}, t0);
     const ends = [3, 6, 9, 12, 14, 15];
     for (let i = 0, s = 0; ; i++) {
       const k = await nextHeld(a.locks, r);
@@ -60,7 +57,6 @@ describe("last call before the stop time the overseer set: the run ends with CI 
 
 describe("out of time with CI not passed: the stop says which groups, for the overseer", () => {
   test("out of time names the groups whose CI hasn't passed", async () => {
-    fs.rmSync(a.at("runs/.stop-at"), { force: true });
     for (const n of N) if (state(`gn/${n}`) === "ready" && n !== "seven") setup("drop", `gn/${n}`, "--why", "test");
     letGo(a.locks, "gn-seven");
     setup("done", "gn/seven", "--evidence", "x");

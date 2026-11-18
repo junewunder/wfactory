@@ -62,6 +62,8 @@ export interface Checkout { dir: string; envWith: (add?: Env) => Env }
 // What the loop's clock says a moment is, as its log and messages write it: t seconds after t0.
 export const hmsAt = (t0: number, t: number) => hms(new Date((t0 + t) * 1000));
 export const hmAt = (t0: number, t: number) => hm(new Date((t0 + t) * 1000));
+// --hours for a stop s seconds after the start (the loop takes whole seconds of it).
+export const hoursFor = (s: number) => String(s / 3600 + 1e-7);
 // The next whole second, to start a run's clock at (so its moments are whole seconds).
 export const nextSecond = () => Math.ceil(Date.now() / 1000);
 

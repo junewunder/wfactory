@@ -128,7 +128,7 @@ tracker *args:
 loop *args:
     factory/loop.sh "$@"
 
-# Run the loop detached for an overseeing session: start | wait | pause | restart | last-call | stop-at | tell | state | stop (factory/oversee.sh --help).
+# Run the loop detached for an overseeing session: start | wait | pause | restart | last-call | tell | state | stop (factory/oversee.sh --help).
 [positional-arguments]
 oversee *args:
     @factory/oversee.sh "$@"
@@ -138,7 +138,7 @@ oversee *args:
 pause *args:
     @factory/oversee.sh pause "$@"
 
-# Every machine's lanes from one session (docs/machines.md): start | wait | summary | beat | state | events | pause | pause-now | off | on | restart | last-call | stop-at | tell | stop | tidy | usage | run (factory/fleet.sh --help).
+# Every machine's lanes from one session (docs/machines.md): start | wait | summary | beat | state | events | pause | pause-now | off | on | restart | last-call | tell | stop | usage (factory/fleet.sh --help).
 [positional-arguments]
 fleet *args:
     @factory/fleet.sh "$@"

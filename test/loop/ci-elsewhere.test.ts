@@ -7,7 +7,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { has, hasnt } from "../lib/index.ts";
-import { hold, nextSecond, hmsAt, run, type Run } from "./inproc.ts";
+import { hold, nextSecond, hmsAt, hoursFor, run, type Run } from "./inproc.ts";
 import { loopFactory, LOOP } from "./factory.ts";
 
 const f = loopFactory("elsewhere");
@@ -26,15 +26,12 @@ describe("CI that runs on another machine keeps nothing free here, before last c
   test("CI on another machine: its group's CI is due", () => { has(t("ci"), "Group X (gx): due"); });
   test("  a unit here using the desk starts before last call", async () => {
     const t0 = nextSecond();
-    fs.mkdirSync(a.at("runs"), { recursive: true });
-    fs.writeFileSync(a.at("runs/.stop-at"), `${t0 + 80}\n`);
     const h = hold(a.locks, "gy/plain");
-    r = loop(["--hours", "1", "--last-call", "1", "--max", "2"], {}, t0);
+    r = loop(["--hours", hoursFor(80), "--last-call", "1", "--max", "2"], {}, t0);
     await h.held();
     await r.at(25);
     h.go();
     await r.end();
-    fs.rmSync(a.at("runs/.stop-at"), { force: true });
     has(r.out(), `${hmsAt(t0, 25)} loop: iteration 2: Y at the desk (gy/desk)`);
   });
 });

@@ -244,7 +244,7 @@ What it must do:
   leaves old lanes on their version until their unit ends, which is what
   `fleet restart` does today.
 - **Know what `just fleet` does.** Start, pause, pause-now, stop, restart,
-  last-call, stop-at, tell and tidy still act on each machine through
+  last-call and tell still act on each machine through
   `oversee.sh` there, over ssh to other machines, since the lanes are still
   units; the records tell the daemon which lanes should be running. Don't
   open a network port: the daemon listens on a socket in the user's runtime

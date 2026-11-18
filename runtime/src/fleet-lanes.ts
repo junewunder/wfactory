@@ -1,5 +1,5 @@
 // The fleet's lanes and machines: starting, restarting, stopping and tidying lanes, telling them
-// things, and each machine's usage reading and a command run there.
+// things, and each machine's usage reading.
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -45,6 +45,8 @@ function dropOrphans(f: Fleet, m: string, keep: number) {
     if (st.every((x) => x === "stopped")) sh(m, checkout(m), DROP_CLONE, {}, c, path.basename(c));
   }
 }
+// What fleet stop does after stopping the lanes: on each machine with no lane running, the
+// leftover sessions and long jobs (oversee.sh tidy), factory/tidy, and clones past the count.
 export function tidy(f: Fleet, ms: string[]) {
   const { floop, checkout, lanes, sh, laneState, setOverride, allLanes } = f;
   for (const m of ms) {
@@ -281,17 +283,6 @@ export function restart(f: Fleet, args: string[]): number {
   return 0;
 }
 
-// fleet stop-at <time> [<machine>…]: an earlier stop time for the lanes.
-export function stopAt(f: Fleet, args: string[]): number {
-  const { takeMachines, each } = f;
-  const at = args[0] ?? "";
-  const t = timeAt(at, epoch());
-  if (t === null) { console.error(`fleet: stop-at needs a time, e.g. 09:00 (got '${at}'; for now, \`fleet last-call\` or \`fleet pause\`)`); return 2; }
-  if (t === "past") { console.error(`fleet: ${at} is in the past`); return 2; }
-  each(takeMachines(args.slice(1)).ms, ["stop-at", "--at", String(t)]);
-  return 0;
-}
-
 // fleet tell <machine>[/<lane>] | <unit id> <text…>: a message to the running sessions.
 export function tell(f: Fleet, args: string[]): number {
   const { known, loopArg, on, sh, allLanes } = f;
@@ -341,12 +332,4 @@ export function usage(f: Fleet, args: string[]): number {
   if (unknown) say("newest: can't tell while a machine's reading has no age");
   else if (NAMES.length > 1 && best) say(`newest: ${best}'s; trust that one`);
   return 0;
-}
-
-// fleet run <machine> <command…>: a command in that machine's checkout.
-export function run(f: Fleet, args: string[]): number {
-  const { NAMES, known, checkout, on } = f;
-  const m = args[0] ?? "";
-  if (!known(m)) { console.error(`fleet: no machine ${m} in docs/machines.md (${NAMES.join(" ")})`); return 2; }
-  return on(m, checkout(m), args.slice(1)).status;
 }

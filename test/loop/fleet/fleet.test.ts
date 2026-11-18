@@ -1,7 +1,7 @@
 // The fleet on this machine (the bash suite's "fleet on this machine", but its deploy checks, which
 // are deploy.test.ts): fleet start pulls the skill's checkout and starts the lane as a unit; the
 // daemon has its record and comes back when killed; fleet beat, tell, wait (what wakes it, by
-// tier, and a lane that stops), summary, events, stop, last-call, stop-at, tidy; a machine ssh
+// tier, and a lane that stops), summary, events, stop, last-call; a machine ssh
 // can't reach; fleet usage. The lane's one unit is held until the test lets it go, so the lane is
 // still running at each wait until the one for a lane that stops.
 // Run: node --test test/loop/fleet/
@@ -128,7 +128,7 @@ describe("fleet wait: what wakes it", () => {
   test("  then each group's CI: a run cut off says so, where it was cut", () => {
     f.editMain("tracker/project.json", (p) => { p.ci = { steps: { drill: { cmd: "true" } } }; });
     setup(["add-group", "gcut", "--title", "Group Cut", "--ci", "drill"]);
-    // (Its unit done by hand on main, not through `done`: the night's done count, which summary --done
+    // (Its unit done by hand on main, not through `done`: the night's done count, which the summary
     // checks below, stays the run's own.)
     setup(["add-unit", "gcut/a", "--title", "Cut a"]);
     f.editMain("tracker/groups/gcut.json", (g) => { g.units[0].record = { state: "done", by: "test", at: new Date().toISOString().replace(/\.\d+Z$/, "Z"), evidence: "x" }; });
@@ -145,6 +145,14 @@ describe("fleet wait: what wakes it", () => {
     assert.ok(at("review-skipped (1):") < at("The rest:"));
     assert.ok(at("The rest:") < at("store-aside (1):"));
     has(o, "landed without the loop's review: its review ran over 30 minutes");
+  });
+  // The store deleting a set-aside copy that held only older copies is routine: it goes with the
+  // rest, not under what went wrong.
+  test("  a set-aside copy of older files, deleted, is with the rest", () => {
+    ev("store-aside-old", `Group's copy on ${HOST} had no stamp or had changed; the copy down replaced 2 files, each with a newer one from the store`);
+    const o = out(["summary"]);
+    const at = (x: string) => { const i = o.indexOf(x); assert.ok(i >= 0, `no ${x} in:\n${o}`); return i; };
+    assert.ok(at("The rest:") < at("store-aside-old (1):"));
   });
   // Under each problem, the unit it happened in and what became of it, as the tracker has it now:
   // an overseer once reported a killed job as rerun and finished when it was neither.
@@ -391,29 +399,23 @@ describe("fleet wait: a lane that stops", () => {
   test("  a lane that stops by itself drops its daemon record", () => { assert.ok(!fs.existsSync(record(LANE))); });
 });
 
-describe("fleet events, stop, last-call, stop-at, tidy", () => {
+describe("fleet events, stop, last-call", () => {
   test("fleet events", () => { has(out(["events", "5"]), "lane-stop"); });
   let stop = "";
   test("fleet stop", () => { stop = out(["stop"]); has(stop, "not running"); });
-  test("fleet last-call reaches each lane", () => { fleet(["last-call"]); assert.ok(fs.existsSync(path.join(L1, "runs/.last-call"))); });
-  test("fleet stop-at gives each lane a stop time to come", () => {
-    fleet(["stop-at", "23:59"]);
-    assert.ok(Number(readOr(path.join(L1, "runs/.stop-at")) || 0) > Date.now() / 1000);
-  });
-  test("  a date in the past is refused", () => { assert.equal(fleet(["stop-at", "2020-01-01 09:00"]).code, 2); });
-  test("  and so are no time and now", () => { assert.equal(fleet(["stop-at", ""]).code, 2); });
-  test("  (now)", () => {
-    const c = fleet(["stop-at", "now"]).code;
-    for (const x of [".last-call", ".stop-at"]) fs.rmSync(path.join(L1, "runs", x), { force: true });
-    assert.equal(c, 2);
-  });
   test("  and tidies the machine", () => { has(stop, "factory/tidy: done"); });
-  test("fleet tidy: a machine with no lane running", () => { has(out(["tidy"]), `=== ${HOST}`); });
+  test("fleet last-call reaches each lane", () => {
+    fleet(["last-call"]);
+    const there = fs.existsSync(path.join(L1, "runs/.last-call"));
+    fs.rmSync(path.join(L1, "runs/.last-call"), { force: true });
+    assert.ok(there);
+  });
+  test("fleet stop on a machine with no lane running tidies it", () => { has(out(["stop"]), `=== ${HOST}\n`); });
   // The machines file gives checkouts as ~/…: lane clones are found from that too.
   test("  it reaches lane clones when the checkout is ~/…", () => {
     fs.mkdirSync(w.at("home")); fs.symlinkSync(F, w.at(`home/${P}`)); fs.symlinkSync(L1, w.at(`home/${P}-lane1`));
     editMachines((s) => s.replace(`${F} `, `~/${P} `));
-    const o = out(["tidy"], { HOME: w.at("home") });
+    const o = out(["stop"], { HOME: w.at("home") });
     editMachines((s) => s.replace(`~/${P} `, `${F} `));
     has(o, `factory-${P}-lane1`);
   });
@@ -422,10 +424,16 @@ describe("fleet events, stop, last-call, stop-at, tidy", () => {
     git(F, "fetch", "-q", "origin");
     has(git(F, "log", "--format=%s", "origin/main"), `Unit seven (g/seven): merged from ${HOST} lane 1`);
   });
-  // The count for the report, from the tracker (2026-10-19: grep said 117, the
-  // report 103).
-  test("fleet summary --done: how many units were done since the run started", () => {
-    assert.match(out(["summary", "--done"]), /^Done since [0-9-]+ [0-9:]+: 1 unit /);
+  // The count for the report, from the tracker (2026-10-19: grep said 117, the report 103): the
+  // summary's last lines, the scorecard's, count each unit done once, and not one the review sent
+  // back; summary --done, which counted those, is gone.
+  test("fleet summary: the units done since the run started, in the scorecard at its end", () => {
+    has(out(["summary"]), "Units done: 1 in the tracker's log");
+  });
+  test("  fleet summary --done is refused", () => {
+    const r = fleet(["summary", "--done"]);
+    assert.equal(r.code, 2);
+    has(r.stdout, "usage: fleet summary [--since T]\n");
   });
 });
 
