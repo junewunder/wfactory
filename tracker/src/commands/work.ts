@@ -229,14 +229,15 @@ C.status = (a) => {
   }
   const units = groups.flatMap((g) => g.units);
   const c = counts(T, units);
-  const total = units.filter((u) => u.kind !== "gate").length;
+  // The work is what's still wanted: a dropped unit is out of the total (status --all lists them).
+  const total = units.filter((u) => u.kind !== "gate").length - (c.dropped || 0);
   const head = `${T.project.title || T.project.name}${env.LOOP && env.LOOP !== "all" ? ` / ${(loops[env.LOOP] || {}).title || env.LOOP}` : ""}`;
   console.log(`${head}: ${c.done || 0} of ${total} done${c.broken ? `, ${c.broken} broken again` : ""}${c.you ? `, ${c.you} waiting on you` : ""}${c.interrupted ? `, ${c.interrupted} interrupted` : ""}`);
   if (o.all || a.includes("all")) {
     for (const g of groups) { const gc = counts(T, g.units); console.log(`  ${g.title} (${g.id}): ${fmtCounts(gc) || "no units"}${g.ci ? `; CI ${ciState(T, g).s}` : ""}`); }
   } else {
     const active = groups.filter((g) => g.units.some((u) => ["doing", "ready", "review", "interrupted", "broken"].includes(derive(T, u).s)));
-    const show = active.slice(0, 5).map((g) => { const gu = g.units.filter((u) => u.kind !== "gate"); return `${g.title} (${gu.filter((u) => derive(T, u).s === "done").length}/${gu.length}${g.host ? ` on ${g.host}` : ""})`; });
+    const show = active.slice(0, 5).map((g) => { const gu = g.units.filter((u) => u.kind !== "gate" && derive(T, u).s !== "dropped"); return `${g.title} (${gu.filter((u) => derive(T, u).s === "done").length}/${gu.length}${g.host ? ` on ${g.host}` : ""})`; });
     if (show.length) console.log(`Open groups: ${show.join(", ")}${active.length > 5 ? ` and ${active.length - 5} more` : ""}`);
   }
   const qs = T.questions.filter(isOpen);

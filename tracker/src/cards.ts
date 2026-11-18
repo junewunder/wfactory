@@ -45,7 +45,7 @@ export function card(T: State, u: Unit, head = "", full: boolean | "all" = false
   const d = derive(T, u);
   const L: string[] = [];
   L.push(`${head}${name(u)}`);
-  const gu = g.units.filter((x) => x.kind !== "gate");
+  const gu = g.units.filter((x) => x.kind !== "gate" && derive(T, x).s !== "dropped");
   L.push(`  Group: ${g.title}, ${gu.filter((x) => derive(T, x).s === "done").length} of ${gu.length} done`);
   L.push(`  Status: ${sentence(T, u, d)}`);
   if (u.detail) L.push(`  What: ${expand(T, u.detail)}`);
