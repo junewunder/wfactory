@@ -1,13 +1,13 @@
 // The scorecard's figures, worked out from its records (scorecard-read.ts) for a period: how each
-// session ended, units claimed over and over, the review, waiting and CI, and the cost of a
-// finished unit; then its lines, each with the share of the period's session cost or lane time
-// it accounts for, ranked by it. scorecard.ts prints them.
+// session ended and what became of it, units claimed over and over, the review, waiting and CI,
+// and the cost of a finished unit; then its lines: first the sessions and units done, which add
+// up as they stand, then each with the share of the period's session cost or lane time it
+// accounts for, ranked by it. scorecard.ts prints them.
 import type { LogEntry } from "../../tracker/src/types.ts";
 import { gaveBackLine } from "../../tracker/src/sessions.ts";
 import { fill } from "../../tracker/src/templates.ts";
-import { today } from "../../tracker/src/text.ts";
 import { startedAt, type Records, type Row } from "./scorecard-read.ts";
-import { ENDINGS, type Ending } from "./scorecard-names.ts";
+import { ENDINGS, ENDING_SAID, OUTCOMES, type Ending, type Outcome } from "./scorecard-names.ts";
 
 // What the tracker writes for these (tracker/src/commands/loop.ts review-fix, probes.ts); a test
 // checks the tracker's source still writes them, so a change there shows.
@@ -15,10 +15,10 @@ const SENT_BACK = /: back to ready: the loop's review asked for fixes$/;
 const SENT_BACK_TWICE = /: stuck: the loop's review asked for fixes a second time$/;
 const CHECK_DONE = /: now done \(its check passes\)$/;
 
-export interface Line { text: string; share: number | null; of: "cost" | "lane" | null; section: number }
+// unrecorded: a line on what the records don't hold (`fleet summary` leaves it out).
+export interface Line { text: string; share: number | null; of: "cost" | "lane" | null; section: number; unrecorded?: boolean }
 export interface UnitClaims { id: string; title: string; claims: number; endings: Partial<Record<Ending, number>>; cost: number }
 export interface GroupCost { id: string; title: string; count: number; median: number; total: number; flagged: boolean }
-export interface PredictionNow { id: string; name: string; op: string; value: number; by: string; why: string; state: "open" | "held" | "missed"; now: number | null }
 export interface Card {
   since: number | null;
   empty: boolean;
@@ -28,7 +28,6 @@ export interface Card {
   units: UnitClaims[];
   groups: GroupCost[];
   unknown: { where: string; what: string; count: number }[];
-  predictions: PredictionNow[];
 }
 
 const r4 = (x: number) => Math.round(x * 1e4) / 1e4;
@@ -41,14 +40,12 @@ export const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x *
 export const minutes = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${Math.round(m % 60)} min` : ""}` : `${Math.round(m)} min`);
 const times = (n: number) => (n === 1 ? "once" : n === 2 ? "twice" : `${n} times`);
 
-// A claim in the tracker's log, and how its session ended.
-interface Claim { tag: string; unit: string; title: string; i: number; at: number; ending: Ending; row?: Row }
+// A claim in the tracker's log, how its session ended, and the command that finished it, if one did.
+interface Claim { tag: string; unit: string; title: string; i: number; at: number; ending: Ending; fin?: string; row?: Row }
 
-// The card for the period from since (null: the first record) up to until (null: now). A
-// prediction is judged on its own period: from when it was made to the end of its date (until
-// then, to now), whatever period the card is for.
-export function score(R: Records, since: number | null, now = new Date(), until: number | null = null, ledger = true): Card {
-  const inP = (t: number) => (since === null || t >= since) && (until === null || t < until);
+// The card for the period from since (null: the first record) to now.
+export function score(R: Records, since: number | null): Card {
+  const inP = (t: number) => since === null || t >= since;
   const log = R.log;
   const figures: Record<string, number | null> = {}, notRecorded: Record<string, string> = {};
   const lines: Line[] = [];
@@ -92,7 +89,7 @@ export function score(R: Records, since: number | null, now = new Date(), until:
   };
   const classify = (c: Claim) => {
     const ls = linesOf(c).map((x) => x.e), fin = linesOf(c).find((x) => x.e.id === c.unit && finishes(x.e));
-    if (fin) { c.ending = sentBackAfter(c.unit, fin.j) ? "sent_back" : "finished"; return; }
+    if (fin) { c.ending = sentBackAfter(c.unit, fin.j) ? "sent_back" : "finished"; c.fin = fin.e.cmd === "check" ? "done" : fin.e.cmd; return; }
     if (c.row && evIn(c.row, "oom-kill", c.unit)) { c.ending = "oom"; return; }
     if (c.row && evIn(c.row, "silent")) { c.ending = "silent"; return; }
     if (ls.some((e) => e.cmd === "ask")) { c.ending = "asked"; return; }
@@ -163,24 +160,64 @@ export function score(R: Records, since: number | null, now = new Date(), until:
   const laneMin = laneRows.reduce((s, r) => s + r.minutes, 0) + usage + idle;
   figures["lane.minutes"] = laneMin;
 
-  // ------------------------------------------------ 1. sessions that finished no unit
+  // ------------------------------------------------ 0. the sessions and the units done, adding up
   // (A session whose claim isn't in the log isn't counted either way: it's unknown, named below.)
   const noUnit = sessions.filter((r) => !["finished", "unknown"].includes(endingOf(r)));
+  const finished = sessions.filter((r) => endingOf(r) === "finished");
   figures["sessions.unknown.count"] = sessions.filter((r) => endingOf(r) === "unknown").length;
   // (Shares of the sessions whose ending is known: one whose claim the log lacks is neither.)
   const known = sessions.filter((r) => endingOf(r) !== "unknown"), K = known.length, CK = cost(known), more = N - K;
+  figures["sessions.finished.count"] = finished.length;
   figures["sessions.no_unit.count"] = noUnit.length;
   figures["sessions.no_unit.share"] = share(noUnit.length, K);
   figures["sessions.no_unit.cost"] = cost(noUnit);
   figures["sessions.no_unit.cost_share"] = share(cost(noUnit), CK);
-  if (K) lines.push({ section: 1, of: "cost", share: share(cost(noUnit), CK), text: `Sessions that finished no unit: ${noUnit.length} of ${K} (${pct(share(noUnit.length, K))}${more ? `; ${more} more not in the log, not counted` : ""}), ${money(cost(noUnit))}` });
+  const OUT = Object.keys(OUTCOMES) as Outcome[];
+  const ofOutcome = (k: Outcome) => noUnit.filter((r) => (OUTCOMES[k].endings as readonly string[]).includes(endingOf(r)));
+  const n = (x: number, one: string, many = `${one}s`) => `${x} ${x === 1 ? one : many}`;
+  // Each finishing command, as the sentence says it.
+  const FIN: Record<string, string> = { done: "done", review: "sent for a second check", drop: "dropped" };
+  const fins = Object.keys(FIN).map((k) => [FIN[k], finished.filter((r) => ofRow.get(r)?.fin === k).length] as const).filter(([, x]) => x);
+  const outs = OUT.map((k) => [k, ofOutcome(k).length] as const).filter(([, x]) => x);
+  if (N) lines.push({ section: 0, of: null, share: null, text: `Sessions: ${N}, ${money(C)}: ${finished.length} finished their unit${fins.length ? ` (${fins.map(([w, x]) => `${x} ${w}`).join(", ")})` : ""}, ${noUnit.length} finished none${outs.length ? `: ${outs.map(([k, x]) => `${x} ${OUTCOMES[k].said}`).join(", ")}` : ""}${more ? `; ${more} more whose claim isn't in the tracker's log` : ""}` });
+  // Units done: each once, every machine's (the log), and those this machine's sessions did.
+  const doneUnits = new Set<string>();
+  log.forEach((e, i) => { if (e.id && inP(atOf(e)) && (e.cmd === "done" || (e.cmd === "check" && CHECK_DONE.test(e.text))) && !sentBackAfter(e.id, i)) doneUnits.add(e.id); });
+  const doneHere = new Set(finished.map((r) => ofRow.get(r)!).filter((c) => c.fin === "done" && doneUnits.has(c.unit)).map((c) => c.unit));
+  figures["units.done.count"] = doneUnits.size;
+  if (doneUnits.size || N) lines.push({ section: 0, of: null, share: null, text: `Units done: ${doneUnits.size} in the tracker's log (every machine, each once), ${doneHere.size} of them by this machine's sessions` });
+  // Loop claims here with no session record: the lane's records went with its clone (before a
+  // removed clone's records were kept: scorecard-read.ts). A session running now has none yet.
+  const recorded = new Set(R.rows.map((r) => r.tag));
+  const unrec = new Set(log.filter((e) => e.cmd === "claim" && e.tag && e.actor === "loop" && e.host === R.host && inP(atOf(e)) && !recorded.has(e.tag) && !R.running.has(e.tag)).map((e) => e.tag!));
+  figures["sessions.unrecorded.count"] = unrec.size;
+  if (unrec.size) lines.push({ section: 0, of: null, share: null, text: `Not counted: ${n(unrec.size, "session")} on this machine claimed a unit (the tracker's log) but no lane here has a record of ${unrec.size === 1 ? "it" : "them"}: a lane's records that went with its clone, before removing one kept them` });
+
+  // ------------------------------------------------ 1. what became of the sessions that finished no unit
+  // Only lost work is waste, and only its line carries a share; the rest is said as what it is.
   for (const k of Object.keys(ENDINGS) as (keyof typeof ENDINGS)[]) {
     const rs = noUnit.filter((r) => endingOf(r) === k);
     figures[`sessions.no_unit.${k}.count`] = rs.length;
     figures[`sessions.no_unit.${k}.share`] = share(rs.length, K);
     figures[`sessions.no_unit.${k}.cost`] = cost(rs);
     figures[`sessions.no_unit.${k}.cost_share`] = share(cost(rs), CK);
-    if (rs.length) lines.push({ section: 1, of: "cost", share: share(cost(rs), CK), text: `  Sessions that ${ENDINGS[k]}: ${rs.length} (${pct(share(rs.length, K))} of sessions), ${money(cost(rs))}` });
+  }
+  // A unit the review sent back is carried on by its next claim: what that session cost.
+  const next = claims.filter((c) => c.ending === "sent_back" && c.row).map((c) => claims.find((x) => x.unit === c.unit && x.i > c.i)?.row).filter((r): r is Row => !!r);
+  figures["sessions.no_unit.sent_back.next_cost"] = cost(next);
+  const parts = (k: Outcome) => (OUTCOMES[k].endings as readonly (keyof typeof ENDINGS)[]).map((e) => [e, noUnit.filter((r) => endingOf(r) === e)] as const).filter(([, rs]) => rs.length)
+    .map(([e, rs]) => `${rs.length} ${ENDING_SAID[e]} (${money(cost(rs))}${e !== "sent_back" ? "" : next.length ? `; the ${n(next.length, "session")} that carried ${rs.length === 1 ? "it" : "them"} on: ${money(cost(next))}` : "; none carried on here yet"})`).join(", ");
+  for (const k of OUT) {
+    const rs = ofOutcome(k);
+    figures[`sessions.no_unit.${k}.count`] = rs.length;
+    figures[`sessions.no_unit.${k}.cost`] = cost(rs);
+    if (k === "lost") {
+      figures["sessions.lost.count"] = rs.length;
+      figures["sessions.lost.share"] = share(rs.length, K);
+      figures["sessions.lost.cost"] = cost(rs);
+      figures["sessions.lost.cost_share"] = share(cost(rs), CK);
+      if (K) lines.push({ section: 1, of: "cost", share: share(cost(rs), CK), text: `Waste: sessions that lost their work: ${rs.length} of ${K} (${pct(share(rs.length, K))}${more ? `; ${more} more not in the log, not counted` : ""}), ${money(cost(rs))}${rs.length ? `: ${parts(k)}` : ""}` });
+    } else if (rs.length) lines.push({ section: 1, of: null, share: null, text: `Sessions that finished no unit and ${OUTCOMES[k].said}: ${rs.length}, ${money(cost(rs))}${OUTCOMES[k].endings.length > 1 ? `: ${parts(k)}` : ""}` });
   }
 
   // ------------------------------------------------ 2. units by claims (every machine)
@@ -206,7 +243,8 @@ export function score(R: Records, since: number | null, now = new Date(), until:
     interrupted: "interrupted or cut off", blocked: "left stuck", asked: "asked the owner", oom: "killed over memory", silent: "silent", unknown: "unknown" };
   for (const u of units.slice(0, 5)) {
     const how = (Object.entries(u.endings) as [Ending, number][]).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${SAID[k]}`).join(", ");
-    lines.push({ section: 2, of: "cost", share: share(u.cost, C), text: `${u.title} (${u.id}): claimed ${times(u.claims)} since it was last done or added: ${how}${u.cost ? `; ${money(u.cost)} here` : ""}` });
+    // (No share: a unit claimed again is carried on, not lost; the lost sessions' share is section 1's.)
+    lines.push({ section: 2, of: null, share: null, text: `${u.title} (${u.id}): claimed ${times(u.claims)} since it was last done or added: ${how}${u.cost ? `; ${money(u.cost)} here` : ""}` });
   }
 
   // ------------------------------------------------ 3. the review
@@ -238,7 +276,7 @@ export function score(R: Records, since: number | null, now = new Date(), until:
     ["wait.memory.minutes", "Waiting for the memory budget", "the heavy-job queue would have to record each wait as it ends: the job, and the minutes"],
     ["wait.in_flight.minutes", "Waiting for work in flight elsewhere", "the loop would have to record why it waited (the units in progress elsewhere), and the minutes"],
   ];
-  for (const [n, what, need] of NR) { figures[n] = null; notRecorded[n] = need; lines.push({ section: 4, of: null, share: null, text: `${what}: not recorded (${need})` }); }
+  for (const [n, what, need] of NR) { figures[n] = null; notRecorded[n] = need; lines.push({ section: 4, of: null, share: null, unrecorded: true, text: `${what}: not recorded (${need})` }); }
 
   // CI: runs and their steps from the tracker's log (every machine); time from this machine.
   const stepNames = Object.keys(R.ciSteps);
@@ -288,7 +326,7 @@ export function score(R: Records, since: number | null, now = new Date(), until:
         if (taken.has(k) || !(k === cmd || k.endsWith(` bash -c ${cmd}`)) || !Array.isArray(v.secs)) continue;
         taken.add(k);
         const m = / runs\/ci-(\d{8}-\d{6})-\S*\.log\.secs /.exec(k), t = m ? startedAt(m[1]) : null;
-        if (t === null ? since !== null || until !== null : !inP(t)) continue;
+        if (t === null ? since !== null : !inP(t)) continue;
         secs.push(...v.secs.filter((x) => typeof x === "number"));
       }
     }
@@ -345,8 +383,10 @@ export function score(R: Records, since: number | null, now = new Date(), until:
   figures["unknown.count"] = unknown.length;
   if (unknown.length) lines.push({ section: 6, of: null, share: null, text: `Not understood (unknown): ${unknown.length} record${unknown.length === 1 ? "" : "s"}: ${unk.map((u) => `${u.where}: ${u.what}${u.count > 1 ? ` ×${u.count}` : ""}`).join("; ")}` });
 
-  // The order: by share, largest first; lines with neither after, in the order above.
+  // The order: the sessions and units done first; then by share, largest first; lines with
+  // neither after, in the order above.
   const ranked = lines.map((l, k) => ({ l, k })).sort((a, b) => {
+    if ((a.l.section === 0) !== (b.l.section === 0)) return a.l.section === 0 ? -1 : 1;
     const sa = a.l.share, sb = b.l.share;
     if (sa !== null && sb !== null) return sb - sa || a.k - b.k;
     if (sa !== null) return -1;
@@ -354,16 +394,6 @@ export function score(R: Records, since: number | null, now = new Date(), until:
     return a.k - b.k;
   }).map((x) => x.l);
 
-  // The ledger: each open prediction and the figure now; past its date, held or missed.
-  const day = today(now);
-  const endOf = (d: string) => { const [y, m, dd] = d.split("-").map(Number); return Math.floor(new Date(y, m - 1, dd + 1).getTime() / 1000); };
-  const predictions: PredictionNow[] = !ledger ? [] : R.predictions.filter((p) => !p.settled).map((p) => {
-    const due = day > p.by;
-    const v = score(R, atOf(p as unknown as LogEntry), now, due ? endOf(p.by) : null, false).figures[p.name] ?? null;
-    const ok = v !== null && ({ "<": v < p.value, "<=": v <= p.value, ">": v > p.value, ">=": v >= p.value, "=": v === p.value } as Record<string, boolean>)[p.op];
-    return { id: p.id, name: p.name, op: p.op, value: p.value, by: p.by, why: p.why, now: v, state: !due ? "open" : ok ? "held" : "missed" };
-  });
-
   const empty = !R.rows.length && !log.some((e) => e.cmd === "claim");
-  return { since, empty, figures, notRecorded, lines: ranked, units, groups, unknown: unk, predictions };
+  return { since, empty, figures, notRecorded, lines: ranked, units, groups, unknown: unk };
 }
