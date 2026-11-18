@@ -160,6 +160,29 @@ each.
 in `$FACTORY_BUSY_GROUPS`: units another lane on this machine is partway
 through.
 
+### 41. Sorting set-aside copies took sessions and the owner (the mod factory, November)
+
+**What happened.** A copy down keeps aside whatever it replaces in a copy
+not proven to be on the store, and so does putting the store's copy back
+over an unfinished unit's outputs (lesson 8: nothing is deleted on a guess).
+Each such set got a unit, for a lane to audit the set and delete it. In the
+mod factory that came to 55 units, about 20 of them in the last two weeks.
+Every audit that ran ended the same way: pipeline outputs, rebuilt from git,
+nothing lost, set dropped.
+
+**What it cost.** A lane session for each of the first 14, and the owner's
+time: the next 37 were closed in two bulk passes once the owner called them
+housekeeping that could just be removed, with 4 more waiting.
+
+**The rule.** What's set aside is settled by a rule, never by a unit or a
+question. A set the store made for units it can name is removed once each
+is dropped, or done with its branch landed on main by the tracker's own
+record of the landing: main builds those outputs again, as lesson 8
+requires of everything in `work/`. Done by hand, still merging or
+reopened doesn't count, and neither does a set that lacks the store's own
+record of whose it is. Any other set stays where it is, costs no session,
+and gets one line in the morning summary for each run it outlasts.
+
 ## Running many lanes
 
 ### 10. The first two-laptop day (the mod factory)
@@ -775,7 +798,7 @@ and where they'd be satisfied. The satisfied line is asked again over
 real output at the probe, the trials and every ramp review. Once the
 owner says start, the agent stops only at gates and real questions.
 
-### 41. The owner's own passes did most of the work, and the skill had no word for them (the mod factory)
+### 42. The owner's own passes did most of the work, and the skill had no word for them (the mod factory)
 
 **What happened.** Over two weeks the mod factory's owner ran eight passes
 over the tracker by hand, with the lanes off: one thread as foreman, a

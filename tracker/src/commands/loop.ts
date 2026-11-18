@@ -9,7 +9,7 @@ import { NetError, die, list, now, parseArgs, plural, since, str, strs } from ".
 import { MAX_NOTE, addNote, checkText, fixIds, groupTitle, name, resolve } from "../names.ts";
 import { beatRecords, beatsHere, claimAlive, dataGroup, dropLease, groupData, newerIn, heldHere, landingMine, leaseAge, leaseOf, liveLease, lockHeld, takeLease } from "../machine.ts";
 import { busyGroups, ciKeepsLease } from "../ci.ts";
-import { derive, hostOk, sentence } from "../status.ts";
+import { SETTLED, derive, hostOk, sentence } from "../status.ts";
 import { gaveBackLine } from "../sessions.ts";
 import { C } from "./registry.ts";
 import type { CiRun, Group, LanesOff, Note, Overseer, State, Unit, UnitRecord } from "../types.ts";
@@ -71,7 +71,7 @@ C.merged = (a) => mutate((T) => {
     // Landed: what its review asked for is settled, and a later round starts its count afresh.
     delete u.review; delete u.landCheck; delete u.round;
     touch(T, u);
-    if (was === "merging") log(T, "merged", u.id, `${u.title}: on main`);
+    if (was === "merging") { u.record.landed = now(); log(T, "merged", u.id, `${u.title}: on main`); }
   }
   return 0;
 });
@@ -359,8 +359,8 @@ C.data = (a) => {
 };
 
 // The files a pipeline step rebuilds (project.json store.rebuilt), so a copy down doesn't keep
-// them: listed, or one more added with why (a set-aside sort's lane adds them; the state is
-// main's, so a hand edit on a unit's branch would be dropped).
+// them: listed, or one more added with why (the state is main's, so a hand edit on a unit's
+// branch would be dropped).
 C.rebuilt = (a) => {
   const o = parseArgs(a);
   const [sub, glob] = o._, why = typeof o.why === "string" ? o.why.trim() : "";
@@ -500,8 +500,36 @@ C.busy = (a) => {
   return 0;
 };
 // One unit's status key (ready, doing, merging, done, …), for scripts.
-// --host: the machine it's pinned to, its own or its group's ("" for any).
-C.state = (a) => { const o = parseArgs(a); const T = load(); const u = resolve(T, o._[0]); console.log(o.branch ? u.record?.branch || "" : o.by ? u.record?.by || "" : o.host ? u.host || T.groupOf.get(u.id)?.host || "" : derive(T, u).s); return 0; };
+// --host: the machine it's pinned to, its own or its group's ("" for any). --landed: when the
+// branch it's done by landed on main ("" if it isn't done, or is done some other way: by hand).
+C.state = (a) => {
+  const o = parseArgs(a); const T = load(); const u = resolve(T, o._[0]);
+  console.log(o.branch ? u.record?.branch || "" : o.by ? u.record?.by || "" : o.host ? u.host || T.groupOf.get(u.id)?.host || ""
+    : o.landed ? (derive(T, u).s === "done" && u.record?.state === "done" && u.record.landed) || "" : derive(T, u).s);
+  return 0;
+};
+// store.sh: no session sorts a set-aside copy any more (the store settles each by rule), so the
+// units an older store.sh filed for that are dropped: those of the group `aside` pinned to this
+// machine, and any named (the ones its sets here name; older still, filed in a data group). Not one
+// its session is working now or whose branch is landing: printed, a line each, for the next look.
+const SORTS_GONE = "No session sorts a set-aside copy any more: the store removes one once the units whose outputs it holds have landed or are dropped, and lists any other in the morning summary";
+C["aside-retire"] = (a) => {
+  const o = parseArgs(a);
+  const find = (T: State) => [...new Set([...(T.groupById.get("aside")?.units ?? []).filter((u) => u.host === ctx.HOST), ...o._.map((id) => T.byId.get(String(id))).filter((u): u is Unit => !!u)])]
+    .filter((u) => !SETTLED.has(derive(T, u).s));
+  const busy = (T: State, u: Unit) => ["doing", "merging"].includes(derive(T, u).s);
+  // (Nothing to drop is the usual look: read only, no write.)
+  const T0 = load(), open = find(T0);
+  if (open.every((u) => busy(T0, u))) { for (const u of open) console.log(u.id); return 0; }
+  return mutate((T) => {
+    for (const u of find(T)) {
+      if (busy(T, u)) { console.log(u.id); continue; }
+      u.record = { state: "dropped", why: SORTS_GONE, by: ctx.TAG, at: now() };
+      touch(T, u); log(T, "drop", u.id, `${u.title}: dropped: ${SORTS_GONE}`);
+    }
+    return 0;
+  });
+};
 // store.sh: where a unit's outputs went when its session ended unfinished (the store's copy put back
 // over them), for its card; --clear once they're back in work/ (restored) or gone.
 C["aside-set"] = (a) => mutate((T) => {

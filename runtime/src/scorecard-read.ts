@@ -44,9 +44,10 @@ export const LOG_CMDS = new Set(`add add-group add-unit answer aside-set ask blo
   landing lanes lanes-stopped lease merged note overseer park pass prune priority publish rebuilt release rename reopen review settle sync
   unclaim unpark withdraw ci-lost`.split(/\s+/));
 // Every kind of event the lanes and daemons write (EVENTS_* in fleet-help.ts and the kinds no tier
-// names), and an older one. A project's own kinds (tracker/project.json "events") count too.
+// names), and older ones (store-aside-unfiled: from when a unit was filed to sort a set-aside copy).
+// A project's own kinds (tracker/project.json "events") count too.
 export const EVENT_KINDS = new Set([...EVENTS_WAKE, ...EVENTS_SUMMARY, ...EVENTS_PROBLEM,
-  ..."overlong store-empty store-moved store-seeded store-up-retried usage-stop".split(" ")]);
+  ..."overlong store-aside-unfiled store-empty store-moved store-seeded store-up-retried usage-stop".split(" ")]);
 
 const read = (f: string): string | null => { try { return fs.readFileSync(f, "utf8"); } catch { return null; } };
 const parse = <T>(text: string | null): T | null => { if (text === null) return null; try { return JSON.parse(text) as T; } catch { return null; } };

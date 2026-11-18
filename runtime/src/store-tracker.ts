@@ -30,5 +30,17 @@ export function ustate(u: string) {
   if (code(r) === 0) return out(r.stdout);
   return (r.stderr ?? "").includes('no unit "') ? "gone" : "unknown";
 }
+// When the branch a unit is done by landed on main, by the tracker's own record of the landing
+// (state --landed): "" if it isn't done, or is done some other way (by hand, reopened and done
+// again); null if the tracker can't say.
+export function landed(u: string): string | null {
+  const r = tr(["state", u, "--landed"], "ignore");
+  return code(r) === 0 ? out(r.stdout) : null;
+}
+// A unit as an owner reads it, "Title (id)"; its id alone if the tracker can't say.
+export function uname(u: string): string {
+  const r = tr(["show", u, "--json"], "ignore");
+  try { const t = code(r) === 0 ? (JSON.parse(r.stdout) as { title?: string }).title : ""; return t ? `${t} (${u})` : u; } catch { return u; }
+}
 // Only an answer from origin counts: offline, the lease can't be shown to be ours.
 export const heldHere = (g: string) => out(tr(["lease", "holder", g, "--fresh"], "ignore").stdout) === here.host;

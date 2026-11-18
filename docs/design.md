@@ -302,7 +302,7 @@ isn't told them again), and attach and the summary list each once.
 ### Sweep and sprint: the lanes held off
 
 The owner's own passes over the tracker (docs/sweep.md, docs/sprint.md;
-[lesson 41](lessons.md)) run with the lanes off, a foreman thread merging
+[lesson 42](lessons.md)) run with the lanes off, a foreman thread merging
 what workers in git worktrees finish. Four things are built for them:
 
 - **The hold is the tracker's** (`project.json` `lanes_off`, set by `just
@@ -352,6 +352,12 @@ is listed, and the lanes' CI proves it.
 - A copy down over a copy not proven to be on the store moves what it
   replaces into `work/.store/aside/`. That's how a migration deletes nothing
   locally.
+- What's set aside is settled by a rule, with no unit and no question
+  (lesson 41). A set is removed only when the store's own record names the
+  units whose outputs it holds and the tracker's record says each has landed
+  on main or is dropped: main rebuilds those. Anything short of that stays,
+  with a line in the morning summary; a person or an audit removes it, never
+  a guess.
 - A store without its `stamps/` folder (a dataset not mounted, a wrong path)
   is an outage, never "nothing there yet".
 - Every rsync has an I/O timeout, and ssh a keepalive and BatchMode, so a

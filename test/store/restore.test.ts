@@ -58,9 +58,6 @@ describe("a different unit of the group never gets them", () => {
     add("f7/r2", "--reads", "none");
     a.loop(ONE, UNDONE);
     assert.ok(setOf("f7/r2"), "no set for f7/r2");
-    // As if this run and the next were one: a set still kept, its unit not claimed again, when the
-    // lanes stop a second time is one to sort (aside-kept.test.ts); this is about restore's refusals.
-    fs.rmSync(path.join(setOf("f7/r2"), ".night"), { force: true });
     add("f7/r3", "--reads", "none", "--priority", "50");
     const out = a.loop(ONE);
     has(out, "iteration 1: Unit r3 of f7");
