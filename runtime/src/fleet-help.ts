@@ -95,6 +95,16 @@ Usage:
   factory/fleet.sh events [N]             the last N lines the owner may need to hear about (default 20)
   factory/fleet.sh pause [<machine>…]     find a good pausing spot: stop after the running unit
   factory/fleet.sh pause-now [<machine>…] pause asap: end the running sessions now
+  factory/fleet.sh off --for "<what>" [--now]   hold the lanes off while work is done by hand in their
+                                          place (a sweep, a sprint): recorded on main with the lanes
+                                          running now and their stop times, and each is asked to
+                                          stop after its unit (--now: its session is ended too).
+                                          While it holds, no lane starts on any machine (start and
+                                          the loop refuse) and a running one stops after its unit.
+                                          Run again, it says how far they've got: exit 0 once every
+                                          lane has stopped, 3 while one runs or a machine is unreachable
+  factory/fleet.sh on                     let go of that hold, and say which lanes ran before it and
+                                          the command that starts each machine's again; it starts none
   factory/fleet.sh restart <machine> [--lane N]   onto a newly pushed skill: deploy it there, and each
                                           running lane (or lane N) restarts on it as soon as its
                                           own unit ends, without waiting for the others; one

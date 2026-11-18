@@ -63,12 +63,19 @@ describe("just runs", () => {
   after(() => { fs.renameSync(w.at("index.keep"), at("runs/index.tsv")); });
 });
 
-// prompt and oversee-guide: the skill's, then the project's additions.
-describe("just prompt and oversee-guide", () => {
+// prompt, worker-guide and oversee-guide: the skill's, then the project's additions.
+describe("just prompt, worker-guide and oversee-guide", () => {
   test("just prompt: the skill's prompt", () => { assert.equal(chomp(J("prompt")), chomp(skillFile("runtime/prompt.md"))); });
   test("then the project's (prompt)", () => {
     fs.writeFileSync(at("factory/prompt.local.md"), "Local prompt rule.\n");
     assert.equal(chomp(J("prompt")), `${skillFile("runtime/prompt.md")}\n---\n\nLocal prompt rule.`);
+  });
+  // A sweep's or a sprint's worker: its own guide first, then the lanes' rules it builds on.
+  test("just worker-guide: the worker's guide, the loop's prompt, then the project's", () => {
+    assert.equal(chomp(J("worker-guide")), `${skillFile("runtime/worker.md")}\n---\n\n${skillFile("runtime/prompt.md")}\n---\n\nLocal prompt rule.`);
+  });
+  test("  with the commands a worker runs that a lane doesn't", () => {
+    for (const c of ["factory/lane.sh worktree", "just claim <id> --branch"]) has(J("worker-guide"), c);
   });
   // The card, not the 35k guide, at the start of every overseer session (2026-10-18).
   test("just oversee-guide: the skill's overseer card", () => { assert.equal(chomp(J("oversee-guide")), chomp(skillFile("runtime/oversee-card.md"))); });

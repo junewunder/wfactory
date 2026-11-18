@@ -319,6 +319,38 @@ overseer reads every lane's log on every machine, so it drops the repeats:
 attach` adds every one the logs have (an overseer taking over elsewhere
 isn't told them again), and attach and the summary list each once.
 
+### Sweep and sprint: the lanes held off
+
+The owner's own passes over the tracker (docs/sweep.md, docs/sprint.md;
+[lesson 43](lessons.md)) run with the lanes off, a foreman thread merging
+what workers in git worktrees finish. Four things are built for them:
+
+- **The hold is the tracker's** (`project.json` `lanes_off`, set by `just
+  fleet off`), not a file beside the lanes. It's on main, so `fleet start`
+  from any machine, a loop by hand and a lane the daemon brings back all
+  read the same record and refuse, and a lane no pause reached stops after
+  its unit. The lanes stop for it; they don't wait. A waiting lane reaches
+  its stop time and runs last call's CI, a rebuild and a publish in the
+  middle of a sweep. The record keeps which lanes ran and until when, and
+  `fleet on` gives back the command, because starting them is the owner's
+  call and the thread that stopped them may be gone by then.
+- **A worker's claim names its branch** (`claim --branch`), so its unit
+  recorded done is merging until the foreman's `merged --branch`, as a
+  lane's is until the loop's. It's asked for, not taken from whatever
+  branch a checkout is on: nothing would ever say "merged" for a session
+  that happened to work on a branch.
+- **A worktree gets what a lane's clone gets** (`factory/lane.sh
+  worktree`), from the same code. Lanes still run in clones: a worker's
+  worktree lasts one unit and its harness makes it.
+- **The worker's side is one guide a recipe prints** (`just worker-guide`:
+  `runtime/worker.md`, then the loop's prompt it builds on), so a foreman's
+  brief holds only its run.
+
+The merge is the foreman's, on a lighter check than a landing, on purpose:
+the loop's landing is paced for one lane on one machine, and these passes
+are for work that is wide or waits on the owner. What that leaves unproven
+is listed, and the lanes' CI proves it.
+
 ## Group data on a store
 
 - The store holds the true copy of each group's big files. One machine at a

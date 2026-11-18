@@ -14,6 +14,12 @@ export const BUSY = 75;
 export const die = (msg: string): never => { throw new UsageError(msg); };
 
 export const now = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
+// A moment as a line for the owner says it: the time of day, with the date when it isn't today's.
+export const since = (iso: string) => {
+  const d = new Date(iso), p2 = (n: number) => String(n).padStart(2, "0");
+  const day = (x: Date) => `${x.getFullYear()}-${p2(x.getMonth() + 1)}-${p2(x.getDate())}`;
+  return `${day(d) === day(new Date()) ? "" : day(d) + " "}${p2(d.getHours())}:${p2(d.getMinutes())}`;
+};
 
 export const slugify = (s: string, max = 40) => {
   let out = s.toLowerCase().normalize("NFKD").replace(/[^\w\s.-]/g, " ").replace(/[_\s]+/g, "-")

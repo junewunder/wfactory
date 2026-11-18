@@ -371,3 +371,87 @@ describe("review-fix: the loop's review asks for fixes; back to ready on the bra
     assert.notEqual(t(["review-fix", "unit/rv/none", "--findings", "- x"]).code, 0);
   });
 });
+
+// A sweep's or a sprint's worker: a session outside the loop, on a branch its foreman merges.
+// (Without the branch on its claim, its unit read as done from the moment it was recorded, with
+// its PR still open, and what needed it was offered.)
+describe("claim --branch: a unit worked outside the loop on a branch someone merges later", () => {
+  const W = { FACTORY_TAG: "sweeper" };
+  let was = "";
+  after(() => { f.git("checkout", "-q", was); });
+  test("on main it's refused: nothing there waits to merge", () => {
+    was = f.git("branch", "--show-current");
+    setup(["add-group", "sw", "--title", "Sweep"]);
+    setup(["add-unit", "sw/one", "--title", "Sweep unit one"]);
+    setup(["add-unit", "sw/two", "--title", "Sweep unit two", "--needs", "sw/one"]);
+    setup(["add-unit", "sw/three", "--title", "Sweep unit three"]);
+    const r = t(["claim", "sw/one", "--branch"], { ...W, FACTORY_MAIN: was }, { merged: true });
+    assert.equal(r.code, 2);
+    has(r.stdout, `this checkout is on ${was}`);
+  });
+  test("  and the unit isn't claimed", () => { has(ok(["state", "sw/one"]), "ready"); });
+  test("on a branch, the claim records the branch the checkout is on", () => {
+    f.git("checkout", "-q", "-b", "sweep/one");
+    has(ok(["claim", "sw/one", "--branch"], W), "on sweep/one");
+    assert.equal(ok(["state", "sw/one", "--branch"]).trim(), "sweep/one");
+  });
+  test("recorded done, it's merging, not done", () => {
+    ok(["done", "sw/one", "--evidence", "its tests pass on the branch"], W);
+    assert.equal(ok(["state", "sw/one"]).trim(), "merging");
+  });
+  test("  and what needs it waits", () => { has(ok(["show", "sw/two"]), "can't start until Sweep unit one (sw/one)"); });
+  test("a branch can be named, before the unit or after", () => {
+    ok(["claim", "sw/three", "--branch", "sweep/named"], W);
+    assert.equal(ok(["state", "sw/three", "--branch"]).trim(), "sweep/named");
+    ok(["unclaim", "sw/three", "--unstarted"], W);
+    ok(["claim", "--branch", "sw/three"], W);
+    assert.equal(ok(["state", "sw/three", "--branch"]).trim(), "sweep/one");
+  });
+  test("merged --branch, by whoever merged it: done, and what needs it is ready", () => {
+    ok(["merged", "--branch", "sweep/one"]);
+    assert.equal(ok(["state", "sw/one"]).trim(), "done");
+    assert.equal(ok(["state", "sw/two"]).trim(), "ready");
+  });
+  test("a claim without --branch records none, as before", () => {
+    ok(["claim", "sw/two"], W);
+    assert.equal(ok(["state", "sw/two", "--branch"]).trim(), "");
+  });
+});
+
+describe("lanes off / on: the lanes held off while work is done by hand in their place", () => {
+  test("not held off: it says so, and --why says nothing", () => {
+    has(ok(["lanes"]), "the lanes aren't held off");
+    assert.equal(ok(["lanes", "--why"]), "");
+    assert.equal(ok(["lanes", "--json"]).trim(), "null");
+  });
+  test("off needs --for (exit 2)", () => { assert.equal(t(["lanes", "off"]).code, 2); });
+  test("  and a --were it can read (exit 2)", () => { assert.equal(t(["lanes", "off", "--for", "a sweep", "--were", "laptop two"]).code, 2); });
+  test("  neither held them off", () => { assert.equal(ok(["lanes", "--why"]), ""); });
+  test("off: held off, for what, and how it ends", () => {
+    const o = ok(["lanes", "off", "--for", "a sweep of shared code", "--were", "laptop 2 1900000000", "--were", "desk 1"]);
+    has(o, "the lanes are held off for a sweep of shared code");
+    has(o, "`just fleet on` lifts it");
+  });
+  test("  --why gives that line", () => { has(ok(["lanes", "--why"]), "the lanes are held off for a sweep of shared code"); });
+  test("  the record keeps the lanes that ran, and until when", () => {
+    assert.deepEqual(JSON.parse(ok(["lanes", "--json"])).were, [{ machine: "laptop", lanes: 2, until: 1900000000 }, { machine: "desk", lanes: 1 }]);
+  });
+  test("  and the log says it", () => { has(ok(["log", "-n", "5"]), "the lanes are held off for a sweep of shared code"); });
+  test("  and so does status", () => { has(ok(["status"]), "Lanes: held off for a sweep of shared code"); });
+  test("a second off keeps the first's record", () => {
+    has(ok(["lanes", "off", "--for", "a sprint", "--were", "other 4"]), "already so: the lanes are held off for a sweep of shared code");
+    assert.equal(JSON.parse(ok(["lanes", "--json"])).were.length, 2);
+  });
+  test("on: the lanes may start again", () => {
+    has(ok(["lanes", "on"]), "the lanes may start again (they were held off for a sweep of shared code");
+    assert.equal(ok(["lanes", "--why"]), "");
+    hasnt(ok(["status"]), "Lanes:");
+  });
+  test("  and a second on says they weren't held off", () => { has(ok(["lanes", "on"]), "the lanes weren't held off"); });
+  test("lint passes with a hold in project.json", () => {
+    ok(["lanes", "off", "--for", "a sweep"]);
+    const r = t(["lint", "--broken"], {}, { merged: true });
+    ok(["lanes", "on"]);
+    assert.equal(r.code, 0, r.stdout);
+  });
+});

@@ -8,7 +8,7 @@ import { profileFile, profileGet, profileUnfilled } from "./profile.ts";
 import { linkedDirs, log } from "./session.ts";
 import { epoch, tryLock } from "./sys.ts";
 import { platform } from "./os.ts";
-import { openingOpen, tr, trOut, trWait, type TrOut } from "./tr.ts";
+import { lanesOff, openingOpen, tr, trOut, trWait, type TrOut } from "./tr.ts";
 import { Clock, SAME_STOP_S } from "./loop-clock.ts";
 import { cat, exists, isInt, json, read, rm, which } from "./loop-util.ts";
 import type { Restarted } from "./loop-restart.ts";
@@ -99,6 +99,8 @@ export function configure(o: Opts, env: NodeJS.ProcessEnv, host: string, lane: s
   if (!exists("tracker/project.json")) { log("no tracker/ here; see the wfactory skill"); return 2; }
   // A busy tracker lock (exit 75) is waited out here, never taken for broken data.
   { const why = openingOpen((a) => trWait(a, log)); if (why) { log(why); return 2; } }
+  // Nor while the lanes are held off for work done by hand (`just fleet off`).
+  { const why = lanesOff((a) => trWait(a, log)); if (why) { log(why); return 2; } }
   for (const f of [spec, "docs/machines.md"]) {
     if (/<fill[:>]/.test(read(f) ?? "")) { log(`${f} still has <fill: …> placeholders. Fill it in first (the wfactory skill's design questions).`); return 2; }
   }

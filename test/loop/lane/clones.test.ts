@@ -1,6 +1,7 @@
 // A second lane: a plain clone beside the checkout, sharing work/, with the checkout's .env, its
-// copy of the skill and a project's lane-setup; without an origin, lane 1 is the checkout itself.
-// factory/lane.sh dir, the real command, in the factory's checkout. Run: node --test test/loop/
+// copy of the skill and a project's lane-setup; a worker's worktree given the same; without an
+// origin, lane 1 is the checkout itself. factory/lane.sh dir and worktree, the real command, in
+// the factory's checkout. Run: node --test test/loop/
 // Setup goes before a test's checks (or in an after() hook), so a failing check can't skip it.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -63,6 +64,39 @@ describe("a new clone: .env, the recipes' link, a project's lane-setup", () => {
     assert.equal(readOr(path.join(d, "work/x")), "data\n");
   });
   test("  excluded once", () => { assert.equal(excluded(d).filter((l) => l === "/work").length, 1); });
+});
+
+// A sweep's or a sprint's worker runs in a git worktree of the checkout, which its harness makes
+// bare: no work/, no .env, no lane-setup. (One factory's foremen pasted the links into every
+// worker's brief as a shell line, and a worker without them crashed its tests.)
+describe("lane.sh worktree: a worker's worktree gets what a lane's clone gets", () => {
+  const d = w.at("worker-tree");
+  const wt = (cwd: string) => cmd(path.join(cwd, "factory/lane.sh"), ["worktree"], { cwd, env: w.env });
+  let r: ReturnType<typeof wt>;
+  test("run in a worktree, it prints the checkout it's a worktree of", () => {
+    git("worktree", "add", "-q", "-b", "unit/worker", d, "origin/main");
+    r = wt(d);
+    assert.equal(r.stdout, `${F}\n`);
+  });
+  test("  its work/ is the machine's one work/", () => {
+    assert.equal(fs.readlinkSync(path.join(d, "work")), path.join(F, "work"));
+    assert.equal(readOr(path.join(d, "work/x")), "data\n");
+  });
+  test("  its .env is the checkout's", () => { assert.equal(fs.readlinkSync(path.join(d, ".env")), path.join(F, ".env")); });
+  test("  its recipes are the checkout's copy of the skill", () => { assert.equal(fs.readlinkSync(path.join(d, ".tracker/skill")), fs.readlinkSync(path.join(F, ".tracker/skill"))); });
+  test("  factory/lane-setup ran in it", () => { assert.equal(readOr(path.join(d, "setup.ran")), `${d}\n`); });
+  test("  the links are never committed", () => { assert.deepEqual(w.git(d, "status", "--porcelain").split("\n").filter((l) => /work|\.env/.test(l)), []); });
+  test("a work/ folder the worktree filled itself is left as it is", () => {
+    fs.rmSync(path.join(d, "work")); fs.mkdirSync(path.join(d, "work")); fs.writeFileSync(path.join(d, "work/own"), "mine\n");
+    has(wt(d).stderr, "left as it is");
+    assert.equal(readOr(path.join(d, "work/own")), "mine\n");
+  });
+  test("in the checkout itself there's nothing to link (exit 2)", () => {
+    const o = wt(F);
+    assert.equal(o.code, 2);
+    has(o.stderr, "isn't a git worktree of the factory's checkout");
+  });
+  test("  and its work/ is still its own folder", () => { assert.ok(fs.lstatSync(path.join(F, "work")).isDirectory()); });
 });
 
 // Without an origin, lane 1 is the checkout itself, and there's no second lane.

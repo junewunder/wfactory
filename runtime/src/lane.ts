@@ -17,8 +17,15 @@ keeps one \`work/\`, and \`.env\` is linked too. Without an origin there's
 nothing to clone from, and lane 1 is this checkout. A project that needs more in a fresh clone (a virtualenv, a build) puts
 it in an executable \`factory/lane-setup\`, run once in the new clone.
 
+A sweep's or a sprint's worker runs in a git worktree of this checkout instead
+(its harness makes it). \`worktree\`, run there, gives it what a lane's clone
+gets: \`work/\` and \`.env\` linked to this checkout's, the recipes, and
+\`factory/lane-setup\`.
+
 Usage:
-  factory/lane.sh dir <N>     print lane N's checkout, making the clone if it's missing`;
+  factory/lane.sh dir <N>     print lane N's checkout, making the clone if it's missing
+  factory/lane.sh worktree    in a git worktree of the checkout: link its work/ and .env to
+                              the checkout's, and run factory/lane-setup there`;
 
 // git in a folder: its output (trimmed), or null if it failed.
 function git(dir: string, ...a: string[]) {
@@ -52,50 +59,76 @@ export function laneDir(root: string, n: number): string | null {
     if (c.stderr) process.stderr.write(c.stderr);
     if (c.status !== 0) { if (!was) fs.rmSync(dir, { recursive: true, force: true }); process.exit(c.status ?? 1); }
     git(dir, "checkout", "-q", git(root, "rev-parse", "--abbrev-ref", "HEAD") ?? "");
-    if (tracksWork(dir)) {
-      console.error(`lane: work/ is tracked in git here, so lane ${n} keeps its own copy instead of a link`);
-    } else {
-      fs.mkdirSync(`${root}/work`, { recursive: true });
-      fs.rmSync(`${dir}/work`, { recursive: true, force: true });
-      fs.symlinkSync(`${root}/work`, `${dir}/work`);
-    }
-    if (exists(`${root}/.env`)) link(`${root}/.env`, `${dir}/.env`);
-    // `just` in the new clone (lane-setup may use it) reads the same recipes as the checkout.
-    let skill: string | null = null;
-    try { skill = fs.readlinkSync(`${root}/.tracker/skill`); } catch {}
-    if (skill !== null) { fs.mkdirSync(`${dir}/.tracker`, { recursive: true }); link(skill, `${dir}/.tracker/skill`); }
-    const setup = `${dir}/factory/lane-setup`;
-    let runnable = false;
-    try { fs.accessSync(setup, fs.constants.X_OK); runnable = fs.statSync(setup).isFile(); } catch {}
-    if (runnable) {
-      const o = { cwd: dir, env: { ...process.env, PWD: dir }, stdio: ["inherit", 2, 2] as ("inherit" | number)[] };
-      let r = spawnSync(setup, o);
-      // Without a #! line, bash runs it itself, as the shell did.
-      if ((r.error as NodeJS.ErrnoException | undefined)?.code === "ENOEXEC") r = spawnSync("bash", [setup], o);
-      if (r.status !== 0) console.error(`lane: factory/lane-setup failed in ${dir}`);
-    }
+    dress(root, dir, `lane ${n}`);
     console.error(`lane: made lane ${n}'s clone at ${dir} (work/ linked to ${root}/work)`);
   }
-  // The links are never committed: 'work/' in a .gitignore matches a folder, not a link, and a
-  // tracked link pulled into the checkout replaces its real work/ (a factory once lost a laptop's work that way).
-  if (isLink(`${dir}/work`) || !exists(`${dir}/work`)) {
-    const ex = `${dir}/.git/info/exclude`;
-    for (const x of ["/work", "/.env"]) {
-      let have = "";
-      try { have = fs.readFileSync(ex, "utf8"); } catch {}
-      if (!have.split("\n").includes(x)) { fs.mkdirSync(path.dirname(ex), { recursive: true }); fs.appendFileSync(ex, `${have && !have.endsWith("\n") ? "\n" : ""}${x}\n`); }
-    }
-    // A pull that dropped a wrongly tracked link leaves the lane without one: link it again.
-    if (!exists(`${dir}/work`) && !tracksWork(dir)) { fs.mkdirSync(`${root}/work`, { recursive: true }); link(`${root}/work`, `${dir}/work`); }
-  }
+  unlisted(root, dir);
   return dir;
+}
+
+// What a checkout beside the factory's gets that git doesn't carry: work/ and .env linked to the
+// checkout's, so a laptop keeps one work/, the recipes' link, and the project's factory/lane-setup.
+// A lane's new clone, and a worker's worktree. A real work/ folder already there (a worktree
+// someone filled) is left as it is.
+function dress(root: string, dir: string, who: string) {
+  if (tracksWork(dir)) {
+    console.error(`lane: work/ is tracked in git here, so ${who} keeps its own copy instead of a link`);
+  } else if (exists(`${dir}/work`) && !isLink(`${dir}/work`) && fs.readdirSync(`${dir}/work`).length) {
+    console.error(`lane: ${dir}/work is a folder with files in it: left as it is, not linked to ${root}/work`);
+  } else {
+    fs.mkdirSync(`${root}/work`, { recursive: true });
+    fs.rmSync(`${dir}/work`, { recursive: true, force: true });
+    fs.symlinkSync(`${root}/work`, `${dir}/work`);
+  }
+  if (exists(`${root}/.env`)) link(`${root}/.env`, `${dir}/.env`);
+  // `just` there (lane-setup may use it) reads the same recipes as the checkout.
+  let skill: string | null = null;
+  try { skill = fs.readlinkSync(`${root}/.tracker/skill`); } catch {}
+  if (skill !== null) { fs.mkdirSync(`${dir}/.tracker`, { recursive: true }); link(skill, `${dir}/.tracker/skill`); }
+  const setup = `${dir}/factory/lane-setup`;
+  let runnable = false;
+  try { fs.accessSync(setup, fs.constants.X_OK); runnable = fs.statSync(setup).isFile(); } catch {}
+  if (runnable) {
+    const o = { cwd: dir, env: { ...process.env, PWD: dir }, stdio: ["inherit", 2, 2] as ("inherit" | number)[] };
+    let r = spawnSync(setup, o);
+    // Without a #! line, bash runs it itself, as the shell did.
+    if ((r.error as NodeJS.ErrnoException | undefined)?.code === "ENOEXEC") r = spawnSync("bash", [setup], o);
+    if (r.status !== 0) console.error(`lane: factory/lane-setup failed in ${dir}`);
+  }
+}
+// The links are never committed: 'work/' in a .gitignore matches a folder, not a link, and a
+// tracked link pulled into the checkout replaces its real work/ (a factory once lost a laptop's work that way).
+function unlisted(root: string, dir: string) {
+  if (!(isLink(`${dir}/work`) || !exists(`${dir}/work`))) return;
+  // (A worktree's is the checkout's own file: git says where.)
+  const ex = path.resolve(dir, git(dir, "rev-parse", "--git-path", "info/exclude") ?? ".git/info/exclude");
+  for (const x of ["/work", "/.env"]) {
+    let have = "";
+    try { have = fs.readFileSync(ex, "utf8"); } catch {}
+    if (!have.split("\n").includes(x)) { fs.mkdirSync(path.dirname(ex), { recursive: true }); fs.appendFileSync(ex, `${have && !have.endsWith("\n") ? "\n" : ""}${x}\n`); }
+  }
+  // A pull that dropped a wrongly tracked link leaves the lane without one: link it again.
+  if (!exists(`${dir}/work`) && !tracksWork(dir)) { fs.mkdirSync(`${root}/work`, { recursive: true }); link(`${root}/work`, `${dir}/work`); }
+}
+
+// lane.sh worktree, run in a git worktree of the factory's checkout: the checkout it's a worktree
+// of, once this one has what a lane's clone gets; null (and why, on stderr) if it isn't one.
+export function dressWorktree(dir: string): string | null {
+  const main = /^worktree (.+)$/m.exec(git(dir, "worktree", "list", "--porcelain") ?? "")?.[1] ?? null;
+  const real = (p: string) => { try { return fs.realpathSync(p); } catch { return p; } };
+  if (main === null || real(main) === real(dir)) { console.error(`lane: ${dir} isn't a git worktree of the factory's checkout (it is the checkout, or a clone): nothing to link`); return null; }
+  dress(main, dir, "this worktree");
+  unlisted(main, dir);
+  console.error(`lane: ${dir} has what a lane's clone gets (work/ linked to ${main}/work)`);
+  return main;
 }
 
 export function laneCli(args: string[], env: NodeJS.ProcessEnv = process.env): number {
   const [cmd = "", n = ""] = args;
   if (cmd === "" || asksHelp(args)) { console.log(HELP); return 0; }
   if (!enterRoot("lane.sh", env)) return 1;
-  if (cmd !== "dir") { console.error(`lane: unknown command ${cmd} (dir <N>)`); return 2; }
+  if (cmd === "worktree") { const main = dressWorktree(env.FACTORY_ROOT!); if (main === null) return 2; console.log(main); return 0; }
+  if (cmd !== "dir") { console.error(`lane: unknown command ${cmd} (dir <N> | worktree)`); return 2; }
   if (!/^[1-9][0-9]*$/.test(n)) { console.error("lane: which lane? (dir <N>, N from 1)"); return 2; }
   const dir = laneDir(env.FACTORY_ROOT!, Number(n));
   if (dir === null) return 2;
