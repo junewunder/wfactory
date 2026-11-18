@@ -20,7 +20,7 @@ type Out = "inherit" | "capture" | "ignore";
 interface On { out?: Out; err?: Out | "merge"; unset?: string[] }
 export type State = "running" | "stopped" | "unreachable";
 // A machine's memory for the beat (heavy.ts's brief).
-export type Brief = { available: number | null; held: { what: string; mem: number }[] };
+export type Brief = { available: number | null; held: { what: string; mem: number }[]; waiting?: { what: string; lane: string; secs: number; why: string }[] };
 // A lane: its machine, its number there, and its checkout.
 export type Lane = { m: string; n: number; d: string };
 
@@ -206,7 +206,7 @@ export function openFleet(env: NodeJS.ProcessEnv, floop: string) {
     const o = chomp(r.out).split("\n").pop() ?? "";
     if (r.status !== 0) return { available: null, held: [] };
     if (/^[0-9]+$/.test(o)) return { available: Number(o), held: [] };
-    try { const b = JSON.parse(o) as Brief; return { available: typeof b.available === "number" ? b.available : null, held: Array.isArray(b.held) ? b.held : [] }; } catch { return { available: null, held: [] }; }
+    try { const b = JSON.parse(o) as Brief; return { available: typeof b.available === "number" ? b.available : null, held: Array.isArray(b.held) ? b.held : [], waiting: Array.isArray(b.waiting) ? b.waiting : [] }; } catch { return { available: null, held: [] }; }
   };
   // Under this, a machine is short of memory (memory-low): its reserve in docs/machines.md (Reserve
   // and GPU), as `just heavy` reads it, by the machine's name there.

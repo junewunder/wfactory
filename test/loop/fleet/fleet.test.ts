@@ -220,7 +220,8 @@ describe("fleet wait: what wakes it", () => {
   test("  for the owner, with the cap", () => { has(r.stdout, `${HOST} · oom-kill · just capped ${HOG} was killed: out of memory at 20M`); });
 });
 
-// A check (a timer's wake, not a wait): at once, what changed since this overseer's last one.
+// A check (a timer's wake) with no wait running: at once, what changed since this overseer's last
+// one. (With one running, and the rest of how the two share the waking: wait-timer.test.ts.)
 describe("fleet wait --check", () => {
   const check = () => fleet(["wait", "--check", "--as", "ovT"]);
   let r = { code: 0, stdout: "" };
@@ -264,12 +265,14 @@ describe("fleet wait --check", () => {
     const x = fleet(["wait", "--check", "--minutes", "1", "--as", "ovT"]);
     assert.equal(x.code, 2);
   });
-  test("  and is refused while a wait for the same overseer runs", async () => {
+  // (It was refused, exit 2, when a timer's check stood in for the wait.)
+  test("  and while a wait for the same overseer runs, it says so and no more, exit 0", async () => {
     const b = await waitFor(["--minutes", "0.1", "--as", "ovT"]);
     const x = check();
     await b.end();
-    assert.equal(x.code, 2);
-    has(x.stdout, "a wait for overseer ovT is already running");
+    assert.equal(x.code, 0);
+    has(x.stdout, "watching: the wait for overseer ovT is running");
+    hasnt(x.stdout, "busy, ");
   });
 });
 
