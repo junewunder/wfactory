@@ -103,8 +103,7 @@ The message:
 >    [this Claude Code thread]
 > 4. **Your plan and how much the factory may use.** Claude Pro, Max, an API
 >    key? The lanes pause between units when less than [8]% of the 5-hour
->    window is left, and pace themselves through the week so that [15]% of
->    it is kept back for your own use.
+>    window is left.
 > 5. **This machine:** [<hostname>], [1] lane, [1] heavy job at a time.
 >    (More machines and a shared store can come later.)
 > 6. **Anything agents should know** about how you like to work: [none]
@@ -142,8 +141,7 @@ and ask the user what it is. Don't overwrite it.
 
 Open it and replace every `<fill: …>` with the user's answers from step 2:
 the "You" section, "Usage limits", and the Machines row. Put the pause
-percentage in the Settings table (`pause below`), and the share of the week
-kept back for them (`keep back`). Leave
+percentage in the Settings table (`pause below`). Leave
 `agent` as `claude` and `store` as `none` unless the user said otherwise.
 Then:
 

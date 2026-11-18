@@ -760,3 +760,29 @@ stands. Such an exception applies the owner's call, so lesson 4
 (never weaken the check to go green) still holds: a lane never makes one
 without the owner's decision. Matching everything first is the owner's call, as a phase they
 start, after hearing what it costs.
+
+### 38. The lanes held back a week the owner wanted spent (the mod factory and another, November)
+
+**What happened.** A fixed floor under the week's usage had ended weeks
+early, so the lanes were given a line in its place: at any moment they
+could have used the share of the week gone by, less 15% kept back for the
+owner, and while ahead of it every lane paused between units. It acted
+three times in its first two days. On a night the owner had usage to use
+up before the week's reset, it paused every lane, and the owner switched
+it off nine minutes later. On another such night it paused one laptop's
+lane for about 4 of 8.7 hours, because that laptop's profile still had it
+on. At 99% of the week used it paused the mod factory's lanes on both
+laptops until the reset, and with them group CI, a step that uses no
+model at all.
+
+**What it cost.** Lane hours on the nights meant to spend the week, half
+of one laptop's night, and CI results held back to the reset. The owner
+turned it off two days after it went in.
+
+**The rule.** The week's usage is shown (`just usage`, `just fleet
+usage`) and never acted on. The line, like the floor before it, assumed an
+owner who wants a share of the week kept back; this one wants the week
+spent and decides by hand when to hold back (a stop time, `just pause`).
+Nothing replaces it. The 5-hour pause stays: near the end of that window
+the lanes would only run into the limit. A profile's old "keep back" or
+"stop below" row is no longer read, and `profile check` says it can go.
