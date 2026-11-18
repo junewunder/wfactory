@@ -179,7 +179,7 @@ describe("CI waits for a unit's unlanded outputs in the copy of its data here", 
     s.setup(["merged", "tools/fx"]);
     has(s.ok(["ci-next"]), "Jay (jay): CI due");
   });
-  test("  a unit stuck on the owner holds nothing (CI would wait on her)", () => {
+  test("  a unit stuck on the owner holds nothing (CI would wait on them)", () => {
     s.setup(["add-unit", "tools/gx", "--title", "More effects"]);
     s.setup(["block", "tools/gx", "--why", "needs a call"]);
     s.write("work/.store/groups/jay.unmerged.tools+gx", "tools/gx\tabc123\n");

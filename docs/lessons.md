@@ -716,8 +716,8 @@ owner at once, the lanes' to fix or not.
 **What it cost.** On one laptop, 4 hours of failing runs and 2 h 45 min of
 lane time on the fix (its session and its tries at landing) against
 8 h 45 min of CI that passed. A character red
-overnight for a timeout. And the owner's evening: she turned fix units off
-for that project, so a red CI there became hers to read.
+overnight for a timeout. And the owner's evening: the owner turned fix units off
+for that project, so a red CI there became theirs to read.
 
 **The rule.** A run that got to no verdict is "couldn't run", not failed: a
 step out of time, killed by a signal, or twice not run for the same reason.
@@ -727,7 +727,7 @@ one that never ends still reaches a fix. CI waits where the copy of the
 group's data holds outputs of a unit not on main yet, and broken CI waits
 for a fix in flight to land before it runs again. A fix's card says what
 changed since the step last passed. The owner is told at once only of a
-failure that holds back a publish and is hers to look at; one the lanes have
+failure that holds back a publish and is theirs to look at; one the lanes have
 the fix of is a line in the morning summary.
 
 ## Checks
