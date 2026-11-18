@@ -23,7 +23,7 @@ import { usagePause } from "./loop-usage.ts";
 import { lanesRest } from "./loop-lanes.ts";
 import { HELP } from "./loop-help.ts";
 import { Clock } from "./loop-clock.ts";
-import { look, type Waiting } from "./loop-claim.ts";
+import { laneRunning, look, type Waiting } from "./loop-claim.ts";
 import { ciUnclaim, ciUnrun } from "./loop-ci.ts";
 import { Locks } from "./loop-locks.ts";
 import { beat, startBeat } from "./loop-beat.ts";
@@ -83,6 +83,7 @@ export class Loop {
   idle = 0;                           // sessions in a row that recorded nothing
   waiting: Waiting = { since: 0, why: "", told: false };
   gaveBack = new Set<string>();       // units this lane's sessions gave back unstarted: not taken again this run
+  noMemUntil = 0;                     // refresh's probes don't wait for memory again before this
   mergeTold = "";                     // what the log last said about this lane's merge that can't move
   // Units held back as too long for the time before last call (loop-claim.ts): how many at the
   // last look, and what the log last said of them ("" once the morning summary has it).
@@ -130,9 +131,14 @@ export class Loop {
   // one that came while it waited starts nothing. A wait past half an hour (heavy.ts, lateAfter)
   // is news: the lane does nothing meanwhile, and what it finished (behind: the unit landing)
   // sits unlanded, though the lane reads as busy.
-  async memory<T>(what: string, cmds: string[], run: (held: Record<string, string>) => Promise<T>, behind = ""): Promise<T> {
+  // wait: at most this many seconds for the memory; then none(why) is the answer, and nothing ran.
+  // What holds the budget may be nothing that ends by itself (an editor's standing reservation, the
+  // editor idle): two lanes once waited behind one for over two hours, each for someone to do
+  // something about it. So the landing check's wait and a refresh's have an end (memWait).
+  async memory<T>(what: string, cmds: string[], run: (held: Record<string, string>) => Promise<T>, behind = "", wait?: { secs: number; none: (why: string) => T | Promise<T> }): Promise<T> {
     const t = await memoryTurn(what, cmds, process.env, (why, ms) => this.event("landing-waits",
-      `${behind ? `${behind} is finished and hasn't landed` : `${this.host} lane ${this.lane} waits, and its work with it`}: ${what} has waited ${Math.round(ms / 60000)} min for its turn in the machine's memory budget (${why.replace(/^memory: /, "")}). \`just heavy\` there shows what holds it`));
+      `${behind ? `${behind} is finished and hasn't landed` : `${this.host} lane ${this.lane} waits, and its work with it`}: ${what} has waited ${Math.round(ms / 60000)} min for its turn in the machine's memory budget (${why.replace(/^memory: /, "")}). \`just heavy\` there shows what holds it`), wait?.secs);
+    if (typeof t === "string") { if (this.stopping) await this.halt(); return await wait!.none(t); }
     if (t) this.turns.add(t);
     try {
       if (this.stopping) { t?.give(); await this.halt(); }
@@ -147,6 +153,10 @@ export class Loop {
   settle(unit: string, title: string, add: Record<string, string>) {
     return this.memory(`${title}'s check (${unit})`, probeCmd(this.cfg.tdir, unit), async (held) => trWait(["settle", unit], log, { ...sessionAdd(this.cfg.tdir, this.lane), ...add, ...held }));
   }
+  // How long the landing check, or a refresh's probes, wait for memory: $FACTORY_MEM_WAIT seconds,
+  // default an hour. At half an hour the overseer has heard (landing-waits, above) and may free it;
+  // at the hour the lane stops waiting. (A settle's probe waits on: the unit's check has to run.)
+  memWait() { const s = Number(process.env.FACTORY_MEM_WAIT ?? ""); return process.env.FACTORY_MEM_WAIT && s >= 0 ? s : 3600; }
 
   // A long command (a check, a copy, probes) run so a signal to the loop stops it at once.
   // (free: one of the exit steps, which run once it's stopping.)
@@ -245,15 +255,21 @@ export class Loop {
       },
       affected: () => this.affected(),
       affectedBy: (old, nw) => this.affectedBy(old, nw),
+      laneRunning: (n) => n === this.lane || laneRunning(this, n),
       check: async (logf, busy, behind) => {
         const fd = fs.openSync(logf, "w");
         try {
           // A heavy command: it waits for memory in the machine's budget (heavy.ts), and its peak
-          // is recorded for the next one's reservation (capped.ts, measured).
+          // is recorded for the next one's reservation (capped.ts, measured). Its exit status is
+          // the answer (landing.ts, unjudged). FACTORY_LANDING: the tracker's lint inside it fails
+          // on no slip in a record, which is main's and no branch's.
+          // Past its wait for memory (memWait) the check gives no verdict (exit 75): the landing
+          // waits, the overseer hears what holds the memory, and the lane goes on.
           return await this.memory(`the landing check (${this.checkout})`, ["just check"], async (held) =>
-            (await measured("just check", ["timeout", process.env.FACTORY_CHECK_TIMEOUT || "1800", "just", "check"], { ...sessionBase(this.cfg.tdir, this.lane), FACTORY_BUSY_GROUPS: busy, ...held },
+            measured("just check", ["timeout", process.env.FACTORY_CHECK_TIMEOUT || "1800", "just", "check"], { ...sessionBase(this.cfg.tdir, this.lane), FACTORY_BUSY_GROUPS: busy, FACTORY_LANDING: "1", ...held },
               // (Named as a session's scope is, so \`oversee.sh stop\` ends what it left running.)
-              this.cfg.cap ? `${this.cfg.scope}-${crypto.randomBytes(4).toString("hex")}` : "", (argv, env) => this.stoppable(argv, { out: fd, env }))) === 0, behind);
+              this.cfg.cap ? `${this.cfg.scope}-${crypto.randomBytes(4).toString("hex")}` : "", (argv, env) => this.stoppable(argv, { out: fd, env })),
+            behind, { secs: this.memWait(), none: (why) => { fs.writeSync(fd, `the landing check never started: ${why}\n`); return 75; } });
         } finally { fs.closeSync(fd); }
       },
     };
@@ -315,7 +331,7 @@ export class Loop {
     this.i = this.carried;
     // Main is checked again at a start: it may have been fixed outside its code (a tool, a service),
     // and the lane would otherwise stop on what it knew failed before.
-    if (!rs) rm("runs/.main-broken");
+    if (!rs) rm("runs/.main-broken", "runs/.main-check-idle");
     // The first lane to start here starts afresh (space may have been freed while the lanes were stopped).
     if (!rs && Locks.lastLane(this.checkout)) rm(this.noroom);
 

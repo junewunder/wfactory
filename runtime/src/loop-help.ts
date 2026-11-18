@@ -76,8 +76,25 @@ resources the unit uses (tracker/project.json "resources", e.g. an editor)
 for the session's life, and the other lanes take something else meanwhile.
 They share work/ too, so \`just check\` gets FACTORY_BUSY_GROUPS (\`tracker busy\`):
 the groups other units here have outputs there for that aren't on main yet (in
-progress, interrupted, or waiting to land), which it skips. Main failing the
-check while some are busy is checked again once none are.
+progress, interrupted, or waiting to land), which it skips.
+
+The landing check's answer. Exit 0 lands the branch; a failure with main passing alone
+makes its merge unit. A failure on main too, in this clone, isn't taken for a broken main (the
+check also reads the machine: work/, a tool, the tracker's data): the lane files one unit per
+machine, "Main's check fails on <machine>" (merge/<machine>-main-check), for a session to find
+what fails and put it right, in main's code or where it lies, takes it next, and goes on. Other
+lanes there leave their finished branches waiting on it, and those are checked again once it's
+done. Only when two such sessions don't put it right, or that unit is stuck, with the owner, or
+an hour open with no lane taking it, is main red: a \`main-broken\` event, and the lanes there stop taking units. A check that never
+judged the tree fails nothing: out of time (FACTORY_CHECK_TIMEOUT seconds, default 1800), a
+heavy job in it that couldn't get its turn (exit 75; the check's own wait for memory ends the
+same way after FACTORY_MEM_WAIT seconds, default 3600, half an hour after the overseer heard
+of the wait), exit 79, or killed. The branch
+waits, pushed, and is checked again FACTORY_CHECK_RETRY seconds later (default 1800); the
+overseer hears (\`check-unrun\`) once, then every two hours while landings are held for it.
+Inside the check FACTORY_LANDING is set, and the tracker's lint fails there on no slip in a
+record: the records are main's, and no branch's. A refresh's probes wait for memory no longer
+than FACTORY_MEM_WAIT either, and are left for a later look; a settle's probe waits on.
 
 Data. A group with data (tracker/project.json "store") keeps its big files on
 the store, and one machine at a time leases it; the claim of a unit

@@ -388,7 +388,9 @@ export const prop = (unit: string, p: string) => {
 // The fake `claude` the loop's sessions run: it finds the unit in the appended card ("Next:
 // Title (group/slug)"), keeps the card ($FACTORY_LOCKS/card.<id>.seen), appends a line to
 // out/<group>-<slug>.txt on the unit's branch, commits it and records the unit done. A merge
-// unit (merge/…) instead merges origin/main keeping this branch's side. Knobs (variables):
+// unit (merge/…) instead merges origin/main keeping this branch's side; the unit filed when main's
+// own check fails (merge/<host>-main-check) runs $FACTORY_LOCKS/fix-hook, if there's one, on its
+// branch (what a session does to put main's check right), and commits nothing itself. Knobs (variables):
 //   FACTORY_FAKE_NOWORK   commit nothing           FACTORY_FAKE_NODONE  leave the unit unfinished
 //   FACTORY_FAKE_SHARED   also write shared.txt (a real conflict with another lane's)
 //   FACTORY_FAKE_WIP      leave work/wip-<group> while it works (outputs not committed yet)
@@ -404,7 +406,9 @@ id=$(grep -oE '^Next: .*\\(([a-z0-9-]+/[a-z0-9.-]+)\\)' <<<"$card" | head -1 | s
 u=\${id//\\//-}
 printf '%s\\n' "$card" > "$FACTORY_LOCKS/card.$id.seen" 2>/dev/null || printf '%s\\n' "$card" > "$FACTORY_LOCKS/card.seen"
 echo '{"type":"system","subtype":"init"}'
-if [[ "$id" == merge/* ]]; then
+if [[ "$id" == merge/*-main-check ]]; then
+  [ ! -x "$FACTORY_LOCKS/fix-hook" ] || "$FACTORY_LOCKS/fix-hook" >/dev/null 2>&1
+elif [[ "$id" == merge/* ]]; then
   git fetch -q origin && git merge -q -X ours --no-edit origin/main >/dev/null 2>&1
 elif [ -n "\${FACTORY_FAKE_TRACKERONLY:-}" ]; then
   echo x >> tracker/log.jsonl; git add tracker; git commit -qm "$id: tracker only" >/dev/null 2>&1

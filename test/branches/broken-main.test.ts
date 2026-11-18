@@ -1,7 +1,9 @@
-// Main itself failing the check: finished branches wait, with no merge unit; the overseer hears
-// it once; the lane that found it takes no new units, and a restart checks main once more and
-// stops again while it's still red; another lane's work in flight still lands if it has nothing
-// to merge or fixes main; and the waiting branch lands once main is fixed. Run: node --test test/branches/
+// Main itself failing the check: finished branches wait, with no merge unit of their own; the lane
+// files one unit to find what fails and takes it next, and nobody is told main is broken yet. When
+// two sessions of it don't put it right, main is red: the overseer hears it once; the lane that
+// found it takes no new units, and a restart checks main once more and stops again while it's
+// still red; another lane's work in flight still lands if it has nothing to merge or fixes main;
+// and the waiting branch lands once main is fixed. Run: node --test test/branches/
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -14,8 +16,10 @@ const [b, c] = f.lanes;
 const { add, w } = f;
 const checks = () => lines(readOr(path.join(b.locks, "checks")));
 const brokenEvents = () => b.events().split("\n").filter((l) => l.split("\t")[3] === "main-broken").length;
+// The unit lane b files (its host is b).
+const FIX = "merge/b-main-check";
 
-describe("main itself failing the check: finished branches wait, no merge unit", () => {
+describe("main itself failing the check: finished branches wait, and a session is sent to find what fails", () => {
   // Someone breaks main behind the lanes' backs.
   const sneak = w.at("sneak");
   w.git(w.top, "clone", "-q", f.origin, sneak);
@@ -27,7 +31,21 @@ describe("main itself failing the check: finished branches wait, no merge unit",
     log = b.loop(ONE);
     has(log, "main itself fails");
   });
-  test("  no merge unit is filed", () => { hasnt(log, "filed Merge main"); });
+  test("  no merge unit is filed for the branch", () => { hasnt(log, "filed Merge main"); });
+  test("  one unit is filed to find what fails, for this lane", () => {
+    has(log, `filed Main's check fails on b (${FIX}), which this lane takes next`);
+    has(b.ok(["show", FIX]), "Never weaken the check");
+  });
+  test("  nobody is told main is broken, and the lane isn't stopped for it", () => { assert.equal(brokenEvents(), 0, b.events()); hasnt(log, "main is red"); });
+  // Its sessions here change nothing (the fake's does nothing without a fix-hook): after the
+  // second, main still failing, it's stuck, and main is red.
+  let red = "";
+  test("two sessions of it later main still fails: main is red, and the lane stops", () => {
+    red = b.loop(["--max", "3", "--hours", "0.05"]);
+    assert.equal(red.split("\n").filter((l) => l.includes("iteration") && l.includes(`(${FIX})`)).length, 2, red);
+    has(red, "main is red: main itself fails");
+    assert.equal(b.ok(["state", FIX]), "stuck");
+  });
   test("  the overseer hears of it", () => { has(b.events(), "main-broken"); });
   // Main is red: the lane stops taking units (the overseer stops the rest, fixes main, and starts
   // them again), so a lane started again before it's fixed stops at once.
@@ -61,4 +79,5 @@ describe("main itself failing the check: finished branches wait, no merge unit",
     has(b.loop(ONE), "unit/g/waits merged into main");
   });
   test("  and is done", () => { assert.equal(b.ok(["state", "g/waits"]), "done"); });
+  test("  and the stuck unit that was to fix main is dropped", () => { assert.equal(b.ok(["state", FIX]), "dropped"); });
 });

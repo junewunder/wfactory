@@ -9,7 +9,7 @@ import { ctx } from "../ctx.ts";
 import { groupFiles, load, loadCache } from "../store.ts";
 import { probeTimeout } from "../probes.ts";
 import { list, plural } from "../text.ts";
-import { bareIds, isOpen, missingRefs, MAX_NOTE, MAX_TITLE, name, noteLength, selected } from "../names.ts";
+import { badDataValue, bareIds, isOpen, missingRefs, MAX_NOTE, MAX_TITLE, name, noteLength, selected } from "../names.ts";
 import { namedBy, resourceKnown, unnamedUses, usesHint } from "../machine.ts";
 import { CI_STEP_KEYS } from "../ci.ts";
 import { EFFECTS, hasEffects, optionWordSlip, unaccounted } from "../cards.ts";
@@ -68,7 +68,7 @@ C.lint = (a = []) => {
     for (const s of g.ci?.steps || []) if (!T.project.ci?.steps?.[s]) errs.push(`group ${g.id}: CI step ${s} isn't defined in tracker/project.json ci.steps`);
     if (g.data && (typeof g.data !== "object" || Array.isArray(g.data))) errs.push(`group ${g.id}: data is an object of the values its data paths use`);
     if (g.data && !T.project.store) errs.push(`group ${g.id}: has data, but tracker/project.json has no store`);
-    for (const [k, v] of Object.entries(g.data && typeof g.data === "object" ? g.data : {})) if (!String(v).trim() || /[/\\]|\.\./.test(String(v))) errs.push(`group ${g.id}: data value ${k} "${v}" is empty or has a path in it`);
+    for (const [k, v] of Object.entries(g.data && typeof g.data === "object" ? g.data : {})) if (badDataValue(v)) errs.push(`group ${g.id}: data value ${k} "${v}" is empty or has a path in it`);
   }
   for (const [k, v] of Object.entries(T.project.ci?.steps || {})) {
     if (typeof v?.cmd !== "string") { errs.push(`project.json ci.steps.${k}: no cmd`); continue; }
@@ -143,8 +143,22 @@ C.lint = (a = []) => {
     for (const op of q.options || []) bareRef(`${at} option ${op.key}`, op.changes);
   }
   for (const d of T.decisions) { bareRef(`${d.id} title`, d.title); missingRef(`${d.id} why`, d.why); if (d.replaces && !T.decisions.some((x) => x.id === d.replaces)) errs.push(`${d.id}: replaces unknown ${d.replaces}`); if (d.retired?.other && !T.decisions.some((x) => x.id === d.retired!.other)) errs.push(`${d.id}: retired for unknown ${d.retired.other}`); if (d.until && Number.isNaN(Date.parse(d.until))) errs.push(`${d.id}: until isn't a time (${d.until})`); }
-  lintRepo(slips);
+  // The files a branch can change (AGENTS.md, the spec, memory/), apart from the tracker's records.
+  const repo: string[] = [];
+  lintRepo(repo);
   for (const w of warns) console.error(`warning: ${w}`);
+  // Inside the loop's check before a branch lands ($FACTORY_LANDING): the tracker's records are
+  // main's, and no branch carries them (the loop drops a branch's tracker/ edits), so a slip in one
+  // says nothing of the branch, nor of main's code, and fails no landing. Broken data still does:
+  // a loop wouldn't start over it either.
+  if (ctx.env.FACTORY_LANDING && !a.includes("--broken")) {
+    for (const e of slips) console.error(`warning: ${e}`);
+    if (slips.length) console.error(`${plural(slips.length, "slip")} in the tracker's records, above: they're main's, not the branch's, so a landing doesn't fail on them (\`just lint\` lists them, to fix)`);
+    if (errs.length || repo.length) { for (const e of [...errs, ...repo]) console.error(e); return 1; }
+    console.log(`lint ok for a landing${warns.length + slips.length ? ` but ${plural(warns.length + slips.length, "warning")}, above` : ""}`);
+    return 0;
+  }
+  slips.push(...repo);
   if (a.includes("--broken")) {
     for (const e of slips) console.error(`warning: ${e}`);
     if (errs.length) { for (const e of errs) console.error(e); return 1; }

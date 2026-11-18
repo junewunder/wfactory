@@ -352,7 +352,8 @@ What happened, in plain words.`,
 Make tracker/ in this directory.`,
   "add-group": `add-group <group> --title "…" [--host H] [--priority N] [--needs id,…] [--data k=v,…] [--ci s,…]
 A new group. Higher priority runs first; the output says what it runs before. --data: the group's
-big files live on the store and move by lease; k=v are the values its data paths use (store.paths).
+big files live on the store and move by lease; k=v are the values its data paths use (store.paths),
+each one name: a value with / \\ or .. in it is refused.
 --ci drill,publish: the group's CI steps, each defined in project.json ci.steps (\`ci --help\`).`,
   "edit-group": `edit-group <group> [--title "…"] [--host H|none] [--priority N] [--needs id,…] [--data k=v,…|none] [--ci s,…|none]
 Change a group. With --priority, says what its units now run before. --data adds or changes values.
@@ -490,7 +491,9 @@ changed two ways is a clash, named on stderr, and git reports a conflict.`,
   lint: `lint [--broken]
 Fail on broken data and on slips (bare IDs, over-long titles or notes, half-written
 questions, memory/AGENTS.md bloat). --broken fails only on broken data, which is what a
-loop refuses to start over, and prints slips as warnings.`,
+loop refuses to start over, and prints slips as warnings. Inside the loop's check before a
+branch lands ($FACTORY_LANDING), a slip in a record is a warning too: the records are main's,
+so it says nothing of the branch; a slip in a file a branch can change still fails.`,
   ci: `ci [<group>] [--json] [--since T]
 Each group's CI (a step that verifies or ships a group's finished work, e.g. a drill or a publish):
 passed; stale (something changed since it passed, a step's command in tracker/project.json too,
