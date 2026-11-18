@@ -6,6 +6,9 @@ import { die, now, list, reEsc, shortTitle, words } from "./text.ts";
 import type { Decision, Question, State, Unit } from "./types.ts";
 
 export const MAX_TITLE = 60, MAX_NOTE = 280;
+// A group's data value fills its data paths (project.json store.paths), so it's one name: never
+// empty, and no path in it. What lint calls broken data, and the write refuses.
+export const badDataValue = (v: unknown) => !String(v).trim() || /[/\\]|\.\./.test(String(v));
 
 // "Title (id)" for anything with a title.
 export const name = (x: { title: string; id: string } | null | undefined) => (x ? `${x.title} (${x.id})` : "(missing)");
