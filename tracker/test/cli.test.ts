@@ -153,14 +153,6 @@ describe("where <loop>, status with loops", () => {
   test("status with loops lists them", () => { has(ok(["status"]), "loops: The main loop (main), side (side)"); });
   test("status <loop> through LOOP", () => { has(ok(["status"], { LOOP: "main" }), "/ The main loop:"); });
   test("status all counts every loop", () => { has(ok(["status", "all"]), "Demo: "); });
-  test("a unit that sorts a set aside (group aside) is offered to every loop", () => {
-    setup(["add-group", "aside", "--title", "Set-aside copies to sort"]); setup(["add-unit", "aside/hg-x-1", "--title", "Sort a set-aside copy"]);
-    has(ok(["next"], { LOOP: "main" }), "aside/hg-x-1");
-  });
-  test("  and so it is to the other", () => {
-    has(ok(["next"], { LOOP: "side" }), "aside/hg-x-1");
-    setup(["drop", "aside/hg-x-1", "--why", "test"]);
-  });
   test("state --host: the machine a unit is pinned to, by its group", () => { assert.equal(ok(["state", "hg/a", "--host"]).trim(), "otherbox"); });
   test("  or by its own", () => {
     setup(["add-unit", "hn/b", "--title", "Pinned unit of its own", "--host", "somebox"]);

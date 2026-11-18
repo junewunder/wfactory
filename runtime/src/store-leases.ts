@@ -51,16 +51,16 @@ export function releaseIdle(): number {
 
 // The last lane stopping: copy back and release (now, "stop now": release only what's already safe).
 export function leave(now: boolean): number {
-  // Kept sets a whole run outlasted become ones to sort, and sets aside get their units before the
-  // lanes go, so they're on main for the next run anywhere. Only the first leave since a session ran
+  // Each set a whole run outlasted gets its line for the morning summary, and the rule is applied
+  // before the lanes go. Only the first leave since a session ran
   // here (the loop touches ran as each one ends) ends a run: two lanes stopping together both
   // leave, and lanes started and stopped again with no session between (a redeploy) end none (#140).
   // The night lock is held while that leave walks the sets, so the other's marking (below) waits
-  // for it: a set made in this run isn't marked and then sorted straight away, a run early.
+  // for it: a set made in this run isn't marked and then reported straight away, a run early.
   try {
     const fd = lock(`${L}/lock-night`);
     try { if (isFile(`${L}/ran`)) { rm(`${L}/ran`); overnight(false); } } finally { unlock(fd); }
-  } catch { log("sorting the kept sets failed"); }
+  } catch { log("reporting the kept sets failed"); }
   const sort = () => { try { if (aside(["sort"], false) !== 0) log("aside sort failed"); } catch { log("aside sort failed"); } };
   sort();
   for (const g of words(tr(["lease", "mine", "--all"], "ignore"))) {
@@ -81,9 +81,9 @@ export function leave(now: boolean): number {
       event("lease-kept", `${g}'s data on ${here.host} isn't all on the store; its lease stays until ${here.host}'s lanes start again or it goes stale`);
     }
   }
-  // The sets the put-backs above made get their units now, not at the next lane start (#140).
+  // The sets the put-backs above made are looked at now, not at the next lane start (#140).
   sort();
-  // Every set still kept, those put back just now included, has the next run to be wanted.
+  // Every set still here, those put back just now included, is reported from the next run's end on.
   try { const fd = lock(`${L}/lock-night`); try { overnight(true); } finally { unlock(fd); } } catch { log("marking the kept sets failed"); }
   return 0;
 }

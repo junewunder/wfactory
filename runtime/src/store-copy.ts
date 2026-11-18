@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { event } from "./events.ts";
 import { epoch, pwd, stamp } from "./sys.ts";
-import { asideCounts, asideUnit, setGroup } from "./store-aside.ts";
+import { asideCounts, MARKS, setGroup } from "./store-aside.ts";
 import { here } from "./store-here.ts";
 import { after, backoff, bytes, ciOwed, due, gf, glock, hasFiles, localStamp, markLive, marks, ownTorn, retryOf, setRetry, stamped, stampHere, unchanged, unmerged, used, workedOn } from "./store-local.ts";
 import { code, copy, copyStamp, duh, gitShort, listed, remoteStamp, rsync, run } from "./store-remote.ts";
@@ -13,14 +13,16 @@ import { data, heldHere, tr, ustate } from "./store-tracker.ts";
 
 // With units, it puts the store's copy back over the copy here, current or not: what that
 // replaces or deletes is those units' unmerged outputs, kept aside (kind "unmerged") until
-// they're done or dropped. A data path the store doesn't have goes aside whole (all of them, with
-// nothing on the store). A unit given as +<id> is finished (on main, or its branch waiting to
-// land): its outputs are in the copy too and can't be told apart, so nothing rebuilds them, and
-// the set is one to sort (kind "check", with a unit); so is a set with no unit named (a mark from
-// an older store.sh), or one put back over a store with nothing on it (the copy may predate the
-// store). prov: each unfinished unit's session and the commit its outputs were built from, from its
-// mark (none for a lane killed). The group's lock is held. 0, or 2: failed.
-export function copyDown(g: string, units: string[] = [], prov = new Map<string, [string, string]>()): number {
+// they've landed or are dropped. A data path the store doesn't have goes aside whole (all of them,
+// with nothing on the store). A unit given as +<id> is finished (on main, or its branch waiting to
+// land): its outputs are in the copy too and can't be told apart, so the set is never put back
+// (kind "units"), and goes once every unit it names has landed or is dropped. A set nothing accounts
+// for in full is kind "check", which no rule removes: one with no unit named (a mark from an older
+// store.sh), one put back over a store with nothing on it (the copy may predate the store), and one
+// made while the copy held other work the units given don't cover (whole false: a copy back was
+// owed already). prov: each unfinished unit's session and the commit its outputs were built from,
+// from its mark (none for a lane killed). The group's lock is held. 0, or 2: failed.
+export function copyDown(g: string, units: string[] = [], prov = new Map<string, [string, string]>(), whole = false): number {
   const back: string[] = [], fin: string[] = [];
   for (const x of units) if (x.startsWith("+")) { fin.push(x.slice(1)); back.push(x.slice(1)); } else back.push(x);
   const d = data([g]);
@@ -33,10 +35,8 @@ export function copyDown(g: string, units: string[] = [], prov = new Map<string,
   if (back.length) {
     const j = json(rs);
     if (j?.copying) event("store-torn", `${g} on the store is a copy back that didn't finish (${jqs(j.copying)} from ${jqs(j.host)}); put back over the copy on ${here.host} as it is`);
-    // A copy back owed (.unsent: a finished unit's, failed or waiting, or this machine's own cut
-    // short; .moved) means finished work is in the copy too. A CI run's alone doesn't: what it
-    // wrote is main's, rebuilt from git.
-    if (fin.length || (isFile(gf(g, "unsent")) && !ciOwed(g)) || !rs || back.includes("")) kind = "check";
+    if (!whole || !rs || back.includes("")) kind = "check";
+    else if (fin.length) kind = "units";
     // Written first, so a put-back cut short leaves a set that says what it is.
     aside = `${pwd()}/${L}/aside/${g}-${timeName()}`;
     mkdirp(aside);
@@ -106,17 +106,18 @@ export function copyDown(g: string, units: string[] = [], prov = new Map<string,
   if (nb) log(`${g}: ${nb} files the copy down replaced or deleted are ones a pipeline step rebuilds (store.rebuilt); not kept`);
   if (ns) log(`${g}: ${ns} files the copy down replaced or deleted were as the copy here was last stamped (the store's older copy); not kept`);
   const set = `${L}/aside/${path.basename(aside)}`;
-  if (back.length && ![...walk(aside)].some((e) => ![".kind", ".units", ".from", ".base"].includes(e.name))) {
+  // What becomes of a set no rule removes, for its event: it costs nobody anything.
+  const stays = `nothing recorded whose work all of it is, so it stays there: no session sorts it, and \`just store aside\` on ${here.host} lists it`;
+  if (back.length && ![...walk(aside)].some((e) => !MARKS.includes(e.name))) {
     rmrf(aside); log(`${g}: put the store's copy back over the copy here; nothing here differed`);
   } else if (back.length && kind === "unmerged") {
-    log(`${g}: put the store's copy back over the copy here; the outputs of ${(cat(`${aside}/.units`) ?? "").split("\n").join(" ")} (${duh(aside)}) are kept in ${set} until done or dropped`);
+    log(`${g}: put the store's copy back over the copy here; the outputs of ${(cat(`${aside}/.units`) ?? "").split("\n").join(" ")} (${duh(aside)}) are kept in ${set} until landed or dropped`);
     tellAside(aside, set);
   } else if (back.length) {
     const unfinished = back.filter((x) => x !== "" && !fin.includes(x)).join(" ");
-    const n = count(aside, (e) => !e.st.isDirectory() && ![".kind", ".units", ".from", ".base"].includes(e.name)), sz = duh(aside);
+    const n = count(aside, (e) => !e.st.isDirectory() && !MARKS.includes(e.name)), sz = duh(aside);
     tellAside(aside, set);
-    const sorted = asideUnit(aside, g, d);
-    event("store-aside", `${g}'s copy on ${here.host} had outputs of unfinished ${unfinished}${fin.length ? `, mixed with finished ${fin.map((x) => `${x} `).join("")}work nothing else rebuilds,` : ""}${rs ? "" : " and nothing on the store to put back"}; everything not on the store (${n} files, ${sz}) is kept in ${set}; ${sorted}`);
+    event("store-aside", `${g}'s copy on ${here.host} had outputs of unfinished ${unfinished}${fin.length ? `, mixed with finished ${fin.join(" ")} work that hadn't reached the store` : ""}${rs ? "" : ", and nothing on the store to put back"}; everything not on the store (${n} files, ${sz}) is kept in ${set}: ${kind === "units" ? "removed once each of those units has landed or is dropped" : stays}`);
   } else if (aside && isDir(aside)) {
     // Older copies only: nothing worked on here, nothing deleted, every file replaced by a newer one.
     // Not with a mirror's listing: it vouched for each file as stamped, so what's left was
@@ -128,8 +129,7 @@ export function copyDown(g: string, units: string[] = [], prov = new Map<string,
     } else {
       fs.writeFileSync(`${aside}/.kind`, "check\n");
       const n = count(aside, (e) => !e.st.isDirectory() && e.name !== ".kind"), sz = duh(aside);
-      const sorted = asideUnit(aside, g, d);
-      event("store-aside", `${g}'s copy on ${here.host} wasn't all on the store${worked ? " (worked on here)" : ""}; the copy down replaced or deleted ${n} files (${sz}), kept in ${set}; ${sorted}`);
+      event("store-aside", `${g}'s copy on ${here.host} wasn't all on the store${worked ? " (worked on here)" : ""}; the copy down replaced or deleted ${n} files (${sz}), kept in ${set}: ${stays}`);
     }
   } else if (aside) {
     log(`${g}: the copy here had no stamp or had changed, but the copy down replaced nothing that differed; nothing set aside`);
@@ -154,7 +154,7 @@ function provenance(u: string): [string, string] {
   return [by, b ? head(`refs/heads/${b}`) || head(`refs/remotes/origin/${b}`) : ""];
 }
 // The unfinished units' cards say where their outputs went (tracker aside-set); --mixed for a set
-// restore() never puts back (other units' outputs in it too, or one to sort).
+// restore() never puts back (other units' outputs in it too, or work nothing accounts for).
 export function tellAside(aside: string, set: string) {
   const units = (cat(`${aside}/.units`) ?? "").split("\n").filter(Boolean);
   const mixed = (cat(`${aside}/.kind`) ?? "") !== "unmerged" || units.length !== 1;
@@ -163,7 +163,7 @@ export function tellAside(aside: string, set: string) {
     if (code(tr(["aside-set", u, set, ...(c ? ["--commit", c] : []), ...(by ? ["--by", by] : []), ...(mixed ? ["--mixed"] : [])], "ignore")) !== 0) log(`${u}: couldn't tell the tracker where its outputs went (${set})`);
   }
 }
-// A set going (restored, sorted, dropped): its units' cards stop naming it.
+// A set going (restored, removed by the rule, dropped): its units' cards stop naming it.
 export function forgetAside(aside: string) {
   for (const l of (cat(`${aside}/.from`) ?? "").split("\n").filter(Boolean)) tr(["aside-set", l.split("\t")[0], "--clear"], "ignore");
 }
@@ -172,7 +172,7 @@ export function forgetAside(aside: string) {
 // the store's copy was put back (a set of kind "unmerged" holding that unit's alone), go back into
 // the copy here, but only if they were built from the commit this clone is on now (the unit's
 // branch, checked out). A set with other units' outputs in it, or built from another commit, stays
-// where it is (\`aside sort\` deletes it once the unit is done or dropped). Prints one line for
+// where it is (\`aside sort\` deletes it once the unit has landed or is dropped). Prints one line for
 // the session; 0: restored, 1: nothing to restore, 3: a set refused (stale or shared), 2: failed.
 export function restore(g: string, u: string): number {
   glock(g);
@@ -180,7 +180,7 @@ export function restore(g: string, u: string): number {
   if (!d) return 2;
   const sets = ls(`${L}/aside`).filter((n) => /-[0-9]{8}-[0-9]{6}$/.test(n) && setGroup(n) === g).reverse();
   const r = run("git", ["rev-parse", "HEAD"], { err: "ignore" }), now = code(r) === 0 ? out(r.stdout) : "";
-  // Its unit came back here: every set holding its outputs waits again for it to be done (overnight).
+  // Its unit came back here: every set holding its outputs is expected to go with this session (overnight).
   for (const b of sets) if ((cat(`${L}/aside/${b}/.units`) ?? "").split("\n").includes(u)) rm(`${L}/aside/${b}/.night`);
   for (const b of sets) {
     const a = `${L}/aside/${b}`, set = `${L}/aside/${b}`;
@@ -329,6 +329,10 @@ export function tend(g: string, force = false, stopped = false): boolean {
     rm(f);
     log(`${g}: the session in ${f.slice(f.lastIndexOf(".dirty.") + 7)}${u ? ` on ${u}` : ""} ended without its loop seeing it end (a lane killed?)`);
   }
+  // A copy back owed before this look (a finished unit's, failed or waiting, or this machine's own
+  // cut short; .moved) is finished work in the copy that no mark below names. A CI run's alone
+  // isn't: what it wrote is main's, rebuilt from git.
+  const whole = !isFile(gf(g, "unsent")) || ciOwed(g);
   for (const f of marks(g, "unmerged")) {
     const [u = "", c = "", by = "", built = ""] = fields(f) ?? [];
     if (u && built) prov.set(u, [by, built]);
@@ -342,7 +346,7 @@ export function tend(g: string, force = false, stopped = false): boolean {
   if (back.length) {
     if (live || reading) log(`${g}: putting the store's copy back (for ${back.join(" ")}) waits for the session or CI here working on it`);
     else if (unk) log(`${g}: putting the store's copy back (for ${back.join(" ")}) waits for the tracker to say what ${all.join(" ")} are`);
-    else if (copyDown(g, [...back, ...fin], prov) !== 0) log(`${g}: couldn't put the store's copy back; tried again at the next look`);
+    else if (copyDown(g, [...back, ...fin], prov, whole) !== 0) log(`${g}: couldn't put the store's copy back; tried again at the next look`);
     return false;
   }
   if (!isFile(gf(g, "unsent"))) return false;
@@ -357,7 +361,7 @@ export function tend(g: string, force = false, stopped = false): boolean {
   if (!force && a !== 0 && now < t + backoff(a)) return false;
   // Only over the copy this one came from: if the store has moved on (another machine's copy back,
   // once this machine's lease lapsed), sending would put an older copy over it. Kept marked, so the
-  // next copy down here sets it aside to sort.
+  // next copy down here sets it aside.
   let why: "copy" | "lease";
   const rs = remoteOf(g);
   if (rs === null) why = "copy";
@@ -365,7 +369,7 @@ export function tend(g: string, force = false, stopped = false): boolean {
     // A CI run's alone: what it wrote is main's, and the store's newer copy is what counts. Nothing
     // to keep: its files are in the copy's listing (ciMade), so the next copy down replaces them.
     if (u === "ci") { log(`${g}: the store has moved on since ${w} (${who(rs)}); its copy back isn't needed`); rm(gf(g, "unsent"), gf(g, "retry"), gf(g, "up")); return false; }
-    if (!isFile(gf(g, "moved"))) event("store-moved", `${g}'s copy on ${here.host} owes the store a copy back after ${w}, but the store has moved on since (${who(rs)}); not copied back. The next copy down here sets it aside, with a unit to sort it`);
+    if (!isFile(gf(g, "moved"))) event("store-moved", `${g}'s copy on ${here.host} owes the store a copy back after ${w}, but the store has moved on since (${who(rs)}); not copied back. The next copy down here sets it aside`);
     touch(gf(g, "moved"));
     return false;
   } else if (!heldHere(g)) why = "lease";

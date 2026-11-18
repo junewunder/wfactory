@@ -1,11 +1,11 @@
 // Kept sets (an unfinished unit's outputs, set aside when the store's copy was put back): a put-back
 // that waited for another session here still records the commit they were built from, so the unit
-// gets them back; a set its units won't come back for here (parked, pinned to another machine) is
-// one to sort, but not one whose unit asks the owner a question, however long it stays open; and a set still kept, its unit not
-// claimed again here, at the end of the next run of the lanes is one to sort, unless its units are
-// done by then (deleted, as always). Two lanes stopping together end one run, not two, even at
-// once; lanes started and stopped with no session between end none; and a set a stop's put-back
-// makes gets its unit at that stop (#140).
+// gets them back; a set whose unit is parked, pinned to another machine or asking the owner a
+// question stays kept, with no unit filed to sort it; and a set still kept at the end of the next
+// run of the lanes gets a line for the morning summary then, unless its units are dropped by then
+// (deleted, as always) or its unit was claimed here again. Two lanes stopping together end one
+// run, not two, even at once; lanes started and stopped with no session between end none; and a
+// set a stop's put-back makes stays kept too (#140).
 // Run: node --test test/store/
 // Setup goes before a test's checks (or in an after() hook), so a failing check can't skip it.
 import { describe, test } from "node:test";
@@ -26,6 +26,10 @@ const card = (id: string) => a.run("factory/tracker", ["show", id]).stdout;
 // The set holding a unit's outputs ("" if none), and one of its files.
 const setOf = (u: string) => asides(a, u.split("/")[0]).find((x) => readOr(path.join(x, ".units")).split("\n").includes(u)) ?? "";
 const kind = (u: string) => chomp(readOr(path.join(setOf(u), ".kind")));
+// The morning-summary lines so far that say a unit's set is still there, and whether a unit was
+// filed to sort its set.
+const keptLines = (u: string) => a.events().split("\n").filter((l) => l.split("\t")[3] === "store-aside-kept" && l.includes(`(${u})`)).length;
+const filed = (u: string) => fs.existsSync(path.join(setOf(u), ".unit"));
 
 // A group of its own for each unit (two sets of one group made in the same second would share a
 // folder), with data on the store from a merged unit first.
@@ -67,21 +71,19 @@ describe("a put-back that waited for another session here", () => {
   });
 });
 
-describe("a set its units won't come back for is one to sort", () => {
-  test("a kept set whose unit is parked: aside sort makes it one to sort", () => {
+describe("a set whose unit can't be claimed here now stays kept, with no unit to sort it", () => {
+  test("a kept set whose unit is parked: aside sort leaves it as it is", () => {
     unfinished("k2/p");
     a.setup(["unclaim", "k2/p"], { FACTORY_TAG: "s-k2" }); a.setup(["park", "k2/p", "--why", "test"]);
     ok(["aside", "sort"]);
-    assert.equal(kind("k2/p"), "check");
+    assert.equal(`${kind("k2/p")} ${filed("k2/p")}`, "unmerged false");
   });
-  test("  with a unit that sorts it", () => { assert.equal(chomp(readOr(path.join(setOf("k2/p"), ".unit"))), `aside/k2-a-${path.basename(setOf("k2/p")).slice(-15)}`); });
-  test("  whose card says the unfinished unit's next session rebuilds its outputs", () => { has(a.tracker(["show", chomp(readOr(path.join(setOf("k2/p"), ".unit")))]).stdout, "It holds outputs of Unit p of k2"); });
-  test("  and the parked unit's card says they aren't put back", () => { has(card("k2/p"), "They aren't put back: rebuild them"); });
-  test("one whose unit is pinned to another machine: one to sort", () => {
+  test("  and the parked unit's card still says the loop puts them back for its next session", () => { has(card("k2/p"), "The loop puts them back for its next session on a only if"); });
+  test("one whose unit is pinned to another machine: kept too", () => {
     unfinished("k3/h");
     a.setup(["edit", "k3/h", "--host", "b"]);
     ok(["aside", "sort"]);
-    assert.equal(kind("k3/h"), "check");
+    assert.equal(`${kind("k3/h")} ${filed("k3/h")}`, "unmerged false");
   });
   test("one whose unit asks the owner a question stays kept: answered, it's claimed here again", () => {
     unfinished("k7/q");
@@ -97,11 +99,11 @@ describe("a set kept through a whole run of the lanes here", () => {
     run();
     assert.equal(`${kind("k4/n")} ${fs.existsSync(path.join(setOf("k4/n"), ".night"))}`, "unmerged true");
   });
-  test("  the next run ending, its unit not claimed here since: one to sort", () => {
+  test("  the next run ending, its unit not claimed here since: still kept, with a line for the morning summary", () => {
     run();
-    assert.equal(kind("k4/n"), "check");
+    assert.equal(`${kind("k4/n")} ${keptLines("k4/n")}`, "unmerged 1");
   });
-  test("    with its unit filed", () => { assert.equal(state(chomp(readOr(path.join(setOf("k4/n"), ".unit")))), "ready"); });
+  test("    and no unit filed", () => { assert.equal(filed("k4/n"), false); });
   test("its unit claimed here again in between: still kept", () => {
     unfinished("k5/c");
     run();
@@ -109,9 +111,9 @@ describe("a set kept through a whole run of the lanes here", () => {
     git("commit", "-q", "--allow-empty", "-m", "elsewhere");
     try { assert.equal(store(a, ["restore", "k5", "k5/c"]).code, 3); } finally { git("reset", "-q", "--hard", "HEAD~1"); }
     run();
-    assert.equal(kind("k5/c"), "unmerged");
+    assert.equal(`${kind("k5/c")} ${keptLines("k5/c")}`, "unmerged 0");
   });
-  test("its unit done by the second stop: deleted, not sorted", () => {
+  test("its unit dropped by the second stop: deleted", () => {
     unfinished("k6/d");
     run();
     f.drop("k6/d");
@@ -142,10 +144,11 @@ describe("a run of the lanes counts once a session has run", () => {
     ok(["release-idle"]); ok(["leave"]);
     assert.equal(kind("k9/n"), "unmerged");
   });
-  test("  the lanes run a session (another unit's), its unit not claimed here: one to sort", () => {
+  test("  the lanes run a session (another unit's), its unit not claimed here: a line for the morning summary", () => {
     add("k10/s", "--reads", "none");
+    const before = keptLines("k9/n");
     a.loop(ONE);
-    assert.equal(kind("k9/n"), "check");
+    assert.equal(`${kind("k9/n")} ${before} ${keptLines("k9/n")}`, "unmerged 0 1");
   });
 });
 
@@ -163,13 +166,12 @@ describe("a set a stop's put-back makes", () => {
     ok(["leave"]);
     assert.notEqual(setOf("k11/p"), "");
   });
-  test("  is sorted at that stop: one to sort", () => { assert.equal(kind("k11/p"), "check"); });
-  test("  with its unit filed", () => { assert.equal(state(chomp(readOr(path.join(setOf("k11/p"), ".unit")))), "ready"); });
+  test("  stays kept, for whichever machine lands its unit, with no unit to sort it", () => { assert.equal(`${kind("k11/p")} ${filed("k11/p")}`, "unmerged false"); });
 });
 
 // Two lanes stopping at once: the one that ends the run walks the kept sets (held here at its
 // first look at a unit, through a tracker that waits), while the other lets its leases go and marks
-// the sets. A set made in this run mustn't be marked before the walk reaches it, or it's sorted a
+// the sets. A set made in this run mustn't be marked before the walk reaches it, or it's reported a
 // run early.
 describe("two leaves at once", () => {
   const hold = f.w.at("tracker-hold"), blocker = f.w.at("tracker-hold.mjs");
@@ -186,7 +188,7 @@ await import(${JSON.stringify(path.join(ROOT, "tracker/tracker.mjs"))});
   const leave = (add: NodeJS.ProcessEnv = {}) => start(a.at("factory/store.sh"), ["leave"], { cwd: a.dir, env: a.envWith(add) });
   let first: ReturnType<typeof leave>, second: ReturnType<typeof leave>;
   test("a set marked last run, and one made in this run; a session ran", () => {
-    unfinished("k3/m");   // (k3's earlier set is one to sort already: a new one, kept)
+    unfinished("k3/m");   // (a new set, beside k3's earlier one)
     run();
     unfinished("kz/t");
     sessionRan();
@@ -209,9 +211,9 @@ await import(${JSON.stringify(path.join(ROOT, "tracker/tracker.mjs"))});
     assert.equal(r1.code, 0, r1.stderr);
     assert.equal(r2.code, 0, r2.stderr);
   });
-  test("  the set marked last run: one to sort", () => { assert.equal(kind("k3/m"), "check"); });
-  test("  the set made in this run: still kept, marked for the next", () => {
-    assert.equal(`${kind("kz/t")} ${fs.existsSync(path.join(setOf("kz/t"), ".night"))}`, "unmerged true");
+  test("  the set marked last run: its line for the morning summary", () => { assert.equal(`${kind("k3/m")} ${keptLines("k3/m")}`, "unmerged 1"); });
+  test("  the set made in this run: no line yet, marked for the next", () => {
+    assert.equal(`${kind("kz/t")} ${keptLines("kz/t")} ${fs.existsSync(path.join(setOf("kz/t"), ".night"))}`, "unmerged 0 true");
   });
 });
 

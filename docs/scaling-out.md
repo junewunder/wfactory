@@ -105,11 +105,8 @@ unit whose work is on main, and releases the lease when that machine has no
 more units for the group, or when its last lane stops. The store keeps only
 merged work: a unit that ends unfinished (handed back, interrupted, a
 question, a lane killed mid-session) has the store's copy put back over the
-copy there, its outputs kept in `work/.store/aside/` until it's done or
-dropped, and its card says where. They're kept for one more run of the lanes
-there: a set still kept at the end of the next run, its unit not claimed
-there since, becomes one to sort (below), and so does one whose unit is
-parked or pinned to another machine. When the same unit is claimed again on
+copy there, its outputs kept in `work/.store/aside/` until its branch has
+landed on main or it's dropped, and its card says where. When the same unit is claimed again on
 that machine, the loop puts that set back before its session if it holds
 that unit's outputs alone, they were built from the commit its branch is on
 now, the copy there is still the one they were made over, and nothing else
@@ -119,7 +116,8 @@ trusting earlier notes about `work/`. A different unit never gets them. A finish
 whose branch waits to land has its outputs held there, and copied back when
 it lands. Neither happens while another session there is working on the
 group; if a finished unit's outputs are in the copy when an unfinished one's
-are put back, they can't be told apart, so both go aside as a set to sort. A
+are put back, they can't be told apart, so both go aside as one set, never
+put back, which goes once both units have landed or are dropped. A
 copy back is sent only over the copy it came from (`store-moved` if the store
 has moved on since). A copy back that fails is tried again at each look
 (after 2, 4, 8, 16, then every 30 minutes) until it goes through (event
@@ -158,21 +156,26 @@ else here waiting to reach the store; a copy back that fails is owed and tried
 again like a unit's, and one still owed when the store has moved on is
 dropped (nothing in it is lost: it's main's). When nobody worked on the copy and every file
 left is older than the store's, the set is deleted at once (event
-`store-aside-old`). Any other set gets a unit, pinned to that machine, that
-audits it (`just store aside audit <set>`), keeps anything
-nothing rebuilds, and deletes it (`just store aside drop <set>`); the
-template's `auto-mode.json` lets a lane run those. These units are filed in
-a group of their own (`aside`, which every loop sees), at their data group's
-priority but with none of its needs or parks, so sorting a set never waits
-on the owner; a set whose group keeps no data any more gets one too. Sets appear
+`store-aside-old`). What's set aside is settled by a rule, with no unit and
+no session: a set made for units the store can name (an unfinished unit's
+outputs, alone or with finished ones) is removed once each of those units
+is dropped or done with its branch landed on main, by the tracker's own
+record of the landing (event `store-aside-removed`); a unit done by hand,
+still merging or reopened doesn't count. Any other set stays where it is
+(event `store-aside` as it's made): nothing recorded whose work it holds, so
+no rule removes it, and each run of the lanes it outlasts ends with one line
+for the morning summary saying what it holds and how old it is
+(`store-aside-kept`). `just store aside audit <set>` there lists what the
+store doesn't hold byte for byte, and `just store aside drop <set>` removes
+it. Such sets appear
 when a copy predates the store (once per group per machine, from before the
 stamp listing) or when something wrote a group's folders
 without its lease: a unit whose data is `none` or another group's, a folder
 two groups share, a command run by hand outside the lanes. Give such a unit
-the group as its data. `just store aside` lists the sets; `just store aside
+the group as its data. `just store aside` lists the sets and what the rule
+says of each; `just store aside
 sort` (run with every idle look, as each lane starts and as the lanes stop)
-files any missing unit, also for a set
-without a kind (from an older store.sh or a copy down cut short). A copy
+applies it. A copy
 that fails fails loudly: nothing is stamped or released on it. Sessions never copy data.
 `factory/store.sh` does the copying (rsync over ssh, never a network
 mount; rsync 3 or later on every machine, which on a Mac is Homebrew's,

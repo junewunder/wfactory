@@ -96,12 +96,12 @@ describe("stop now", () => {
     has(c4, "iteration 1: Unit k1 of f1");
   });
   test("  the killed session's unit ended unmerged: the store's copy is put back first", () => { has(c4, "the outputs of f1/k1"); });
-  test("    with no unit to sort it", () => { hasnt(c.events(), "store-aside"); });
+  test("    with no event for a set nothing accounts for", () => { hasnt(c.events(), "\tstore-aside\t"); });
   test("    and the copy here has the other laptop's work", () => { has(readOr(c.at("work/out/f1/log.txt")), "f1/k2 on d"); });
   // Its outputs were made over the copy before the other laptop's work: putting them back would undo that.
   test("    its own set isn't put back over it", () => { has(c4, "were made over a copy of the group's data that has moved on since"); });
   test("  and the unit is done", () => { assert.equal(state("f1/k1"), "done"); });
-  test("  after which its set aside is deleted", () => { has(c4, "outputs of f1/k1, now done or dropped"); });
+  test("  after which its set aside is deleted", () => { has(c4, "outputs of f1/k1, now landed or dropped"); });
 });
 
 describe("an older copy changed after its stamp, even with old file times, isn't safe to delete", () => {
