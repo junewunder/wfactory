@@ -25,7 +25,10 @@ replaces is kept in aside/ until the unit has landed or is dropped, and the unit
 card says where. When the same unit is claimed again on this machine, its set
 goes back into the copy here before its session (restore), if the set holds
 that unit's outputs alone, they were built from the commit its branch is on
-now, the copy here is still the one they were made over, and nothing else in
+now (or from one where nothing that feeds the group's build differs: the
+project's ci.affected hook, asked with FACTORY_CI_AFFECTED_ONLY=<group>, says
+"<group>\\tunchanged"; a commit this clone hasn't got is fetched from origin
+first), the copy here is still the one they were made over, and nothing else in
 it is waiting to reach the store (another lane's session or CI run, another
 unit's outputs waiting to land, a copy back owed);
 otherwise its next session rebuilds them from its branch, and is told so. Nothing is copied back or put back while
@@ -114,14 +117,16 @@ Usage:
                                    then mark it as worked on by that session, as \`dirty\`): with --new (the claim
                                    took a new lease) make room and copy down unless current; then
                                    the unit's inputs. Exit 1: no room; other non-zero: failed.
-  factory/store.sh end <group> <unit> [<commit>]  the unit's session ended: copy back if its work is on
+  factory/store.sh end <group> <unit> [<commit> [<branch>]]  the unit's session ended (on <branch>, whose
+                                   head its outputs were built from): copy back if its work is on
                                    main (or there are no branches), hold its outputs if its branch waits
                                    to land, put the store's copy back if it's unfinished. Exit 2: a copy
                                    back failed (it's tried again at each look)
   factory/store.sh restore <group> <unit>     the same unit claimed again, on its branch: put its own set
                                    back (see above). Prints a line for its session. Exit 0: put
                                    back; 1: no set of its; 3: its set refused (other units' outputs
-                                   in it, built from another commit, the copy moved on, or other
+                                   in it, built from a commit whose build differs or can't be
+                                   compared, the copy moved on, or other
                                    work here not on the store yet)
   factory/store.sh up <group> <unit> [<commit>]  copy back now (lease holder only) and stamp it
   factory/store.sh dirty <group> [<unit> <pid>]  a session in this lane (its loop's pid) is about to work on it

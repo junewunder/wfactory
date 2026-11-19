@@ -112,7 +112,10 @@ copy there, its outputs kept in `work/.store/aside/` until its branch has
 landed on main or it's dropped, and its card says where. When the same unit is claimed again on
 that machine, the loop puts that set back before its session if it holds
 that unit's outputs alone, they were built from the commit its branch is on
-now, the copy there is still the one they were made over, and nothing else
+now (or from one where nothing that feeds the group's build differs, which
+the project's ci.affected hook must vouch for, asked about that group alone:
+a branch that merged main in since, with nothing in main's changes that the
+group builds from), the copy there is still the one they were made over, and nothing else
 in it is waiting to reach the store (another lane's session or CI run,
 another unit's outputs waiting to land, a copy back owed) (`store.sh restore`); otherwise its session is told to rebuild them before
 trusting earlier notes about `work/`. A different unit never gets them. A finished unit

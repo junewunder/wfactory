@@ -69,7 +69,7 @@ export function storeCli(args: string[]): number {
       case "seed": return seed(a);
       case "adopt": return adopt(a[0] ?? "");
       case "up": return up(a[0] ?? "", a[1] ?? "", a[2] ?? "", a[3] === "--all");
-      case "end": return end(a[0] ?? "", a[1] ?? "", a[2] ?? "");
+      case "end": return end(a[0] ?? "", a[1] ?? "", a[2] ?? "", a[3] ?? "");
       case "restore": return restore(a[0] ?? "", a[1] ?? "");
       case "dirty": dirty(a[0] ?? "", a[1], a[2]); return 0;
       case "clean": {

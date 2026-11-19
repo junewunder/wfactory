@@ -563,6 +563,12 @@ has moved past the last commit it covered: after a lane lands a unit, and before
 (so merges made outside the lanes are seen too); one lane at a time per machine, under
 FACTORY_CI_AFFECTED_TIMEOUT seconds (default 120). The first run only records main's code commit.
 A run that fails or times out records nothing (an event says so once) and is tried again next time.
+The store asks it too, before putting back a set built from another commit than the branch's
+(\`store.sh restore\`): with FACTORY_CI_AFFECTED_ONLY=<group> in its environment, the hook judges
+that group alone and prints "<group>\\tunchanged" when nothing that feeds its build differs between
+the two commits (which then needn't be on main), else "<group>\\t<why>"; one it can't judge
+(unknown, or a build it can't plan at either commit) it names with why. Without that line the set
+stays aside, so a hook that ignores the variable keeps every such set aside.
 No arguments: the hook and the commit it covered (--json: {"cmd", "at"}).
 <new> --touches F: the loop's record of a run, in one write: each group F names is touched
 (ci-touch, with commit <new>; a group with no CI is skipped and said), and <new> is covered, unless

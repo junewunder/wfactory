@@ -197,8 +197,8 @@ export async function workUnit(l: Loop, u: Claimed): Promise<"next" | "stop"> {
   }
 
   // Its own outputs from its last, unfinished attempt, set aside when that ended, go back into
-  // work/ if they were built from the commit its branch is on (store.sh restore); the session is
-  // told either way.
+  // work/ if they were built from the commit its branch is on, or one where the group's build
+  // inputs are the same (store.sh restore); the session is told either way.
   let restored = "";
   if (dg) {
     const r = spawnSync("factory/store.sh", ["restore", dg, unit], { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
@@ -308,7 +308,7 @@ export async function workUnit(l: Loop, u: Claimed): Promise<"next" | "stop"> {
   // back that failed earlier is tried again.
   if (dg) {
     const commit = git("rev-parse", "--short", `origin/${c.main}`) ?? git("rev-parse", "--short", "HEAD") ?? "";
-    if ((await l.stoppable(["factory/store.sh", "end", dg, unit, commit])) !== 0) log(`couldn't copy ${dg}'s data back; it stays marked as unsent, so nothing deletes it, and it's tried again at each look`);
+    if ((await l.stoppable(["factory/store.sh", "end", dg, unit, commit, ...(branch ? [branch] : [])])) !== 0) log(`couldn't copy ${dg}'s data back; it stays marked as unsent, so nothing deletes it, and it's tried again at each look`);
   }
   let marks: string[] = []; try { marks = fs.readdirSync("work/.store/groups"); } catch {}
   if (dg || marks.some((n) => n.endsWith(".unsent") || n.includes(".unmerged."))) l.releaseIdle();

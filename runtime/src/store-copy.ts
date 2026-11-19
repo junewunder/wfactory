@@ -10,6 +10,7 @@ import { code, copy, copyStamp, duh, gitShort, listed, remoteStamp, rsync, run }
 import { cat, count, dropEmpty, fields, filesFollowed, isDir, isFile, jqs, json, L, log, ls, MB, mkdirp, out, rebuilt, rm, rmrf, sameBytes, stat, timeName, touch, walk, who } from "./store-util.ts";
 import { remoteOf } from "./store-local.ts";
 import { data, heldHere, tr, ustate } from "./store-tracker.ts";
+import { sameBuild } from "./store-same.ts";
 
 // With units, it puts the store's copy back over the copy here, current or not: what that
 // replaces or deletes is those units' unmerged outputs, kept aside (kind "unmerged") until
@@ -146,10 +147,12 @@ export function copyDown(g: string, units: string[] = [], prov = new Map<string,
 // A unit's session and the commit its branch is on (its outputs were built from it), as the
 // tracker and this clone know them; "" each when they can't say. Asked as its session ends, in the
 // lane it ran in (end), and kept in its mark: a put-back later, from another lane or process, can't
-// tell from that clone's branch, which may be an older attempt's.
-function provenance(u: string): [string, string] {
+// tell from that clone's branch, which may be an older attempt's. branch: the one its session worked
+// on, as the loop gives it; the tracker's record of it is the fallback, since a review that asked for
+// fixes has cleared that record by the time end runs.
+function provenance(u: string, branch = ""): [string, string] {
   const by = out(tr(["state", u, "--by"], "ignore").stdout);
-  const b = out(tr(["state", u, "--branch"], "ignore").stdout);
+  const b = branch || out(tr(["state", u, "--branch"], "ignore").stdout);
   const head = (ref: string) => { const r = run("git", ["rev-parse", "-q", "--verify", `${ref}^{commit}`], { err: "ignore" }); return code(r) === 0 ? out(r.stdout) : ""; };
   return [by, b ? head(`refs/heads/${b}`) || head(`refs/remotes/origin/${b}`) : ""];
 }
@@ -171,7 +174,9 @@ export function forgetAside(aside: string) {
 // The same unit claimed again: its own outputs from its last, unfinished session, set aside when
 // the store's copy was put back (a set of kind "unmerged" holding that unit's alone), go back into
 // the copy here, but only if they were built from the commit this clone is on now (the unit's
-// branch, checked out). A set with other units' outputs in it, or built from another commit, stays
+// branch, checked out), or from one whose inputs to the group's build are the same (sameBuild: the
+// project's ci.affected hook says so). A set with other units' outputs in it, or built from a commit
+// whose build differs or that nothing can vouch for, stays
 // where it is (\`aside sort\` deletes it once the unit has landed or is dropped). Prints one line for
 // the session; 0: restored, 1: nothing to restore, 3: a set refused (stale or shared), 2: failed.
 export function restore(g: string, u: string): number {
@@ -215,9 +220,13 @@ export function restore(g: string, u: string): number {
       log(`${g}: ${set} (${u}'s outputs) not put back over other work here (${busy.join("; ")})`);
       return 3;
     }
-    if (!c || !now || c !== now) {
-      console.log(`Its last attempt's outputs, set aside in ${set} on ${here.host}, were built from commit ${c ? c.slice(0, 8) : "(unknown)"}, but your branch is at ${now.slice(0, 8)}: they were not put back. Rebuild them before trusting earlier notes about what's in work/.`);
-      log(`${g}: ${set} (${u}'s outputs) was built from ${c.slice(0, 8) || "an unknown commit"}, this clone is at ${now.slice(0, 8)}; not put back`);
+    // Built from the commit this clone is on, or from one where nothing that feeds the group's
+    // build differs (the project's ci.affected hook says, asked about this group alone); anything
+    // it can't vouch for is refused.
+    const same = sameBuild(g, c, now);
+    if (!same.same) {
+      console.log(`Its last attempt's outputs, set aside in ${set} on ${here.host}, were built from commit ${c ? c.slice(0, 8) : "(unknown)"}, but your branch is at ${now.slice(0, 8)}: they were not put back (${same.why}). Rebuild them before trusting earlier notes about what's in work/.`);
+      log(`${g}: ${set} (${u}'s outputs) not put back: ${same.why}; this clone is at ${now.slice(0, 8)}`);
       return 3;
     }
     // A file of the set where the copy here has a folder (or the other way round) would stop the
@@ -242,8 +251,8 @@ export function restore(g: string, u: string): number {
     }
     forgetAside(a);
     rmrf(a);
-    console.log(`Its last attempt's outputs (set aside in ${set} when it ended unfinished, built from the commit your branch is on) are back in work/: carry on from them.`);
-    log(`${g}: put ${u}'s outputs from its last attempt back (${set}, built from ${c.slice(0, 8)})`);
+    console.log(`Its last attempt's outputs (set aside in ${set} when it ended unfinished, ${c === now ? "built from the commit your branch is on" : `built from ${c.slice(0, 8)}, whose inputs to ${g}'s build are the same as your branch's`}) are back in work/: carry on from them.`);
+    log(`${g}: put ${u}'s outputs from its last attempt back (${set}, ${same.how})`);
     return 0;
   }
   return 1;
@@ -387,9 +396,9 @@ export function tend(g: string, force = false, stopped = false): boolean {
 }
 
 // A unit's session ended: its mark goes, and its outputs are settled by its state (tend).
-export function end(g: string, u: string, c: string): number {
+export function end(g: string, u: string, c: string, branch = ""): number {
   glock(g);
   rm(gf(g, `dirty.${here.lid}`));
-  if (here.branches) unmerged(g, u, c, ...provenance(u)); else due(g, u, c);
+  if (here.branches) unmerged(g, u, c, ...provenance(u, branch)); else due(g, u, c);
   return tend(g, true) ? 2 : 0;
 }

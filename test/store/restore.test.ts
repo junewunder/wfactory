@@ -95,7 +95,8 @@ describe("refused when stale", () => {
     const out = a.loop(ONE, UNDONE);
     has(out, "iteration 1: Unit r6 of f7");
     has(out, "but your branch is at");
-    has(out, "they were not put back. Rebuild them before trusting earlier notes about what's in work/.");
+    has(out, "they were not put back (built from ");
+    has(out, "and the project has no ci.affected hook to compare the build's inputs by). Rebuild them before trusting earlier notes about what's in work/.");
   });
   test("  dropped, its sets go too", () => {
     f.drop("f7/r6");
