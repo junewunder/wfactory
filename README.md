@@ -72,8 +72,7 @@ on an agent following its prompt:
 - Each session has a memory cap.
 
 [docs/protections.md](docs/protections.md) goes into more depth: how each
-one works and what it doesn't cover. More than 3,000 tests run real lanes against a stand-in
-`claude`: a script that commits a change and records its unit done.
+one works and what it doesn't cover.
 
 wfactory isn't a sandbox. Sessions run as you, with your network and credentials,
 so use it only where you'd let an agent loose. `just fleet stop` stops

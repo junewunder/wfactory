@@ -61,8 +61,8 @@ around them.
 - A noisy check marks good work red. It gets a resampling rule first.
   Prompt.
 
-More than 3,000 tests run real lanes against a fake `claude`, a local bare
-origin and real systemd units. They pass at every commit, on Linux; the
+Besides unit tests of the tracker and the runtime, the suites run real
+lanes against a fake `claude`, a local bare origin and real systemd units. They pass at every commit, on Linux; the
 macOS path is less tested ([AGENTS.md](../AGENTS.md)).
 
 None of this is a sandbox. Sessions run with `--permission-mode auto` and
