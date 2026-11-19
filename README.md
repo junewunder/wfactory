@@ -49,7 +49,8 @@ questions with defaults, installs the skill, and runs a toy factory of five
 units until they pass, in about 15 minutes. Then, in a project, say "start
 a factory for \<the work\>".
 
-It needs Linux with systemd or macOS 13+ on Apple silicon (not Windows);
+It needs Linux with systemd (the suites run there at every commit) or macOS
+13+ on Apple silicon (less tested), not Windows;
 bash, git, node, curl, jq, [just](https://github.com/casey/just) and the
 [Claude Code](https://docs.claude.com/en/docs/claude-code) CLI, on a plan
 with usage to spare. Branches and review need the project to have a git
@@ -65,18 +66,22 @@ that set out to cheat could get around them.
 - A session can't mark a unit with a check done. The tracker runs the check
   itself and records the result. A unit no command can check is signed off
   by a different session, or recorded with the session's evidence, which
-  the review then reads.
+  the review then reads. ([probes.test.ts](tracker/test/probes.test.ts)),
+  ([units.test.ts](tracker/test/units.test.ts))
 - A fresh session reviews each branch before it lands and can send it back
   with findings. A review that times out or gives no verdict never lets the
   branch through: it waits and is reviewed again.
+  ([review.test.ts](test/branches/review.test.ts))
 - When code that several units share changes, the checks that read it
   rerun, so a finished unit that broke shows up. The tracker knows only the
-  input files each check was told about.
+  input files each check was told about. ([probes.test.ts](tracker/test/probes.test.ts))
 - A session's edits to the tracker or the loop are dropped at merge, so it
-  can't change its own record.
+  can't change its own record. ([landing.test.ts](test/branches/landing.test.ts))
 - Nothing merges while main fails its own check.
+  ([broken-main.test.ts](test/branches/broken-main.test.ts))
 - Two lanes never claim the same unit, even across separate machines.
-- Each session has a memory cap.
+  ([claims.test.ts](test/branches/claims.test.ts))
+- Each session has a memory cap. ([oom.test.ts](test/loop/lane/oom.test.ts))
 
 Some rules are only in the prompt. Changing a test or a golden file to go
 green is a question for you, and the review looks for it, but nothing in
