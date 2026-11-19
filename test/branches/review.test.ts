@@ -1,9 +1,11 @@
 // The loop reviews a finished branch's diff before it lands (runtime/src/review.ts), with the fake
 // reviewer (test/lib's FAKE_REVIEWER) in place of a claude session. A pass lands; a fix doesn't, and
 // puts the unit back to ready on its branch with the findings; a second fix makes it stuck; a branch
-// with nothing to merge lands unreviewed; a review that can't give a verdict lands, and the overseer
-// hears. The review is launched as sessions are: its words in files, never on its command line, and
-// no display. Run: node --test test/branches/
+// with nothing to merge lands unreviewed; a review that can't give a verdict doesn't land it: the
+// branch waits and is reviewed again later, the overseer hearing each time, and the third with no
+// verdict makes the unit stuck; a usage limit waits and isn't counted. The review is launched as
+// sessions are: its words in files, never on its command line, and no display.
+// Run: node --test test/branches/
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -117,33 +119,122 @@ describe("a branch that changes only tracker/ lands without a review", () => {
   });
 });
 
-describe("a review that can't give a verdict: the branch lands, and the overseer hears why", () => {
+// (Before, such a branch landed unreviewed, a review-skipped event telling the overseer.)
+const unrun = (id: string) => r.events().split("\n").filter((l) => l.split("\t")[3] === "review-unrun" && l.includes(`g/${id}`));
+describe("a review that can't give a verdict: the branch waits, pushed, and is reviewed again later; a pass then lands it", () => {
   for (const [what, v, why] of [["fails", "exit 3", "the review session failed (exit 3"], ["says no verdict that parses", "looks fine to me", "the review gave no verdict that could be read"]]) {
+    const id = what.split(" ")[0];
+    let out = "";
     test(`a review that ${what}`, () => {
       verdicts(v);
-      const id = what.split(" ")[0];
       add(id);
-      const out = r.loop(ONE);
+      out = r.loop(ONE);
+      assert.equal(reviews() > 0, true);
+    });
+    test("  not landed: the unit still waits to merge, its branch on origin", () => {
+      hasnt(out, `unit/g/${id} merged into main`);
+      assert.equal(f.main(`out/g-${id}.txt`), "");
+      assert.equal(r.ok(["state", `g/${id}`]), "merging");
+      assert.notEqual(remote(`unit/g/${id}`), "");
+    });
+    test("  the overseer hears why, and that it waits", () => {
+      assert.equal(unrun(id).length, 1, r.events());
+      has(unrun(id)[0], `Unit ${id} (g/${id}): the loop's review gave no verdict on its branch (${why}`);
+      has(unrun(id)[0], "so it isn't landed: the branch waits, pushed, and is reviewed again after");
+      has(unrun(id)[0], "try 1 of 3");
+      hasnt(r.events(), "landed without the loop's review");
+    });
+    test("  not reviewed again before FACTORY_REVIEW_RETRY has passed", () => {
+      const n = reviews();
+      out = r.loop(ONE);
+      assert.equal(reviews(), n);
+      has(out, `the loop's review gave no verdict on it at`);
+      assert.equal(r.ok(["state", `g/${id}`]), "merging");
+    });
+    test("  after it, reviewed again: a pass lands it", () => {
+      const n = reviews();
+      out = r.loop(ONE, { FACTORY_REVIEW_RETRY: "0" });
+      assert.equal(reviews(), n + 1);
       has(out, `unit/g/${id} merged into main`);
       assert.equal(r.ok(["state", `g/${id}`]), "done");
-      has(r.events(), `Unit ${id} (g/${id}) landed without the loop's review: ${why}`);
+      assert.equal(unrun(id).length, 1);
     });
   }
 });
 
-describe("a review that runs too long: ended, with its own log line, and the branch lands", () => {
+describe("a review with no verdict three times: the unit is stuck, for the overseer, never landed", () => {
+  let out = "";
+  test("three reviews that fail, half an hour apart (FACTORY_REVIEW_RETRY 0 here)", () => {
+    verdicts("exit 3", "exit 4", "exit 5");
+    add("thrice");
+    const n = reviews();
+    // (A run may look at the waiting branch more than once.)
+    for (let i = 0; i < 4 && r.ok(["state", "g/thrice"]) !== "stuck"; i++) {
+      out += r.loop(ONE, { FACTORY_REVIEW_RETRY: "0" });
+      if (reviews() < n + 3) assert.equal(r.ok(["state", "g/thrice"]), "merging");
+    }
+    assert.equal(reviews(), n + 3);
+  });
+  test("  told the first two times", () => {
+    assert.deepEqual(unrun("thrice").map((l) => /try (\d) of 3/.exec(l)?.[1]), ["1", "2"]);
+  });
+  test("  the third: stuck, its branch on origin, not landed", () => {
+    hasnt(out, "unit/g/thrice merged into main");
+    assert.equal(f.main("out/g-thrice.txt"), "");
+    assert.equal(r.ok(["state", "g/thrice"]), "stuck");
+    assert.notEqual(remote("unit/g/thrice"), "");
+  });
+  test("  the card says why, the last try's why with it", () => {
+    has(r.ok(["show", "g/thrice"]), "the loop's review gave no verdict 3 times, so it waits for the overseer: the review session failed (exit 5");
+  });
+  test("  and the overseer hears it's stuck", () => {
+    has(r.events(), "Unit thrice (g/thrice): the loop's review gave no verdict 3 times, so it waits for the overseer");
+  });
+  test("  reopened by the overseer, it gets three more tries, and a pass lands it", () => {
+    r.ok(["reopen", "g/thrice"]);
+    out = r.loop(ONE, { FACTORY_REVIEW_RETRY: "0" });
+    has(out, "unit/g/thrice merged into main");
+    assert.equal(r.ok(["state", "g/thrice"]), "done");
+  });
+});
+
+describe("a review that hits a usage limit: the branch waits, and it isn't counted as a try", () => {
+  test("three usage limits in a row", () => {
+    verdicts("limit", "limit", "limit");
+    add("lim");
+    const n = reviews();
+    // (A run may look at the waiting branch more than once.)
+    for (let i = 0; i < 4 && reviews() < n + 3; i++) has(r.loop(ONE), "review: the reviewer hit a usage limit;");
+    assert.equal(reviews(), n + 3);
+  });
+  test("  not landed, not stuck, and no review-unrun event", () => {
+    assert.equal(r.ok(["state", "g/lim"]), "merging");
+    assert.equal(f.main("out/g-lim.txt"), "");
+    assert.equal(unrun("lim").length, 0);
+  });
+  test("  the next look reviews it, and a pass lands it", () => {
+    has(r.loop(ONE), "unit/g/lim merged into main");
+    assert.equal(r.ok(["state", "g/lim"]), "done");
+  });
+});
+
+describe("a review that runs too long: ended, with its own log line, and the branch waits", () => {
   let out = "";
   test("a review past FACTORY_REVIEW_TIMEOUT", () => {
     verdicts("sleep 60");
     add("slow");
     out = r.loop(ONE, { FACTORY_REVIEW_TIMEOUT: "2", FACTORY_POLL: "1" });
-    has(out, "unit/g/slow merged into main");
+    hasnt(out, "unit/g/slow merged into main");
+    assert.equal(r.ok(["state", "g/slow"]), "merging");
   });
   test("  the log says the review ran over, not that the wrap-up time is over", () => {
     has(out, "the review has run over 2 s: ending it");
     hasnt(out, "wrap-up time is over");
   });
-  test("  and the overseer hears why it wasn't reviewed", () => { has(r.events(), "Unit slow (g/slow) landed without the loop's review: its review ran over 2 s"); });
+  test("  and the overseer hears why it wasn't reviewed", () => { has(unrun("slow")[0] ?? "", "Unit slow (g/slow): the loop's review gave no verdict on its branch (its review ran over 2 s)"); });
+  test("  reviewed again later, a pass lands it", () => {
+    has(r.loop(ONE, { FACTORY_REVIEW_RETRY: "0" }), "unit/g/slow merged into main");
+  });
 });
 
 describe("the reviewer reads what the lane's sessions can: the clone's linked folders", () => {

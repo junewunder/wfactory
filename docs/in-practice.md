@@ -32,9 +32,9 @@ path through the code. The README points here for the detail.
 In one factory (the mod factory in [lessons.md](lessons.md)), a fresh
 session reviewed 593 finished branches from one machine's lanes before they
 landed, everything recorded up to 17 November 2026. It sent 45 back for
-fixes, 6 of them a second time. None landed without a review: the review
-fails open (one that times out or can't answer lets the branch land), and
-in that period it never had to.
+fixes, 6 of them a second time. None landed without a review. (At the
+time, a review that timed out or couldn't answer let the branch land, and
+none did; now such a branch waits and is reviewed again.)
 
 In the same factory, a finished unit cost a median of $1.68 in
 API-equivalent terms, $1193.60 for 489 units, from one machine's lanes.

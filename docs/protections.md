@@ -27,9 +27,11 @@ around them.
 - The check passes but the change is wrong where the check doesn't look.
   A fresh read-only session reviews each branch against the unit's
   description before it lands and can send it back with findings; sent
-  back twice, it waits for you. Code (`test/branches/review.test.ts`). It fails open: a review that
-  times out or gives no verdict lets the branch land, and the overseer is
-  told. In one factory it reviewed 593 branches and sent 45 back.
+  back twice, it waits for you. Code (`test/branches/review.test.ts`). A
+  review that times out or gives no verdict never lets the branch land
+  unreviewed: the branch waits and is reviewed again half an hour later,
+  and after three tries with no verdict it waits for you. In one factory it
+  reviewed 593 branches and sent 45 back.
 - Work piles onto a broken main. While main fails its check, finished
   branches wait and a session is sent to fix what fails; if two can't, the
   lane that found it takes no new units.

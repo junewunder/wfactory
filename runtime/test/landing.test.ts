@@ -7,7 +7,7 @@ import fs from "node:fs";
 import { tempDir } from "../../test/lib/index.ts";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { CHECK_RETRY_MS, FIX_IDLE_MS, Landing, UNRUN_RETELL_MS, type LaneCtx } from "../src/landing.ts";
+import { CHECK_RETRY_MS, FIX_IDLE_MS, Landing, REVIEW_RETRY_MS, UNRUN_RETELL_MS, type LaneCtx } from "../src/landing.ts";
 import type { TrOut } from "../src/tr.ts";
 import type { ReviewInput, Verdict } from "../src/review.ts";
 
@@ -63,6 +63,7 @@ function landing(o: { fails?: () => boolean; rc?: (log: string) => number; revie
       if (a[0] === "show") return ok(`${a[1]}: the card\n`);
       if (a[0] === "ci-land") return o.ciLand === null ? { code: 1, out: "", err: "tracker: origin unreachable\n" } : ok(JSON.stringify(o.ciLand ?? { since: "", checks: [], skipped: [], why: "no ci.land in tracker/project.json" }));
       if (a[0] === "land-fail") return ok(f.states.get("land-fail") ?? `${a[1]} → ready, on its branch (the check before landing failed)\n`);
+      if (a[0] === "review-none") return ok(`${a[1]} → stuck (the loop's review gave no verdict 3 times)\n`);
       if (a[0] === "state" && a[2] === "--branch" && f.states.has(`${a[1]} branch`)) return ok(`${f.states.get(`${a[1]} branch`)}\n`);
       if (a[0] === "state") { const s = f.states.get(a[1]); return s === undefined ? { code: 1, out: "", err: `no unit "${a[1]}"\n` } : ok(`${s}\n`); }
       if (a[0] === "add-unit" || a[0] === "reopen") f.states.set(a[1], "ready");
@@ -594,13 +595,75 @@ test("main's check failing: the branch waits, and no review is spent on it", asy
   assert.equal(f.reviews.length, 0);
 });
 
-test("a review with no verdict: the branch lands unreviewed, and the overseer hears why", async () => {
-  const r = lane(); const [l, f] = landing({ review: () => ({ verdict: "none", why: "the reviewer hit a usage limit" }) });
+// (Before, such a branch landed unreviewed, with a note and a review-skipped event.)
+test("a review with no verdict: not landed; the branch waits, pushed, and the overseer hears it's reviewed again later", async () => {
+  const r = lane(); const [l, f] = landing({ review: () => ({ verdict: "none", why: "the review session failed (exit 3)" }) });
+  f.states.set("g/nv", "done");
   unitBranch("unit/g/nv", { "nv.txt": "n\n" });
-  assert.equal(await l.land("unit/g/nv", "Unit nv (g/nv)"), 0);
-  assert.equal(onOrigin(r, "nv.txt"), "n");
-  assert.deepEqual(f.events.filter(([k]) => k === "review-skipped").map(([, m]) => m), ["Unit nv (g/nv) landed without the loop's review: the reviewer hit a usage limit"]);
-  assert.ok(f.calls.some((c) => c[0] === "note" && c[1] === "g/nv" && /without the loop's review/.test(c[2])));
+  await l.finishUnit("g/nv", "unit/g/nv", "Unit nv (g/nv)");
+  assert.equal(onOrigin(r, "nv.txt"), null, "not on main");
+  assert.equal(r.origin("git show unit/g/nv:nv.txt"), "n", "its branch is on origin");
+  assert.equal(f.calls.filter((c) => c[0] === "merged" || c[0] === "note" || c[0] === "review-none").length, 0);
+  assert.deepEqual(f.events.map(([k]) => k), ["review-unrun"]);
+  assert.match(f.events[0][1], /^Unit nv \(g\/nv\): the loop's review gave no verdict on its branch \(the review session failed \(exit 3\)\), so it isn't landed: the branch waits, pushed, and is reviewed again after \d\d:\d\d, while Box lane 2 takes other units \(try 1 of 3; /);
+  assert.equal(r.here("git rev-parse --abbrev-ref HEAD"), "main");
+});
+
+test("  not reviewed again, nor checked, until REVIEW_RETRY_MS has passed; then a pass lands it", async () => {
+  const r = lane();
+  let v: Verdict = { verdict: "none", why: "its review went silent" };
+  const [l, f] = landing({ review: () => v });
+  unitBranch("unit/g/rr", { "rr.txt": "r\n" });
+  assert.equal(await l.land("unit/g/rr", "Unit rr (g/rr)"), 2);
+  assert.equal(await l.land("unit/g/rr", "Unit rr (g/rr)"), 2);
+  assert.match(l.why, /^the loop's review gave no verdict on it at \d\d:\d\d; it's reviewed again after \d\d:\d\d$/);
+  assert.equal(f.reviews.length, 1);
+  assert.deepEqual(f.checks, ["runs/land-check.log"]);
+  fs.writeFileSync("runs/.review-unrun", fs.readFileSync("runs/.review-unrun", "utf8").replace(/\t(\d+)\t/, (_, t) => `\t${Number(t) - REVIEW_RETRY_MS}\t`));
+  v = { verdict: "pass" };
+  assert.equal(await l.land("unit/g/rr", "Unit rr (g/rr)"), 0);
+  assert.equal(f.reviews.length, 2);
+  assert.equal(onOrigin(r, "rr.txt"), "r");
+  assert.ok(!fs.existsSync("runs/.review-unrun"), "nothing left waiting");
+});
+
+test("  $FACTORY_REVIEW_RETRY, in seconds, in its place", async () => {
+  lane(); const [l, f] = landing({ review: () => ({ verdict: "none", why: "x" }) });
+  unitBranch("unit/g/re", { "re.txt": "r\n" });
+  process.env.FACTORY_REVIEW_RETRY = "0";
+  try {
+    await l.land("unit/g/re", "Unit re (g/re)");
+    await l.land("unit/g/re", "Unit re (g/re)");
+  } finally { delete process.env.FACTORY_REVIEW_RETRY; }
+  assert.equal(f.reviews.length, 2);
+});
+
+test("  the third with no verdict for the same change: the unit is stuck for the overseer (review-none), never landed", async () => {
+  const r = lane();
+  let n = 0;
+  const [l, f] = landing({ review: () => ({ verdict: "none", why: `the review session failed (exit ${++n})` }) });
+  f.states.set("g/n3", "done");
+  unitBranch("unit/g/n3", { "n3.txt": "3\n" });
+  process.env.FACTORY_REVIEW_RETRY = "0";
+  try { for (let i = 0; i < 3; i++) await l.finishUnit("g/n3", "unit/g/n3", "Unit n3 (g/n3)"); } finally { delete process.env.FACTORY_REVIEW_RETRY; }
+  assert.equal(f.reviews.length, 3);
+  assert.equal(onOrigin(r, "n3.txt"), null, "not on main");
+  assert.equal(r.origin("git show unit/g/n3:n3.txt"), "3", "its branch is on origin");
+  assert.deepEqual(f.calls.filter((c) => c[0] === "review-none"), [["review-none", "unit/g/n3", "--why", "the review session failed (exit 3)"]]);
+  assert.deepEqual(f.events.map(([k]) => k), ["review-unrun", "review-unrun", "stuck"]);
+  assert.match(f.events[1][1], /try 2 of 3/);
+  assert.equal(f.events[2][1], "g/n3: the loop's review gave no verdict 3 times, so it waits for the overseer (`just show g/n3` says why)");
+  assert.ok(!fs.existsSync("runs/.review-unrun"), "a reopen starts its tries afresh");
+});
+
+test("  a usage limit (a wait) isn't a try: three in a row leave it waiting, not stuck", async () => {
+  lane(); const [l, f] = landing({ review: () => ({ verdict: "wait", why: "the reviewer hit a usage limit" }) });
+  f.states.set("g/ul", "done");
+  unitBranch("unit/g/ul", { "ul.txt": "u\n" });
+  for (let i = 0; i < 4; i++) await l.finishUnit("g/ul", "unit/g/ul", "Unit ul (g/ul)");
+  assert.equal(f.reviews.length, 4, "reviewed again at each look");
+  assert.equal(f.calls.filter((c) => c[0] === "review-none").length, 0);
+  assert.deepEqual(f.events, []);
 });
 
 test("a review stopped by a pause: the branch waits for the next look, not landed", async () => {
@@ -637,18 +700,6 @@ test("a review that passed isn't run again when the landing failed after it, the
   assert.equal(await l.land("unit/g/pa", "Unit pa (g/pa)"), 0);
   assert.equal(f.reviews.length, 1);
   assert.equal(onOrigin(r, "pa.txt"), "p");
-});
-
-test("a review with no verdict: nothing says it landed unreviewed until it has", async () => {
-  const r = lane(); const [l, f] = landing({ review: goneDuring(r, { verdict: "none", why: "the review session failed" }) });
-  unitBranch("unit/g/nl", { "nl.txt": "n\n" });
-  assert.equal(await l.land("unit/g/nl", "Unit nl (g/nl)"), 2);
-  assert.equal(f.events.filter(([k]) => k === "review-skipped").length, 0);
-  assert.equal(f.calls.filter((c) => c[0] === "note").length, 0);
-  back(r);
-  assert.equal(await l.land("unit/g/nl", "Unit nl (g/nl)"), 0);
-  assert.equal(f.events.filter(([k]) => k === "review-skipped").length, 1);
-  assert.equal(f.calls.filter((c) => c[0] === "note").length, 1);
 });
 
 // The check before landing (ci.land): what the project runs on the tree as it would land.

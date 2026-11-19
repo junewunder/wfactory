@@ -135,8 +135,9 @@ describe("a look at a session's memory: the snapshot kept through a kill", { ski
 });
 
 // The loop's review runs in a capped scope of its own: one killed over its cap is told as a kill,
-// with what used the memory, and the branch lands unreviewed (review-skipped names the kill).
-describe("a review killed over its memory cap: an oom-kill event, and the branch lands unreviewed", () => {
+// with what used the memory, and the branch waits to be reviewed again (review-unrun names the kill).
+// (It landed unreviewed once, a review-skipped event naming the kill.)
+describe("a review killed over its memory cap: an oom-kill event, and the branch waits to be reviewed again", () => {
   let out = "";
   const reviewer = w.at("bin/review-hog");
   fs.writeFileSync(reviewer, `#!/usr/bin/env bash\necho '{"type":"system","subtype":"init"}'\nhog; exit 1\n`, { mode: 0o755 });
@@ -144,11 +145,13 @@ describe("a review killed over its memory cap: an oom-kill event, and the branch
     setup("drop", "g/semi", "--why", "test");   // (the last describe's, interrupted)
     setup("add-unit", "g/rvhog", "--title", "Review hog unit");
     out = capped(["--max", "1"], { FACTORY_REVIEWER: reviewer });
-    has(out, "unit/g/rvhog merged into main");
+    hasnt(out, "unit/g/rvhog merged into main");
+    assert.equal(state("g/rvhog"), "merging");
   });
   test("  the log says the review was OOM-killed", () => { has(out, "the review of Review hog unit (g/rvhog) was OOM-killed inside its 40M scope"); });
   const lines = () => events().split("\n").filter((l) => l.includes("Review hog unit")).join("\n");
   test("  an oom-kill event naming the biggest", () => { has(lines(), `oom-kill\tthe review of Review hog unit (g/rvhog) was killed: out of memory at 40M; biggest: \`bash ${hog}`); });
-  test("  and review-skipped names the kill", () => { has(lines(), "review-skipped\tReview hog unit (g/rvhog) landed without the loop's review: its review was killed: out of memory at 40M"); });
+  test("  that says the branch waits", () => { has(lines(), "The branch waits, and is reviewed again later"); });
+  test("  and review-unrun names the kill", () => { has(lines(), "review-unrun\tReview hog unit (g/rvhog): the loop's review gave no verdict on its branch (its review was killed: out of memory at 40M"); });
   test("  the review's .err has the snapshot", () => { has(readOr(path.join(newest(a.at("runs/review"), /-g-rvhog$/), "review.err")), "What used the memory at the last look before the kill:"); });
 });

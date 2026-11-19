@@ -99,6 +99,27 @@ function setUnrun(key: string, now: number) {
   const keep = (read(UNRUN) ?? "").split("\n").filter((x) => x && !x.startsWith(`${key}\t`) && now - (Number(x.split("\t")[1]) || 0) < checkRetry());
   try { fs.writeFileSync(UNRUN, [...keep, `${key}\t${now}`].map((x) => x + "\n").join("")); } catch {}
 }
+// A branch whose review gave no verdict (the CLI failed, it ran too long, a verdict that won't
+// parse, killed over its memory cap) waits, pushed, and is reviewed again this long after
+// ($FACTORY_REVIEW_RETRY, seconds, in its place). The REVIEW_TRIES-th with no verdict for the same
+// change leaves its unit stuck for the overseer (tracker review-none): it never lands unreviewed.
+export const REVIEW_RETRY_MS = 30 * 60_000, REVIEW_TRIES = 3;
+const reviewRetry = () => { const s = Number(process.env.FACTORY_REVIEW_RETRY ?? ""); return process.env.FACTORY_REVIEW_RETRY && s >= 0 ? s * 1000 : REVIEW_RETRY_MS; };
+// runs/.review-unrun: the branch changes whose review gave no verdict, the last try's time and how
+// many tries ("<unit> <change>\t<ms>\t<tries>" a line). A day-old line is dropped.
+const REVIEW_UNRUN = "runs/.review-unrun";
+function reviewUnrun(key: string): { at: number; tries: number } | null {
+  const l = (read(REVIEW_UNRUN) ?? "").split("\n").find((x) => x.startsWith(`${key}\t`));
+  if (!l) return null;
+  const [, at, n] = l.split("\t");
+  return { at: Number(at) || 0, tries: Number(n) || 1 };
+}
+function setReviewUnrun(key: string, v: { at: number; tries: number } | null) {
+  const now = Date.now();
+  const keep = (read(REVIEW_UNRUN) ?? "").split("\n").filter((x) => x && !x.startsWith(`${key}\t`) && now - (Number(x.split("\t")[1]) || 0) < 24 * 3600_000);
+  if (v) keep.push(`${key}\t${v.at}\t${v.tries}`);
+  try { if (keep.length) fs.writeFileSync(REVIEW_UNRUN, keep.map((x) => x + "\n").join("")); else fs.rmSync(REVIEW_UNRUN, { force: true }); } catch {}
+}
 const hhmm = (ms: number) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
 // The unit a lane files when main's own check fails in its clone, one per machine: a session finds
@@ -142,8 +163,9 @@ export class Landing {
   c: LaneCtx;
   why = "";     // why land() couldn't land a branch
   findings = ""; // what its review asked to fix, when land() returned 4
-  // (why, when land() returned 5: the check before landing's last line)
-  unreviewed = ""; // why its review gave no verdict, told once it has landed
+  // (why, when land() returned 5: the check before landing's last line; when it returned 6, why
+  // the last review gave no verdict)
+  reviewKey = ""; // the branch change whose review gave no verdict REVIEW_TRIES times (land() returned 6)
   busy = "";    // the groups busy here at the last look (busyNow)
   // Main's check fails here and the sessions sent to find why didn't put it right (fixMain): why,
   // until something lands. The loop takes no new units.
@@ -350,10 +372,12 @@ export class Landing {
   // (unjudged: the branch waits here, and is tried again); 3 = main itself fails the check in this
   // clone (the branch waits while a session finds what fails, fixMain; busy set: perhaps another
   // unit's outputs in work/); 4 = its review asks for fixes (findings says which); 5 = the project's
-  // check before landing failed (why has its last line).
-  async land(b: string, t: string): Promise<0 | 1 | 2 | 3 | 4 | 5> {
+  // check before landing failed (why has its last line); 6 = its review gave no verdict
+  // REVIEW_TRIES times (why says the last one's why). A review with no verdict before that is a 2:
+  // the branch waits, and is reviewed again after REVIEW_RETRY_MS.
+  async land(b: string, t: string): Promise<0 | 1 | 2 | 3 | 4 | 5 | 6> {
     const { log, event, MAIN, HOST, LANE, TDIR } = this.c;
-    this.why = ""; this.findings = ""; this.unreviewed = "";
+    this.why = ""; this.findings = ""; this.reviewKey = "";
     if (!g("checkout", "-q", b)) { this.why = `couldn't check out ${b}`; return 1; }
     this.commitLeft(`${t}: what the session left uncommitted`);
     if (!g("fetch", "-q", "origin", MAIN)) return 2;
@@ -387,6 +411,12 @@ export class Landing {
     const un = unrunAt(key);
     if (un !== null && Date.now() - un < checkRetry()) {
       this.why = `\`just check\` gave no verdict on it at ${hhmm(un)}; it's checked again after ${hhmm(un + checkRetry())}`; return 2;
+    }
+    // Its review gave no verdict a while ago: not again yet (REVIEW_RETRY_MS), nor its check, which
+    // runs before the review.
+    const rn = reviewUnrun(`${u} ${this.ownChange()}`);
+    if (rn !== null && Date.now() - rn.at < reviewRetry()) {
+      this.why = `the loop's review gave no verdict on it at ${hhmm(rn.at)}; it's reviewed again after ${hhmm(rn.at + reviewRetry())}`; return 2;
     }
     // The tracker lives on main: tracker/ edits on a branch are dropped, never merged.
     const base = git("merge-base", this.om, "HEAD") ?? "";
@@ -467,7 +497,7 @@ export class Landing {
         reviewed = true;
         const v = await this.review(u, t);
         if (v === 4) return 4;
-        if (v === 2) { g("checkout", "-q", "-f", b); return 2; }
+        if (v === 2 || v === 6) { g("checkout", "-q", "-f", b); return v; }
       }
       if (fs.existsSync("memory/MEMORY.md") && !this.ok(["memory", "--check"])) {
         if (this.ok(["memory"]) && g("add", "memory/MEMORY.md")) g("commit", "-q", "--no-verify", "-m", "memory: rebuild the index");
@@ -479,10 +509,6 @@ export class Landing {
         this.red = "";
         // The check passed here on a tree with main in it: a unit still open to make it pass is moot.
         this.fixOver(`{unit:${u}} landed`);
-        if (this.unreviewed) {
-          event("review-skipped", `${t} landed without the loop's review: ${this.unreviewed}`);
-          this.c.tr(["note", u, `Landed without the loop's review: ${this.unreviewed}`], LOOP);
-        }
         await this.landed(b, t);
         log(`git: ${b} merged into main`);
         await this.c.affected();
@@ -669,13 +695,15 @@ export class Landing {
   }
 
   // A finished branch's review, on the branch with main merged in (land, once its check passed):
-  // 0 = land it; 2 = stopped (a pause, the stop time), so it waits; 4 = fixes asked for
-  // (this.findings). A branch that changes nothing outside tracker/ has nothing to review. One whose
-  // review gave no verdict lands, and the overseer hears why: the check, the hard gate, has passed,
-  // and a reviewer that can't run would otherwise hold every branch back. A branch whose own change
-  // passed here before (its landing failed after: a conflict, a push refused) isn't reviewed again.
-  async review(u: string, t: string): Promise<0 | 2 | 4> {
-    const { log } = this.c;
+  // 0 = land it; 2 = it waits: stopped (a pause, the stop time, a usage limit), or no verdict;
+  // 4 = fixes asked for (this.findings); 6 = no verdict REVIEW_TRIES times for this change, so its
+  // unit goes to the overseer (this.why, this.reviewKey). A branch that changes nothing outside
+  // tracker/ has nothing to review. One whose review gave no verdict doesn't land unreviewed: it
+  // waits, pushed, and is reviewed again after REVIEW_RETRY_MS, as a check with no verdict is
+  // checked again, and the overseer hears each time (review-unrun). A branch whose own change passed
+  // here before (its landing failed after: a conflict, a push refused) isn't reviewed again.
+  async review(u: string, t: string): Promise<0 | 2 | 4 | 6> {
+    const { log, event, HOST, LANE } = this.c;
     const base = git("merge-base", this.om, "HEAD") ?? "";
     const diff = base ? raw("diff", base, "HEAD", "--", ".", ":(exclude)tracker") : "";
     if (!diff.trim()) { log(`review: ${t} changes nothing outside tracker/; no review`); return 0; }
@@ -690,13 +718,22 @@ export class Landing {
     if (v.verdict === "pass") {
       log(`review: ${t} passed`);
       try { fs.writeFileSync("runs/.review-passed", [...passed.slice(-49), key].map((l) => l + "\n").join("")); } catch {}
+      setReviewUnrun(key, null);
       return 0;
     }
-    if (v.verdict === "fix") { this.findings = v.findings; log(`review: ${t} needs fixes before it lands`); return 4; }
+    if (v.verdict === "fix") { setReviewUnrun(key, null); this.findings = v.findings; log(`review: ${t} needs fixes before it lands`); return 4; }
     if (v.verdict === "wait") { this.why = v.why; log(`review: ${v.why}; ${t} waits`); return 2; }
-    log(`review: none for ${t} (${v.why}); it lands unreviewed`);
-    this.unreviewed = v.why;
-    return 0;
+    const now = Date.now(), tries = (reviewUnrun(key)?.tries ?? 0) + 1;
+    setReviewUnrun(key, { at: now, tries });
+    this.why = v.why;
+    if (tries >= REVIEW_TRIES) {
+      this.reviewKey = key;
+      log(`review: none for ${t} (${v.why}), ${REVIEW_TRIES} times now; it goes to the overseer`);
+      return 6;
+    }
+    log(`review: none for ${t} (${v.why}); it waits, pushed, and is reviewed again after ${hhmm(now + reviewRetry())}`);
+    event("review-unrun", `${t}: the loop's review gave no verdict on its branch (${v.why}), so it isn't landed: the branch waits, pushed, and is reviewed again after ${hhmm(now + reviewRetry())}, while ${HOST} lane ${LANE} takes other units (try ${tries} of ${REVIEW_TRIES}; the last with no verdict leaves the unit stuck for you)`);
+    return 2;
   }
 
   // The lane couldn't merge a branch: a unit only this lane takes, before anything else.
@@ -764,6 +801,18 @@ export class Landing {
         const r = this.c.tr(["land-fail", b, "--evidence", this.why], LOOP);
         if (r.code !== 0) log(`tracker: couldn't record that ${b}'s check before landing failed (${r.out.trim() || r.err.trim()}); it's tried again at the next look`);
         else this.sentBack(u, b, r.out, "the check before landing failed three times in a row, so it waits for the overseer (`just show <unit>` has the last failure)");
+      }
+      else if (rc === 6) {
+        // Its review gave no verdict REVIEW_TRIES times: as for a review's fixes the second time, its
+        // branch goes up and its unit is stuck, for the overseer, never landed unreviewed.
+        this.saveBranch(u, b, t, "its review gave no verdict");
+        const r = this.c.tr(["review-none", b, "--why", this.why], LOOP);
+        if (r.code !== 0) log(`tracker: couldn't record that ${b}'s review gave no verdict (${r.out.trim() || r.err.trim()}); it's reviewed again later`);
+        else {
+          // (A reopen starts its tries afresh.)
+          setReviewUnrun(this.reviewKey, null);
+          this.sentBack(u, b, r.out, `the loop's review gave no verdict ${REVIEW_TRIES} times, so it waits for the overseer (\`just show <unit>\` says why)`);
+        }
       }
       else {
         log(`git: ${b} waits: ${this.why}`);

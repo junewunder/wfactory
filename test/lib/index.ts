@@ -435,8 +435,8 @@ echo '{"type":"result","is_error":false,"result":"did '"$id"'","num_turns":1,"to
 // the real claude. Each review is numbered ($FACTORY_LOCKS/reviews counts them) and leaves what it
 // was given: review.<n>.args, .prompt (its stdin), .system (its appended system prompt), .env
 // (\`env -0\`). Its verdict is the first line of $FACTORY_LOCKS/review-verdicts, taken off (a JSON
-// object, other text for a result that won't parse, "exit <n>" to fail, or "sleep <s>" to give
-// none that long), else a pass.
+// object, other text for a result that won't parse, "exit <n>" to fail, "sleep <s>" to give
+// none that long, or "limit" for a usage limit's error), else a pass.
 export const FAKE_REVIEWER = `#!/usr/bin/env bash
 n=$(( $(cat "$FACTORY_LOCKS/reviews" 2>/dev/null || echo 0) + 1 )); echo $n > "$FACTORY_LOCKS/reviews"
 printf '%s\\n' "$*" > "$FACTORY_LOCKS/review.$n.args"
@@ -447,7 +447,7 @@ v='{"verdict":"pass","findings":[]}'
 q="$FACTORY_LOCKS/review-verdicts"
 if [ -s "$q" ]; then l=$(head -1 "$q"); tail -n +2 "$q" > "$q.t" && mv "$q.t" "$q"; [ -z "$l" ] || v=$l; fi
 echo '{"type":"system","subtype":"init"}'
-case $v in exit\\ *) exit "\${v#exit }" ;; sleep\\ *) exec sleep "\${v#sleep }" ;; "{"*) printf '{"type":"result","is_error":false,"result":"reviewed","structured_output":%s}\\n' "$v" ;; *) printf '{"type":"result","is_error":false,"result":"%s"}\\n' "$v" ;; esac
+case $v in exit\\ *) exit "\${v#exit }" ;; sleep\\ *) exec sleep "\${v#sleep }" ;; limit) echo '{"type":"result","is_error":true,"result":"You have hit your usage limit"}'; exit 1 ;; "{"*) printf '{"type":"result","is_error":false,"result":"reviewed","structured_output":%s}\\n' "$v" ;; *) printf '{"type":"result","is_error":false,"result":"%s"}\\n' "$v" ;; esac
 `;
 
 // A factory made by init.sh on a local bare origin (a stand-in for GitHub), with lanes that are

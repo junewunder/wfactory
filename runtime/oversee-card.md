@@ -54,7 +54,7 @@ its check says what to do.
 | a question or gate | post it, with options and default (`just show q/<slug>`) |
 | `stuck` | what only they can fix; else `just reopen` with a note |
 | `main-broken`, a lane stopped with "main is red" | main's check fails, the lane's fix unit too: tell them now, `just fleet pause` every machine, fix main (or start a thread), check it passes, `just fleet start` (guide step 4) |
-| `review-skipped` | one line; several in a row: the reviewer can't run (`review_model`, the CLI) |
+| `review-unrun` | one line; several in a row, or a unit stuck for it: the reviewer can't run (`review_model`, the CLI) |
 | `oom`, `memory-low` | which machine, what was killed or how little is left, what was running; the cap or the load is their call |
 | `oom-kill` | read the snapshot first (the guide's "Out-of-memory kills") |
 | `landing-waits` | `just heavy` there: end what's idle and ours, else one line |

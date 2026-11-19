@@ -101,6 +101,7 @@ Setting up:
   merged <id>… | --branch B             loop.sh: the unit's branch is on main now
   review-fix <branch> --findings "…"    loop.sh: its review asked for fixes; back to ready (stuck the 2nd time)
   land-fail <branch> --evidence "…"    loop.sh: its check before landing failed; back to ready (stuck the 3rd time)
+  review-none <branch> --why "…"       loop.sh: its review gave no verdict 3 times; stuck, for the overseer
   unclaim <id> [--unstarted]            give back this session's claim (its work kept, if it did any)
   lanes-stopped [--failed "…"]          loop.sh: this machine's last lane stopped and tidied up
   lanes [off --for "…" | on]            hold the lanes off while work is done by hand (just fleet off | on)
@@ -459,6 +460,11 @@ loop.sh, when its review of a finished branch asks for fixes before it lands: th
 merge on it go back to ready with the findings on their card (and a note saying so), and the next
 claim carries the branch on. The second time for a unit, it's stuck for the overseer instead;
 \`reopen\` gives it two more rounds. A merge unit on the branch is done with it.`,
+  "review-none": `review-none <branch> --why "…"
+loop.sh, when its review of a finished branch has given no verdict three times for the same change
+(the loop waits half an hour between tries, and a usage limit isn't a try): the units waiting to
+merge on it are stuck for the overseer, their branch kept on origin, the last try's why in theirs.
+\`reopen\` sends one back to the loop. A merge unit on the branch is done with it.`,
   landing: `landing [claim <branch>]
 The loop, landing finished branches: any lane on the machine a unit was worked on (its outputs in
 work/ are there) may land it once it's waiting to merge, one lane at a time. The lane that worked it

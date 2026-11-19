@@ -9,9 +9,12 @@
 // both: it now weighs the evidence against the card's check. And a grab change landed that changed
 // five fighters' builds and rebuilt none, which broke their CI overnight: the review now hears which
 // other groups' builds the branch changes (the ci.affected hook over the branch), as one line each.
-// A review that can't give a verdict (the CLI fails, a usage limit, a verdict that won't parse, too
-// long, killed over its memory cap) doesn't hold the branch: it lands unreviewed, and the overseer
-// hears why. One stopped by a pause or the stop time waits for the next look instead.
+// A review that can't give a verdict (the CLI fails, a verdict that won't parse, too long, killed
+// over its memory cap) doesn't let the branch land unreviewed: it waits, pushed, and is reviewed
+// again half an hour later, the overseer hearing why each time; the third with no verdict for the
+// same change leaves its unit stuck for the overseer (landing.ts, REVIEW_TRIES), as a check before
+// landing that keeps failing does. One stopped by a pause, the stop time or a usage limit waits for
+// the next look instead, and isn't a try.
 import fs from "node:fs";
 import path from "node:path";
 import { limitHit, linkedDirs, log, runSession } from "./session.ts";
@@ -26,7 +29,8 @@ import type { Loop } from "./loop.ts";
 // affected: the ci.affected hook's lines for the branch ("<group>\t<why>"), the unit's own group
 // left out; "" when there are none or the project has no hook.
 export interface ReviewInput { unit: string; title: string; card: string; diff: string; standards: string; affected?: string }
-// none: no verdict (why says why), and the branch lands; wait: stopped, and it's tried again later.
+// none: no verdict (why says why), a try: the branch waits, and is reviewed again after a while;
+// wait: stopped (a pause, the stop time, a usage limit), not a try: it's reviewed again at the next look.
 export type Verdict = { verdict: "pass" } | { verdict: "fix"; findings: string } | { verdict: "none" | "wait"; why: string };
 
 export const SCHEMA = {
@@ -118,11 +122,12 @@ export async function runReview(l: Loop, r: ReviewInput): Promise<Verdict> {
   if (v) return v;
   if (await sessionOom(l, scope, f.err)) {
     const big = oomSnapshot(f.out, f.err, o.mem, s.end);
-    log(`the review of ${r.title} was OOM-killed inside its ${o.mem} scope; the branch lands unreviewed`);
-    l.event("oom-kill", `the review of ${r.title} was killed: out of memory at ${o.mem}; biggest: ${big}. The branch lands unreviewed`, r.unit);
+    log(`the review of ${r.title} was OOM-killed inside its ${o.mem} scope; the branch waits, and is reviewed again later`);
+    l.event("oom-kill", `the review of ${r.title} was killed: out of memory at ${o.mem}; biggest: ${big}. The branch waits, and is reviewed again later`, r.unit);
     return { verdict: "none", why: `its review was killed: out of memory at ${o.mem} (biggest: ${big})` };
   }
-  if (limitHit(f.out, f.err)) return { verdict: "none", why: "the reviewer hit a usage limit" };
+  // (The lanes pause on a usage limit anyway: not a try.)
+  if (limitHit(f.out, f.err)) return { verdict: "wait", why: "the reviewer hit a usage limit" };
   if (s.stopped === 4) return { verdict: "none", why: `its review ran over ${mins(limit)}` };
   if (s.stopped === 5) return { verdict: "none", why: "its review went silent" };
   if (s.rc !== 0 && s.stopped === 0) return { verdict: "none", why: `the review session failed (exit ${s.rc}; ${f.err})` };

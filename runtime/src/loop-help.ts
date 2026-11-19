@@ -59,11 +59,14 @@ words in files and on stdin, never on its command line. Its verdict is JSON:
 its branch, pushed, with the findings on its card (\`tracker review-fix\`), so
 the next claim carries it on. A second "fix" makes it stuck, for the
 overseer (a \`stuck\` event). A branch that changes nothing outside tracker/
-isn't reviewed. A review that gives no verdict (the CLI fails, a usage limit,
-a verdict that won't parse, over FACTORY_REVIEW_TIMEOUT seconds, default
-1800) doesn't hold the branch: it lands, with a note on the unit and a
-\`review-skipped\` event. One stopped by a pause or the stop time waits for
-the next look. The reviewer's model is tracker/project.json "review_model",
+isn't reviewed. A review that gives no verdict (the CLI fails, a verdict
+that won't parse, over FACTORY_REVIEW_TIMEOUT seconds, default 1800) never
+lets the branch land unreviewed: it waits, pushed, and is reviewed again
+FACTORY_REVIEW_RETRY seconds later (default 1800), the overseer hearing each
+time (a \`review-unrun\` event); the third with no verdict for the same change
+makes the unit stuck, for the overseer (\`tracker review-none\`, a \`stuck\`
+event). One stopped by a pause, the stop time or a usage limit waits for the
+next look, and isn't counted. The reviewer's model is tracker/project.json "review_model",
 else the lane's (--model). Its prompt and transcript are in runs/review/.
 FACTORY_REVIEWER runs another command in place of the agent CLI for it (the
 tests' fake reviewer).

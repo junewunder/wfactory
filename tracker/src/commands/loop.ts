@@ -157,6 +157,32 @@ C["review-fix"] = (a) => {
     return 0;
   });
 };
+// The loop's review of a finished branch gave no verdict three times for the same change (the
+// loop counts, and waits between tries): the units waiting to merge on it are blocked for the
+// overseer, their branch kept on origin, rather than landing unreviewed or trying for ever. A merge
+// unit among them is done with the branch, as with review-fix.
+const REVIEW_TRIES = 3;
+C["review-none"] = (a) => {
+  const o = parseArgs(a), b = o._[0];
+  const why = (str(o.why) ?? "").replace(/\s+/g, " ").trim();
+  if (!b || !why) die('review-none <branch> --why "…"');
+  return mutate((T) => {
+    const us = waiting(T, b);
+    if (!us.length) die(`nothing waits to merge on ${b}`);
+    const merge = (u: Unit) => T.groupOf.get(u.id)?.id === "merge";
+    const back = us.some((u) => !merge(u)) ? us.filter((u) => !merge(u)) : us;
+    for (const u of us.filter((x) => !back.includes(x))) { delete u.record!.branch; delete u.record!.pushed; delete u.record!.landing; touch(T, u); }
+    const text = fixIds(T, "the why", why);
+    const cut = text.length > 300 ? text.slice(0, 299) + "…" : text;
+    for (const u of back) {
+      u.record = { state: "blocked", why: `the loop's review gave no verdict ${REVIEW_TRIES} times, so it waits for the overseer: ${cut}`, by: ctx.TAG, at: now() };
+      log(T, "block", u.id, `${u.title}: stuck: the loop's review gave no verdict ${REVIEW_TRIES} times`);
+      console.log(`${name(u)} → stuck (the loop's review gave no verdict ${REVIEW_TRIES} times)`);
+      touch(T, u);
+    }
+    return 0;
+  });
+};
 // The project's check before a finished branch lands (project.json ci.land) failed: it found what
 // git doesn't make (a hand fix in work/, output from code nobody committed). As with review-fix, the
 // units waiting to merge on the branch go back to ready on it (pushed), with the check's last line

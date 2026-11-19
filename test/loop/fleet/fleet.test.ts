@@ -138,13 +138,13 @@ describe("fleet wait: what wakes it", () => {
   });
   // The bad news first (#78): an owner reads the top of the report.
   test("  the problems first, whichever tier they're in, then the rest", () => {
-    ev("review-skipped", "Unit q (g/q) landed without the loop's review: its review ran over 30 minutes");
+    ev("review-unrun", "Unit q (g/q): the loop's review gave no verdict on its branch (its review ran over 30 minutes), so it isn't landed");
     const o = out(["summary"]);
     const at = (x: string) => { const i = o.indexOf(x); assert.ok(i >= 0, `no ${x} in:\n${o}`); return i; };
-    assert.ok(at("What went wrong:") < at("review-skipped (1):"));
-    assert.ok(at("review-skipped (1):") < at("The rest:"));
+    assert.ok(at("What went wrong:") < at("review-unrun (1):"));
+    assert.ok(at("review-unrun (1):") < at("The rest:"));
     assert.ok(at("The rest:") < at("store-aside (1):"));
-    has(o, "landed without the loop's review: its review ran over 30 minutes");
+    has(o, "the loop's review gave no verdict on its branch (its review ran over 30 minutes), so it isn't landed");
   });
   // The store deleting a set-aside copy that held only older copies is routine: it goes with the
   // rest, not under what went wrong.

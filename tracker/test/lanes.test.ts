@@ -372,6 +372,43 @@ describe("review-fix: the loop's review asks for fixes; back to ready on the bra
   });
 });
 
+describe("review-none: the loop's review gave no verdict three times; stuck, for the overseer", () => {
+  const B = { FACTORY_BRANCHES: "1", FACTORY_TAG: "rntag" };
+  test("a unit done on a branch whose review gave no verdict three times: stuck", () => {
+    setup(["add-group", "rn", "--title", "No verdicts"]);
+    setup(["add-unit", "rn/one", "--title", "Unreviewable unit"]);
+    ok(["claim", "rn/one"], B);
+    ok(["done", "rn/one", "--evidence", "on the branch"], B);
+    has(ok(["review-none", "unit/rn/one", "--why", "its review ran over 30 minutes"], { FACTORY_ACTOR: "loop" }), "Unreviewable unit (rn/one) → stuck (the loop's review gave no verdict 3 times)");
+    assert.equal(ok(["state", "rn/one"]), "stuck\n");
+  });
+  test("  its card says why, in plain words, with the last try's why", () => {
+    has(ok(["show", "rn/one"]), "the loop's review gave no verdict 3 times, so it waits for the overseer: its review ran over 30 minutes");
+  });
+  test("  not waiting to merge any more", () => {
+    assert.notEqual(t(["review-none", "unit/rn/one", "--why", "x"]).code, 0);
+  });
+  test("  reopened by the overseer: ready, on its branch", () => {
+    ok(["reopen", "rn/one"]);
+    assert.equal(ok(["state", "rn/one"]), "ready\n");
+  });
+  test("a merge unit's branch: the unit whose work it is is stuck, and the merge unit is done with it", () => {
+    setup(["add-unit", "rn/two", "--title", "Unreviewable unit two"]);
+    ok(["claim", "rn/two"], B);
+    ok(["done", "rn/two", "--evidence", "on the branch"], B);
+    t(["add-group", "merge", "--title", "Merges"]);   // (an earlier test may have made it)
+    setup(["add-unit", "merge/rn", "--title", "Merge main on a lane", "--branch", "unit/rn/two"]);
+    ok(["claim", "merge/rn"], B);
+    ok(["done", "merge/rn", "--evidence", "merged"], B);
+    ok(["review-none", "unit/rn/two", "--why", "the review session failed (exit 1)"]);
+    assert.equal(ok(["state", "rn/two"]), "stuck\n");
+    assert.equal(ok(["state", "merge/rn"]), "done\n");
+  });
+  test("no --why: refused", () => {
+    assert.equal(t(["review-none", "unit/rn/two"]).code, 2);
+  });
+});
+
 // A sweep's or a sprint's worker: a session outside the loop, on a branch its foreman merges.
 // (Without the branch on its claim, its unit read as done from the moment it was recorded, with
 // its PR still open, and what needed it was offered.)

@@ -578,11 +578,17 @@ of context, which makes review the cheap place for a project's standards
   card, and the next claim carries the branch on. A second fix makes it
   stuck: two rounds the reviewer and the lanes can't settle are the
   overseer's, not a loop.
-- **No verdict lands.** A reviewer that can't run (a wrong model, the CLI
-  failing, a usage limit, a verdict that won't parse) would otherwise hold
-  every branch all night, the stall the audit found landing could cause.
-  The check, the hard gate, has passed; the unit gets a note and the
-  overseer a `review-skipped` event.
+- **No verdict waits, and three go to the overseer.** A reviewer that can't
+  give a verdict (the CLI failing, a review that runs too long, a verdict
+  that won't parse) leaves the branch waiting, pushed, and the lane goes
+  on with other units; the branch is reviewed again half an hour later, as
+  a landing check with no verdict is checked again, and the overseer hears
+  each time (`review-unrun`). The third with no verdict for the same change
+  makes the unit stuck, for the overseer: a reviewer that can't run at all
+  holds branches back instead of letting them land unreviewed, and the
+  overseer hears it within the hour. A usage limit isn't a try: the lanes
+  pause for it anyway. (It first landed such branches, with a note, so a
+  broken reviewer couldn't hold every branch all night; it never had to.)
 - **Not a turn in the memory budget.** The lane runs the review in place
   of a session, never beside one, and sessions take no turn either; a
   turn would reserve 4G for a process a fraction of that (#116).

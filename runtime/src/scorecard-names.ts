@@ -64,7 +64,7 @@ export const NAMES: [string, string][] = [
   ["review.sent_back.count", "times the review here sent a branch back for fixes"],
   ["review.sent_back.rate", "those as a share of the branches reviewed"],
   ["review.sent_back_twice.count", "times it sent one back a second time (the unit is then stuck)"],
-  ["review.unreviewed.count", "branches landed without the review (this machine's review-skipped events)"],
+  ["review.unreviewed.count", "branches landed without the review (this machine's review-skipped events, from before a review with no verdict made the branch wait)"],
   ["wait.usage.minutes", "lane time paused for usage (usage-pause until usage-resume or the lane's stop)"],
   ["wait.usage.share", "its share of lane time"],
   ["wait.nothing_workable.minutes", "lane time between two iterations with nothing workable (the gaps holding an idle event)"],

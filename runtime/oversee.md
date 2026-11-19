@@ -168,12 +168,15 @@ lands; say so, and that `just tracker merged --branch <branch>` clears it.
   follow "Main is red" in step 4. A `check-unrun` event (a landing check
   out of time, killed, or without memory: the lane goes on) needs you only
   if it repeats: give back what holds the memory, or tell the owner;
-- a `review-skipped` event: a branch landed without the loop's review (the
-  event says why). Several in a row mean the reviewer can't run at all (its
-  model, `review_model` in `tracker/project.json`, or the CLI): fix that, or
-  tell the owner. A `stuck` event for a unit whose review asked for fixes
-  twice: read the findings (`just show <id>`); `just reopen` it with a note
-  if the next session can settle them, which gives it two more rounds;
+- a `review-unrun` event: the loop's review gave no verdict on a finished
+  branch (the event says why), so the branch waits and is reviewed again
+  half an hour later. Several in a row, or a `stuck` event for a unit whose
+  review gave no verdict three times, mean the reviewer can't run at all
+  (its model, `review_model` in `tracker/project.json`, or the CLI): fix
+  that, or tell the owner, then `just reopen` the stuck units. A `stuck`
+  event for a unit whose review asked for fixes twice: read the findings
+  (`just show <id>`); `just reopen` it with a note if the next session can
+  settle them, which gives it two more rounds;
 - a lane still down after 3 restarts for the same cause;
 - a machine, or all of them, idle 30 minutes or more (an `idle` event, or
   every lane on it waiting);
