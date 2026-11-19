@@ -290,6 +290,9 @@ export async function workUnit(l: Loop, u: Claimed): Promise<"next" | "stop"> {
   if (left) log(left);
   const after = progress(c.tdir, tag, unit, head0);   // before the loop's own tracker commit below
   if (c.branches) l.land.presave(unit, branch, `${title} (${unit})`);
+  // The commit the session's outputs were built from, read now: landing it below may merge main
+  // into the branch before a review or check sends it back, and that merge built nothing in work/.
+  const built = c.branches ? (git("rev-parse", "HEAD") ?? "") : "";
 
   // Its probe waits for memory in the machine's budget (heavy.ts). A busy lock is waited out, or the
   // unit would stay claimed by a session that's gone (#109).
@@ -308,7 +311,7 @@ export async function workUnit(l: Loop, u: Claimed): Promise<"next" | "stop"> {
   // back that failed earlier is tried again.
   if (dg) {
     const commit = git("rev-parse", "--short", `origin/${c.main}`) ?? git("rev-parse", "--short", "HEAD") ?? "";
-    if ((await l.stoppable(["factory/store.sh", "end", dg, unit, commit, ...(branch ? [branch] : [])])) !== 0) log(`couldn't copy ${dg}'s data back; it stays marked as unsent, so nothing deletes it, and it's tried again at each look`);
+    if ((await l.stoppable(["factory/store.sh", "end", dg, unit, commit, ...(built ? [built] : [])])) !== 0) log(`couldn't copy ${dg}'s data back; it stays marked as unsent, so nothing deletes it, and it's tried again at each look`);
   }
   let marks: string[] = []; try { marks = fs.readdirSync("work/.store/groups"); } catch {}
   if (dg || marks.some((n) => n.endsWith(".unsent") || n.includes(".unmerged."))) l.releaseIdle();

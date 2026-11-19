@@ -117,8 +117,8 @@ Usage:
                                    then mark it as worked on by that session, as \`dirty\`): with --new (the claim
                                    took a new lease) make room and copy down unless current; then
                                    the unit's inputs. Exit 1: no room; other non-zero: failed.
-  factory/store.sh end <group> <unit> [<commit> [<branch>]]  the unit's session ended (on <branch>, whose
-                                   head its outputs were built from): copy back if its work is on
+  factory/store.sh end <group> <unit> [<commit> [<built>]]  the unit's session ended (its outputs built
+                                   from commit <built>, read before landing): copy back if its work is on
                                    main (or there are no branches), hold its outputs if its branch waits
                                    to land, put the store's copy back if it's unfinished. Exit 2: a copy
                                    back failed (it's tried again at each look)

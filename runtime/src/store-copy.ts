@@ -147,12 +147,14 @@ export function copyDown(g: string, units: string[] = [], prov = new Map<string,
 // A unit's session and the commit its branch is on (its outputs were built from it), as the
 // tracker and this clone know them; "" each when they can't say. Asked as its session ends, in the
 // lane it ran in (end), and kept in its mark: a put-back later, from another lane or process, can't
-// tell from that clone's branch, which may be an older attempt's. branch: the one its session worked
-// on, as the loop gives it; the tracker's record of it is the fallback, since a review that asked for
-// fixes has cleared that record by the time end runs.
-function provenance(u: string, branch = ""): [string, string] {
+// tell from that clone's branch, which may be an older attempt's. built: the commit the loop read
+// as the session ended, before landing it could merge main into the branch (a review or check that
+// sends it back leaves that merge as the branch's head, and the outputs weren't built from it);
+// without it, the head of the branch the tracker records, which a bounced review has cleared.
+function provenance(u: string, built = ""): [string, string] {
   const by = out(tr(["state", u, "--by"], "ignore").stdout);
-  const b = branch || out(tr(["state", u, "--branch"], "ignore").stdout);
+  if (built) return [by, built];
+  const b = out(tr(["state", u, "--branch"], "ignore").stdout);
   const head = (ref: string) => { const r = run("git", ["rev-parse", "-q", "--verify", `${ref}^{commit}`], { err: "ignore" }); return code(r) === 0 ? out(r.stdout) : ""; };
   return [by, b ? head(`refs/heads/${b}`) || head(`refs/remotes/origin/${b}`) : ""];
 }
@@ -396,9 +398,9 @@ export function tend(g: string, force = false, stopped = false): boolean {
 }
 
 // A unit's session ended: its mark goes, and its outputs are settled by its state (tend).
-export function end(g: string, u: string, c: string, branch = ""): number {
+export function end(g: string, u: string, c: string, built = ""): number {
   glock(g);
   rm(gf(g, `dirty.${here.lid}`));
-  if (here.branches) unmerged(g, u, c, ...provenance(u, branch)); else due(g, u, c);
+  if (here.branches) unmerged(g, u, c, ...provenance(u, built)); else due(g, u, c);
   return tend(g, true) ? 2 : 0;
 }

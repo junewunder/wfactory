@@ -4,7 +4,7 @@
 // clone hasn't got is fetched from origin first, and one nobody has is refused. And the commit a
 // set records is the head of the branch the loop says its session worked on, even when the tracker
 // no longer records that branch (a review that asked for fixes clears it before the session's end
-// is settled). Driven by store.sh in lane a. Run: node --test test/store/
+// is settled), and it's the commit the loop read before landing could merge main into the branch. Driven by store.sh in lane a. Run: node --test test/store/
 // Setup goes before a test's checks, so a failing check can't skip it.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -45,13 +45,14 @@ git("pull", "-q", "--ff-only", "origin", "main");
 // A unit's session ends unfinished on its branch, here at HEAD (tracked: the claim records the
 // branch, as the loop's does; given: end is told it): its outputs are set aside.
 let leased = false;
-function endUnfinished(u: string, { tracked = true, given = "" } = {}) {
+function endUnfinished(u: string, { tracked = true, given = "", after = () => {} } = {}) {
   add(u, "--reads", "none");
   if (!leased) { a.setup(["lease", "take", G]); ok(["take", G]); leased = true; }
   a.setup(["claim", u], tracked ? { FACTORY_BRANCHES: "1", FACTORY_TAG: `s-${u}` } : { FACTORY_TAG: `s-${u}` });
   git("branch", "-f", `unit/${u}`, "HEAD");
   ok(["dirty", G, u, String(process.pid)]);
   fs.appendFileSync(a.at(`work/out/${G}/log.txt`), `${u} on a\n`);
+  after();
   ok(["end", G, u, "c", ...(given ? [given] : [])]);
   assert.ok(setOf(u), `no set for ${u}`);
 }
@@ -134,11 +135,20 @@ describe("a commit this clone hasn't got", () => {
 });
 
 describe("the commit a set records", () => {
-  test("the tracker records no branch for the unit: the branch end is given says it", () => {
-    endUnfinished(`${G}/u5`, { tracked: false, given: `unit/${G}/u5` });
-    assert.equal(chomp(a.run("factory/tracker", ["state", `${G}/u5`, "--branch"]).stdout), "");
-    assert.equal(fromOf(`${G}/u5`), git("rev-parse", "HEAD"));
+  test("the commit end is given (the loop's, read before landing), not the branch's head now", () => {
+    // Landing merged main into the branch before a review sent it back: the head is that merge,
+    // which built nothing in work/.
+    const built = git("rev-parse", "HEAD");
+    endUnfinished(`${G}/u5`, { given: built, after: () => { git("checkout", "-q", `unit/${G}/u5`); moveOn(); git("checkout", "-q", "main"); } });
+    assert.notEqual(git("rev-parse", `unit/${G}/u5`), built);
+    assert.equal(fromOf(`${G}/u5`), built);
     settle(`${G}/u5`);
+  });
+  test("  none given, and the tracker records no branch for the unit: no commit", () => {
+    endUnfinished(`${G}/u7`, { tracked: false });
+    assert.equal(chomp(a.run("factory/tracker", ["state", `${G}/u7`, "--branch"]).stdout), "");
+    assert.equal(fromOf(`${G}/u7`), "");
+    settle(`${G}/u7`);
   });
   test("  and with neither, none is recorded, and it's never put back", () => {
     endUnfinished(`${G}/u6`, { tracked: false });
