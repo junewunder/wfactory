@@ -10,7 +10,7 @@ wfactory installs as a Claude Code skill, and setting up a factory is a
 conversation with it. It works with you to find the check, split the work
 into units and try the first few by hand. Everything underneath is already
 built: the tracker, which records every unit and its state; the loop that
-runs the sessions; review before merge; and memory limits. That part is an
+runs the sessions; review before merge; and memory caps. That part is an
 ordinary TypeScript program with no model in it.
 
 Once a factory is set up, a run goes like this. Tell Claude Code
@@ -22,8 +22,8 @@ runs one session at a time) and reports to you.
    branch, under a memory cap.
 3. The tracker runs the unit's check. The check passing is what makes the
    unit done; the session saying so isn't.
-4. A fresh read-only session reviews the branch, and the loop merges it
-   into main.
+4. A fresh read-only session reviews the branch and can send it back
+   with findings. Once the review passes, the loop merges it into main.
 5. When a session reaches a decision that needs your opinion, it files a question
    with options and a default, and the lane moves on to other work.
 
@@ -72,10 +72,10 @@ on an agent following its prompt:
 - Each session has a memory cap.
 
 [docs/protections.md](docs/protections.md) goes into more depth: how each
-one works and what it doesn't cover. More than 3,000 tests run real lanes against a fake
-`claude`.
+one works and what it doesn't cover. More than 3,000 tests run real lanes against a stand-in
+`claude`: a script that commits a change and records its unit done.
 
-It isn't a sandbox. Sessions run as you, with your network and credentials,
+wfactory isn't a sandbox. Sessions run as you, with your network and credentials,
 so use it only where you'd let an agent loose. `just fleet stop` stops
 every lane now.
 
@@ -84,8 +84,9 @@ every lane now.
 It's for one person with a personal project, one Claude Max plan and a few
 machines, who wants to find out what running a code factory is like without
 building one first. The tracker, the loop, the review and the merging are
-already there, and so are my defaults for how to run one. Start from my
-judgment and change what you disagree with.
+already there, and so is my judgment on how to run one: the skill answers
+most of a factory's design questions itself, from what a unit is to how
+often to commit, and tells you what it chose. Change what you disagree with.
 
 With unlimited tokens, Claude can do a lot of this on its own. wfactory is
 built for when you have one plan: a lane runs one session at a time, and
