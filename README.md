@@ -11,7 +11,7 @@ conversation with it. It works with you to find the check, split the work
 into units and try the first few by hand. Everything underneath is already
 built: the tracker, which records every unit and its state; the loop that
 runs the sessions; review before merge; and memory caps. That part is an
-ordinary TypeScript program with no model in it.
+ordinary TypeScript program; a model runs only in the sessions it starts.
 
 Once a factory is set up, a run goes like this. Tell Claude Code
 **"oversee"**, and a Claude session, the overseer, starts the lanes (a lane
