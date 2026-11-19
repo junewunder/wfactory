@@ -58,21 +58,30 @@ remote. Start with one machine and one lane; more are opt-in
 
 ## What it enforces
 
-wfactory's code enforces all of these, with tests, so none of them depends
-on an agent following its prompt:
+wfactory's code holds each of these, with tests, rather than a prompt
+asking an agent to. They're aimed at mistakes: sessions run as you, and one
+that set out to cheat could get around them.
 
-- A unit of work being "done" is decided by its check and a reviewing
-  session, never by the session that did the work.
-- When code that several units share changes, their checks rerun, so a
-  finished unit that broke shows up.
+- A session can't mark a unit with a check done. The tracker runs the check
+  itself and records the result. A unit no command can check is signed off
+  by a different session, or recorded with the session's evidence, which
+  the review then reads.
+- A fresh session reviews each branch before it lands and can send it back
+  with findings. A review that times out or gives no verdict never lets the
+  branch through: it waits and is reviewed again.
+- When code that several units share changes, the checks that read it
+  rerun, so a finished unit that broke shows up. The tracker knows only the
+  input files each check was told about.
 - A session's edits to the tracker or the loop are dropped at merge, so it
   can't change its own record.
 - Nothing merges while main fails its own check.
 - Two lanes never claim the same unit, even across separate machines.
 - Each session has a memory cap.
 
-[docs/protections.md](docs/protections.md) goes into more depth: how each
-one works and what it doesn't cover.
+Some rules are only in the prompt. Changing a test or a golden file to go
+green is a question for you, and the review looks for it, but nothing in
+the code stops the edit. [docs/protections.md](docs/protections.md) lists
+every protection, how it works and where it stops.
 
 wfactory isn't a sandbox. Sessions run as you, with your network and credentials,
 so use it only where you'd let an agent loose.
@@ -105,6 +114,26 @@ unit from a bad one without looking yourself (the check). A corpus to
 convert, a library to port, a test suite to make pass one case at a time.
 For a handful of one-off tasks, or work nothing can check, the skill says
 so and won't build a factory that would produce confident junk.
+
+## How it compares
+
+- [Ralph](https://ghuntley.com/ralph/) runs a fresh agent session in a loop
+  until a task list is done ([one version](https://github.com/snarktank/ralph)).
+  The agent runs the checks and marks each task as passing itself. wfactory
+  runs the same kind of loop, but the tracker runs the check and records
+  the result, and the session's word doesn't count.
+- [Gas Town](https://github.com/steveyegge/gastown) coordinates 20 to 30
+  agents on mixed work, with a coordinating agent, monitors for stuck
+  agents, a merge queue that runs verification gates, and a container to
+  run in. wfactory is narrower: one kind of work on one plan, and a check
+  per unit that reruns when the code it reads changes.
+- [Superpowers](https://github.com/obra/superpowers) is a set of skills
+  that gives your agent a way of working: a spec, a plan, tests first, and
+  subagents that do and review each task. Its rules live in the skills'
+  prompts. wfactory is for unattended runs, and its main rules are in code.
+
+Most of wfactory's setup goes to what these leave to you: finding a check
+you trust, and deciding whether the work suits a factory at all.
 
 ## What setting one up looks like
 
