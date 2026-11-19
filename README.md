@@ -97,11 +97,35 @@ convert, a library to port, a test suite to make pass one case at a time.
 For a handful of one-off tasks, or work nothing can check, the skill says
 so and won't build a factory that would produce confident junk.
 
-Lanes don't start on day one. The skill first works with you on the check
-and a few trial units, then pilots two or three with you watching, then
-runs more of them unattended a step at a time. After that it's gardening: a few days of running,
-then a few days of looking at what came out, weeding, and fixing the check
-or the factory's spec, the rules its agents work from.
+## What setting one up looks like
+
+Lanes don't start on day one. Here is how [gbaa](https://github.com/junewunder/gbaa)'s
+setup would go today (it began on an earlier version of the skill).
+
+1. You say "start a factory for a recompiler from GBA games to Rust". The
+   skill lays down the factory and sends you one message with a proposed
+   default for each thing it needs to know: the goal as two lines (how far
+   it could go: every GBA game; where you'd be satisfied: Pokémon Emerald
+   playing natively on a Steam Deck), what to check against (mGBA) and which
+   differences from it count as bugs, and what the work may download or
+   touch (your ROMs, read only). You correct what's wrong.
+2. The opening: one-off work, filed as the project's GitHub issues and
+   worked by agents in their own threads while one session oversees. A
+   search for prior work. A probe that one game can be reached at all,
+   with the result that would mean "stop" written down before it runs; you
+   say go or stop. Then the check (does a recompiled frame match mGBA's?),
+   a way for you to look at the output yourself, and two
+   or three trial units, timed. gbaa's took 8 to 24 minutes, which set the
+   unit's size.
+3. The skill settles the rest of the design itself and sends one message
+   saying how the factory is set up, asking only what has no safe default.
+   Lanes can't start until you say the opening is over.
+4. The first two or three units run with you watching, which is where the
+   factory's spec, the rules its agents work from, gets fixed. Then the lanes widen a step at a time, and each step
+   ends with you reading its results side by side before the next starts.
+
+After that it's gardening: a few days of running, then a few days of
+looking at what came out, weeding, and fixing the check or the spec.
 
 ## Read next
 
