@@ -66,8 +66,8 @@ that set out to cheat could get around them.
 - A session can't mark a unit with a check done. The tracker runs the check
   itself and records the result. A unit no command can check is signed off
   by a different session, or recorded with the session's evidence, which
-  the review then reads. ([probes.test.ts](tracker/test/probes.test.ts)),
-  ([units.test.ts](tracker/test/units.test.ts))
+  the review then reads. ([probes.test.ts](tracker/test/probes.test.ts),
+  [units.test.ts](tracker/test/units.test.ts))
 - A fresh session reviews each branch before it lands and can send it back
   with findings. A review that times out or gives no verdict never lets the
   branch through: it waits and is reviewed again.
