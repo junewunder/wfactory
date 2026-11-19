@@ -75,8 +75,17 @@ on an agent following its prompt:
 one works and what it doesn't cover.
 
 wfactory isn't a sandbox. Sessions run as you, with your network and credentials,
-so use it only where you'd let an agent loose. `just fleet stop` stops
-every lane now.
+so use it only where you'd let an agent loose.
+
+## When something goes wrong
+
+Ask the overseer what happened; it reads the run records and transcripts
+for you. To look yourself, `just runs` lists the last sessions (unit,
+result, turns, cost, minutes) and where their transcripts are, `just
+status` shows what's done, what's next and what's waiting on you, and
+`just scorecard` says where a run's sessions and time went. `just fleet
+pause` stops the lanes after their running units; `just fleet stop` stops
+them now.
 
 ## Who it's for
 
