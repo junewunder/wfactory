@@ -85,22 +85,20 @@ describe("one question, three lanes: the overseer hears it once", () => {
     has((await b.end()).stdout, "woke: time");
   });
   test("the summary counts each question once", () => {
-    const pj = path.join(F, "tracker/project.json"), was = readOr(pj);
     // (A question is a wake-now event, which the summary leaves to what waits on the owner; a
     // project that moves it to the summary sees it there.)
-    fs.writeFileSync(pj, JSON.stringify({ ...JSON.parse(was), events: { summary: ["question"] } }, null, 2) + "\n");
+    setup(["project", "set", "events", JSON.stringify({ summary: ["question"] })]);
     const s = out(["summary"]);
-    fs.writeFileSync(pj, was);
+    setup(["project", "unset", "events"]);
     has(s, "  question (2):\n");
     assert.equal(s.split("(q/raise-bar)").length - 1, 1, s);
   });
   test("  nor one told before the summary's start and logged again since", () => {
     asked(1, "An old question?", "q/old", 120);
     asked(2, "An old question?", "q/old");
-    const pj = path.join(F, "tracker/project.json"), was = readOr(pj);
-    fs.writeFileSync(pj, JSON.stringify({ ...JSON.parse(was), events: { summary: ["question"] } }, null, 2) + "\n");
+    setup(["project", "set", "events", JSON.stringify({ summary: ["question"] })]);
     const s = out(["summary", "--since", "-60 minutes"]);
-    fs.writeFileSync(pj, was);
+    setup(["project", "unset", "events"]);
     hasnt(s, "(q/old)");
   });
   // A replaced overseer's wait ends after the new one has attached: it adds what it told, and

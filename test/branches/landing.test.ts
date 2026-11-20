@@ -48,7 +48,8 @@ describe("a branch's tracker/ edits never reach main, new files included", () =>
     add("sneaky");
     has(a.loop(ONE, { FACTORY_FAKE_TRACKER: "1" }), "unit/g/sneaky merged into main");
   });
-  test("  without its tracker/ edits, even a new file", () => { assert.equal(f.main("tracker/groups/sneaky.json"), ""); });
+  test("  without its tracker/ edits, even a new file", () => { assert.equal(f.onMain("tracker/groups/sneaky.json"), ""); assert.equal(f.onMain("tracker/log.jsonl"), ""); });
+  test("  nor did they reach the tracker's state", () => { assert.equal(f.main("tracker/groups/sneaky.json"), ""); });
   test("  and the overseer hears of it", () => { has(a.events(), "tracker-edits"); });
 });
 

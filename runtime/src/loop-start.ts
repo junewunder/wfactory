@@ -12,6 +12,7 @@ import { lanesOff, openingOpen, tr, trOut, trWait, type TrOut } from "./tr.ts";
 import { Clock, SAME_STOP_S } from "./loop-clock.ts";
 import { cat, exists, isInt, json, read, rm, which } from "./loop-util.ts";
 import type { Restarted } from "./loop-restart.ts";
+import { projectFile } from "./tracker-dir.ts";
 
 // ---------------------------------------------------------------- the options
 
@@ -54,7 +55,7 @@ export function options(args: string[], env: NodeJS.ProcessEnv): Opts | number {
 
 // tracker/project.json's whole-number setting, else its default.
 export function setting(k: string, dflt: number): number {
-  const p = json(read("tracker/project.json"));
+  const p = json(read(projectFile()));
   const v = p?.[k];
   const s = v === undefined || v === null || v === false ? String(dflt) : String(v);
   return isInt(s) ? Number(s) : dflt;
@@ -70,9 +71,9 @@ export const SESSION_TOOLS = ["Bash", "Read", "Edit", "Write", "Grep", "Glob", "
 export interface Config {
   spec: string;         // the loop's spec (docs/factory.md, or the named loop's)
   store: boolean;       // groups' data on a store: claims take leases, and the loop copies
-  branches: boolean;    // an origin: units on branches, the state on origin's main
+  branches: boolean;    // an origin: units on branches, the state on origin's state branch
   main: string;         // the main branch
-  tdir: string;         // the tracker's state: origin's main (.tracker/main) when there's an origin
+  tdir: string;         // the tracker's state: origin's state branch (.tracker/state) when there's an origin
   agent: string;        // the agent CLI
   args: string[];       // its arguments for every session
   scope: string;        // what each session's scope is named after: factory-<checkout>[-<loop>]
@@ -83,9 +84,12 @@ export interface Config {
 // exit code it refuses with. What sessions and the tracker need goes into env as it goes.
 export function configure(o: Opts, env: NodeJS.ProcessEnv, host: string, lane: string, checkout: string): Config | number {
   const say = (r: TrOut) => { process.stdout.write(r.out); process.stderr.write(r.err); };
+  // ---- the state, before anything is read from it: with an origin it's this checkout's clone
+  // of origin's state branch, which a new lane's clone doesn't have yet.
+  { const r = trWait(["dir", "--sync"], log); if (r.code !== 0) { say(r); return 2; } }
   // ---- which loop: its spec
   let spec = "docs/factory.md";
-  const proj = json(read("tracker/project.json"));
+  const proj = json(read(projectFile()));
   const loops = proj?.loops && typeof proj.loops === "object" ? proj.loops as Record<string, unknown> : {};
   if (Object.keys(loops).length > 0) {
     if (!o.loop) { log(`name a loop: ${Object.keys(loops).sort().join(" ")}`); return 2; }
@@ -96,7 +100,7 @@ export function configure(o: Opts, env: NodeJS.ProcessEnv, host: string, lane: s
   env.LOOP = o.loop;
 
   // ---- preflight: no unattended runs until the factory is actually defined
-  if (!exists("tracker/project.json")) { log("no tracker/ here; see the wfactory skill"); return 2; }
+  if (!exists(projectFile())) { log("no tracker/ here; see the wfactory skill"); return 2; }
   // A busy tracker lock (exit 75) is waited out here, never taken for broken data.
   { const why = openingOpen((a) => trWait(a, log)); if (why) { log(why); return 2; } }
   // Nor while the lanes are held off for work done by hand (`just fleet off`).

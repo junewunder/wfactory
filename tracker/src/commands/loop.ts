@@ -3,7 +3,7 @@
 import path from "node:path";
 import { ctx, git } from "../ctx.ts";
 import { applyProbe, probesFirst } from "../probes.ts";
-import { load, loadCache, log, mutate, originLeases, readLog, saveCache, stateDir, touch } from "../store.ts";
+import { load, loadCache, log, mutate, originLeases, readLog, saveCache, stateDir, syncNow, touch } from "../store.ts";
 import { procStart } from "../proc.ts";
 import { NetError, die, list, now, parseArgs, plural, since, str, strs } from "../text.ts";
 import { MAX_NOTE, addNote, checkText, fixIds, groupTitle, name, resolve } from "../names.ts";
@@ -511,7 +511,7 @@ C.lease = (a) => {
     default: return die("lease holder|mine|idle|beat|take|release (`just tracker lease --help`)");
   }
 };
-C.dir = () => { console.log(stateDir()); return 0; };
+C.dir = (a) => { if (a.includes("--sync")) syncNow(); console.log(stateDir()); return 0; };
 // Lanes on one machine share work/, so a unit worked here leaves outputs there that aren't on
 // main yet: in progress, interrupted, or finished with its branch still to land. A check that
 // looks at work/ skips those groups.

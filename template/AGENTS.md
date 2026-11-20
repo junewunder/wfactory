@@ -14,7 +14,9 @@
 - **The owner** is the person in the wfactory profile
   (`~/.config/wfactory/profile.md`, or `$WFACTORY_PROFILE`): their
   name, how to address them, where they read reports, and the usage limits.
-- `tracker/` is the state, changed only through the tracker CLI (`just next`,
+- The tracker is the state (a `tracker/` folder here; with an origin, a
+  branch of origin of its own, in no checkout), changed only through the
+  tracker CLI (`just next`,
   `just done`, `just ask`, …; `just tracker --help`). Never edit its JSON by
   hand and never read it whole: ask `just status`, `just show <id>`,
   `just find <words>` (a unit whose ID you don't know), `just questions`. The owner reads `just view`, not the files.

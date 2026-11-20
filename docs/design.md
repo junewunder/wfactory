@@ -35,6 +35,15 @@ tracker/
 .tracker/             gitignored: the computed cache, the viewer, the state clone
 ```
 
+`project.json` and the templates are written by people and agents, not by a
+command of their own. With an origin they're in no checkout (below), so
+`tracker project` prints the settings and `project set <key> <value>` changes
+one, refusing a change that would leave broken data; `tracker template <name>
+--from <file>` writes a template. A setting is changed by key, never by
+writing the whole file back: the tracker keeps a few values of its own there
+(the hold on the lanes, where CI's `affected` hook has covered to), and a
+whole file read a minute ago would put those back.
+
 **One file per group,** not one per unit and not one in total. With 4,000
 units, one file each would make `git status` and the viewer slow. A single
 file would make every write conflict with every other. A group (one
@@ -46,25 +55,53 @@ Writes take a lock and go through a temporary file plus a rename. The data
 carries a schema version, and the CLI refuses a tracker newer than it
 understands rather than corrupting it.
 
-### The state is origin's main
+### The state is a branch of origin of its own
 
-With an origin, the CLI never reads or writes the checkout's `tracker/`. It
-keeps a blobless, sparse clone of origin's main in `.tracker/main` (only
-`tracker/`), fetches it before each command (at most every 20 seconds), and
-commits and pushes every write at once. If the push is refused because
+With an origin, the state is origin's `tracker-state` branch: it holds
+`tracker/` and nothing else, with a history unrelated to main's. No checkout
+has a `tracker/` folder. The CLI keeps a blobless clone of that branch in
+`.tracker/state`, fetches it before each command (at most every 20 seconds),
+and commits and pushes every write at once. If the push is refused because
 someone else pushed first, the write is thrown away and done again on the
 new state. For a claim that means picking again, so two lanes racing for one
 unit can't both get it, and two lanes racing for different units both do.
 
 This is what lets a unit live on its own branch while its claim, notes,
-questions and done reach every lane within seconds. The branch never carries
-`tracker/` changes (the loop drops any before merging). Without an origin,
-the checkout's `tracker/` is the state.
+questions and done reach every lane within seconds. Neither main nor a unit's
+branch carries `tracker/` (the loop drops one a branch made before merging).
+Without an origin, the checkout's `tracker/` is the state, a folder on main.
 
-The few merges that do meet tracker JSON go through a merge driver
-(`tracker merge-json`): lists of things with an id merge by id, objects
-merge key by key, and the same field changed two ways is a conflict that
-names the field. `merge=union` breaks JSON, so it isn't used.
+**Why not main.** The state was origin's main at first: one branch, one
+clone, and a checkout of any commit showed the tracker as it was then. But
+every write is a commit, and in two factories 62% and 71% of main's commits
+were the tracker's. Main's history stopped being readable as the work, every
+tool that walks it had to skip them ("main's newest commit outside
+`tracker/`"), and a tracker push raced each landing for the same branch. On a
+branch of its own the writes cost main nothing, and what's given up is the
+tracker's past by checking out an old commit: the log (`just log`) and the
+branch's own history have it by time instead. Git and origin stay the one
+thing every lane already reaches, so there's still no server to run, and
+origin still refuses the second of two racing pushes, which is the whole of
+how claims are atomic.
+
+The state's clone also fetches main's commits (not their files): CI records
+which of main's commits it passed on, and asks which commit is in which.
+
+**The move.** A factory starts without an origin, its `tracker/` on main.
+`tracker state-branch` moves it once the factory has one: the state branch
+gets `tracker/` as origin's main has it, and main gets one commit that takes
+the folder out, both in one atomic push, so no write can be in one and
+missing from the other. Until then every other command refuses and says so,
+since the alternative (each checkout quietly writing its own copy) is the
+split state the shared one exists to prevent. Main's old tracker commits stay
+in its history; taking them out would rewrite every commit ID that CI's
+records, the store's stamps and the lanes' clones hold.
+
+Merges of tracker JSON (a factory without an origin whose clones are pulled
+by hand; this machine's unpushed writes replayed on a newer state) go through
+a merge driver (`tracker merge-json`): lists of things with an id merge by
+id, objects merge key by key, and the same field changed two ways is a
+conflict that names the field. `merge=union` breaks JSON, so it isn't used.
 
 ### Status
 

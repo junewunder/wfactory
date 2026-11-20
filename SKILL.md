@@ -109,7 +109,11 @@ queue` shows what each machine takes next and why. `just tracker park <id|select
 waited on or counted as theirs to do, until `unpark`.
 
 **Templates** (`tracker/templates/<name>.json`) make a group's units from
-parameters: `just tracker add lexer --template module`. A template unit
+parameters: `just tracker add lexer --template module`. With an origin the
+state is in no checkout, so a template is written from a file (`just tracker
+template module --from <file>`) and a setting in `project.json` is changed
+with `just tracker project set <key> <value>` (`just tracker project` prints
+them all). A template unit
 with `"each": "work/{name}/api.json#/functions"` makes one unit per item once
 that file exists (`just tracker sync lexer`).
 
@@ -265,7 +269,9 @@ One machine with one lane is the default. When a factory needs more, read
 - **More lanes or more machines.** These need an origin (on one machine, a
   bare repo on the same disk is enough). Each unit is then worked on its own
   branch in its own lane clone, and the loop merges it. Claims and tracker
-  writes go straight to origin's main, so two lanes never get one unit.
+  writes go straight to a branch of origin that holds only the tracker's
+  state, so two lanes never get one unit and main's history is the work
+  alone (`just tracker state-branch` moves the state there, once).
   Machines are rows in the profile and in `docs/machines.md`, and
   capabilities (`--caps`), not host pins, tie units to a machine.
 - **Group data on a store.** Files too big for git that later units of the

@@ -32,8 +32,8 @@ open, so it's never ended for being quiet.
 
 Branches. When the repo has an origin, each unit is worked on its own branch,
 unit/<id>, made from origin's main in this lane's clone. The claim and every
-tracker write go straight to origin's main (the tracker CLI pushes them), so
-the branch never carries tracker/ changes. The session's last step merges the
+tracker write go straight to origin's state branch (the tracker CLI pushes
+them), so neither the branch nor main carries tracker/ changes. The session's last step merges the
 latest main into its branch, settles any conflict and runs the checks. Then
 the loop merges the branch into main and pushes (fetch, merge, check again
 and retry if someone pushed first), and deletes the branch: finished branches

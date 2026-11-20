@@ -88,6 +88,7 @@ describe("a group whose CI is broken: no check before landing", () => {
 describe("the ci.affected hook: a code change pushed outside the lanes touches the groups it names", () => {
   const scratch = f.w.at("main-edit");
   const pushCode = (file: string) => {
+    if (!fs.existsSync(scratch)) f.w.git(f.w.top, "clone", "-q", f.origin, scratch);
     f.w.git(scratch, "fetch", "-q", "origin"); f.w.git(scratch, "reset", "-q", "--hard", "origin/main");
     fs.appendFileSync(path.join(scratch, file), "more\n");
     f.w.git(scratch, "commit", "-qam", `change ${file}`); f.w.git(scratch, "push", "-q", "origin", "HEAD:main");
@@ -97,7 +98,8 @@ describe("the ci.affected hook: a code change pushed outside the lanes touches t
   test("the first look records main's code commit, and runs nothing", () => {
     c.setup(["ci-pass", "g", "--evidence", "drill passed by hand"]);
     f.editMain("tracker/project.json", (p) => { p.ci.affected = `${lk("affected.sh")} {old} {new}`; });
-    first = f.w.git(scratch, "log", "-1", "--format=%H", "origin/main", "--", ".", ":(exclude)tracker").trim();
+    c.git("fetch", "-q", "origin");
+    first = c.git("log", "-1", "--format=%H", "origin/main", "--", ".", ":(exclude)tracker").trim();
     has(c.loop(ONE), "ci.affected: the first run; covering from main's code at");
     assert.equal(readOr(lk("affected.calls")), "");
     assert.equal(JSON.parse(c.ok(["ci-affected", "--json"])).at, first);

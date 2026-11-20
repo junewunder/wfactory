@@ -246,8 +246,8 @@ shared checkout.
   stops only when the owner's questions are all that's left.
 - Each unit is worked on its own branch, and the loop merges it. The
   session that wrote the code settles its own conflicts. Claims and tracker
-  writes go straight to main, so of two lanes racing for a unit exactly one
-  gets it.
+  writes go straight to origin (to main then; to a branch of their own since
+  lesson 46), so of two lanes racing for a unit exactly one gets it.
 - One machines file per factory is the only place machine facts live.
 - A loop refuses to start only over broken tracker data, never over a slip
   in someone's note.
@@ -367,6 +367,31 @@ between units until the count takes it in, its clone kept. A start with
 makes N the file's count (`just fleet lanes <machine> N`), and the next
 start without it says so again, so the count the owner asked for doesn't
 depend on an overseer remembering it.
+
+### 46. Most of main's commits were the tracker's (the mod factory and the recompiler factory, November)
+
+**What happened.** With an origin, the tracker's state was `tracker/` on
+origin's main, and every write was a commit there, pushed at once (lesson
+10). After six weeks, about 19,900 of the mod factory's 28,152 commits on
+main were tracker writes (71%), and 2,219 of the recompiler factory's 3,565
+(62%). The largest kinds were units filed and lease writes (2,511 of those
+in the mod factory), ahead of claims and results.
+
+**What it cost.** Main's history no longer read as the work: three commits
+in four said "claimed", "lease" or "settle". Everything that asks what
+changed on main had to step over them (CI's "main's newest commit outside
+`tracker/`", the review's diff, the check that isn't run again "for a main
+that moved only in `tracker/`"), and every tracker push and every landing
+pushed to the same branch. The owner named it among the reasons to replace
+the tracker.
+
+**The rule.** With an origin, the state is a branch of origin of its own
+(`tracker-state`) that holds `tracker/` and nothing else, and main has no
+tracker commit. What lesson 10 needs is unchanged: origin refuses the second
+of two racing pushes on any branch, so of two lanes racing for a unit
+exactly one gets it. A factory moves its state once (`just tracker
+state-branch`), and the settings and templates, in no checkout after that,
+are read and changed through the tracker (`project`, `template`).
 
 ## The overseer
 

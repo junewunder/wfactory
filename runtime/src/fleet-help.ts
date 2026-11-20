@@ -5,9 +5,9 @@ fleet.sh — run and watch every machine's lanes from one overseeing session.
 The machines and their lane counts come from docs/machines.md. Each lane is
 \`factory/oversee.sh\` in that lane's own clone beside the machine's checkout
 (\`<checkout>-lane<N>\`, made by factory/lane.sh), run locally for this machine
-and over ssh for the others. Lanes meet on origin's main: claims and tracker
-writes are pushed there at once, and each unit's branch is merged into it
-when the unit is done (factory/loop.sh).
+and over ssh for the others. Lanes meet on origin: claims and tracker writes
+are pushed to its state branch at once, and each unit's branch is merged
+into its main when the unit is done (factory/loop.sh).
 
 Nothing runs on a machine the owner hasn't included: \`start\` with no machine
 starts this one only. \`start\` first deploys the newest pushed wfactory

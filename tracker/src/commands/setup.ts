@@ -2,7 +2,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ctx } from "../ctx.ts";
-import { createState, hasStateAt, loadTemplate, log, mutate, RANKING, SCHEMA, touch } from "../store.ts";
+import { createState, hasStateAt, load, loadTemplate, log, moveState, mutate, pretty, RANKING, saveTemplate, SCHEMA, sharedAlready, templateNames, touch } from "../store.ts";
+import { findings } from "./lint.ts";
 import { die, list, parseArgs, plural, str, strs, type Args } from "../text.ts";
 import { badDataValue, checkText, checkTitle, name, rankUnits, resolve } from "../names.ts";
 import { resourceKnown, unnamedUses, usesHint } from "../machine.ts";
@@ -19,12 +20,83 @@ C.init = (a) => {
   const o = parseArgs(a);
   const cwd = ctx.cwd;
   if (hasStateAt(cwd)) { console.log("tracker/ already exists"); return 0; }
+  if (sharedAlready(cwd, ctx.STATE)) { console.log("this factory's tracker is on origin's state branch already; nothing to make"); return 0; }
   const nm = path.basename(cwd);
   createState(cwd, { schema: SCHEMA, ranking: RANKING, name: nm, title: str(o.title) ?? nm, resources: {} });
   repoFiles(cwd);
   console.log(`made tracker/ for ${nm}`);
   return 0;
 };
+// The settings (project.json) and the unit templates are written by hand, not by a command of
+// their own, and with an origin they're in no checkout: read and changed through these.
+const OWN_KEYS = ["schema", "ranking"];
+const keyPath = (k: string | undefined) => {
+  const ks = (k || die("which setting? A key of project.json, parts joined by dots (ci.steps.drill)")).split(".");
+  if (ks.some((x) => !x || ["__proto__", "constructor", "prototype"].includes(x))) die(`"${k}" isn't a key of project.json`);
+  return ks;
+};
+C.project = (a) => {
+  const [sub, key, ...rest] = a;
+  if (!sub) { console.log(pretty(load().project)); return 0; }
+  if (!["get", "set", "unset"].includes(sub)) die("usage: project | project get <key> | project set <key> <value> | project unset <key>");
+  const ks = keyPath(key);
+  type Obj = Record<string, unknown>;
+  const isObj = (v: unknown): v is Obj => !!v && typeof v === "object" && !Array.isArray(v);
+  if (sub === "get") {
+    let v: unknown = load().project;
+    for (const k of ks) v = isObj(v) ? v[k] : undefined;
+    if (v === undefined) { console.error(`project.json has no ${key}`); return 1; }
+    console.log(typeof v === "string" ? v : pretty(v));
+    return 0;
+  }
+  if (OWN_KEYS.includes(ks[0])) die(`${ks[0]} is the tracker's own: it says what this data is, and no setting changes it`);
+  let value: unknown;
+  if (sub === "set") {
+    const text = rest.join(" ");
+    if (!text) die(`project set ${key} <value>: the value as JSON ('{"cmd": "true"}', '["a", "b"]', 30, true), or plain text for a string`);
+    try { value = JSON.parse(text); } catch { value = text; }
+    if (value === null) die(`null isn't a setting; \`project unset ${key}\` takes it out`);
+  }
+  return mutate((T) => {
+    const before = new Set(findings(T).errs);
+    let o = T.project as unknown as Obj;
+    for (const k of ks.slice(0, -1)) {
+      if (o[k] === undefined) { if (sub === "unset") { console.log(`project.json has no ${key}; nothing to take out`); return 0; } o[k] = {}; }
+      if (!isObj(o[k])) die(`${ks.slice(0, ks.indexOf(k) + 1).join(".")} isn't an object in project.json, so it has no ${ks.at(-1)}`);
+      o = o[k] as Obj;
+    }
+    const last = ks.at(-1)!;
+    if (sub === "unset") { if (o[last] === undefined) { console.log(`project.json has no ${key}; nothing to take out`); return 0; } delete o[last]; }
+    else if (JSON.stringify(o[last]) === JSON.stringify(value)) { console.log(`${key} is that already`); return 0; }
+    else o[last] = value;
+    const broke = findings(T).errs.filter((e) => !before.has(e));
+    if (broke.length) die(`not written: with ${key} ${sub === "set" ? "set to that" : "gone"}, the tracker's data would be broken:\n${broke.map((e) => `  ${e}`).join("\n")}`);
+    T.dirty.add("project");
+    log(T, "project", null, `settings: ${key} ${sub === "set" ? "set" : "taken out"}`);
+    console.log(sub === "set" ? `${key} set` : `${key} taken out`);
+    return 0;
+  });
+};
+C.template = (a) => {
+  const o = parseArgs(a);
+  const nm = o._[0];
+  if (!nm) { const ns = templateNames(); console.log(ns.length ? ns.join("\n") : "(no templates)"); return 0; }
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(nm)) die(`"${nm}" isn't a template's name (letters, digits, dashes)`);
+  if (typeof o.from !== "string") { console.log(pretty(loadTemplate<Template>(nm))); return 0; }
+  let t: Template;
+  try { t = JSON.parse(fs.readFileSync(path.resolve(ctx.cwd, o.from), "utf8")); } catch (e) { return die(`couldn't read a template from ${o.from}: ${(e as Error).message}`); }
+  if (!t || typeof t !== "object" || Array.isArray(t) || (t.units !== undefined && !Array.isArray(t.units))) die(`${o.from} isn't a template: a JSON object, its "units" a list (SKILL.md, "Templates")`);
+  if (t.name !== undefined && t.name !== nm) die(`${o.from} says its name is "${t.name}", and this would write it as ${nm}; make them agree`);
+  return mutate((T) => {
+    const had = templateNames().includes(nm);
+    saveTemplate(nm, { ...t, name: nm });
+    log(T, "template", null, `template ${nm}: ${had ? "replaced" : "added"}`);
+    console.log(`template ${nm} ${had ? "replaced" : "added"}${had ? ` (\`sync <group>\` adds the units it now makes to a group made from it)` : ""}`);
+    return 0;
+  });
+};
+// Once, in a factory that has an origin: the state leaves main for origin's state branch.
+C["state-branch"] = () => { console.log(moveState()); return 0; };
 // The repo's own files that make the tracker work with git.
 export function repoFiles(root: string) {
   const add = (f: string, line: string) => { const p = path.join(root, f); const s = fs.existsSync(p) ? fs.readFileSync(p, "utf8") : ""; if (!s.split("\n").includes(line)) fs.writeFileSync(p, s + (s && !s.endsWith("\n") ? "\n" : "") + line + "\n"); };

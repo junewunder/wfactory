@@ -7,7 +7,7 @@ import { describe, test, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { has, hasnt, until, lines, groupAlive } from "../lib/index.ts";
+import { has, hasnt, until, lines, groupAlive, STATE_BRANCH } from "../lib/index.ts";
 import { branchFactory, ONE } from "./factory.ts";
 
 const f = branchFactory(["a", "c", "d", "e"]);
@@ -74,7 +74,7 @@ describe("a unit the session didn't finish: its branch is pushed before its clai
     add("unfinished");
     e.loop(ONE, { FACTORY_FAKE_NODONE: "1" });
     e.git("fetch", "-q", "origin");
-    const sc = e.git("log", "--format=%H", "--grep", "Unit unfinished: session ended mid-unit", "origin/main").split("\n").filter(Boolean).at(-1) ?? "";
+    const sc = e.git("log", "--format=%H", "--grep", "Unit unfinished: session ended mid-unit", `origin/${STATE_BRANCH}`).split("\n").filter(Boolean).at(-1) ?? "";
     assert.ok(sc, "no commit settling the session's claim");
     const g = JSON.parse(e.git("show", `${sc}:tracker/groups/g.json`));
     assert.equal(g.units.find((u: any) => u.id === "g/unfinished")?.record?.pushed, true, `settle commit ${sc.slice(0, 9)}`);

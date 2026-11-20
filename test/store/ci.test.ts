@@ -34,7 +34,7 @@ describe("group CI on data: the lease holder runs it before letting the lease go
     assert.equal(s.ci, "f5"); assert.equal(s.host, "b");
   });
   test("  on the data it has (its last line, IDs written as titles)", () => {
-    has(tr(a, ["ci", "f5"]).stdout + (JSON.parse(readOr(a.at(".tracker/main/tracker/groups/f5.json")) || "{}").ci?.passed?.evidence ?? ""), "drill: {unit:f5/c1} saw the input");
+    has(tr(a, ["ci", "f5"]).stdout + (JSON.parse(readOr(a.at(".tracker/state/tracker/groups/f5.json")) || "{}").ci?.passed?.evidence ?? ""), "drill: {unit:f5/c1} saw the input");
   });
 });
 
@@ -77,7 +77,7 @@ describe("a dead laptop's CI and claims: they free up once its heartbeat is stal
     await lane.kill();
     has(out, '"group":"f5"');
   });
-  test("  and stamps a's heartbeat in the same write", () => { has(JSON.stringify(JSON.parse(readOr(a.at(".tracker/main/tracker/leases.json")) || "{}").hosts ?? {}), '"a"'); });
+  test("  and stamps a's heartbeat in the same write", () => { has(JSON.stringify(JSON.parse(readOr(a.at(".tracker/state/tracker/leases.json")) || "{}").hosts ?? {}), '"a"'); });
   test("with a's heartbeat fresh, b still sees it running", () => { has(tr(b, ["ci", "f5"]).stdout, "running (session ak on a"); });
   test("a dead laptop's CI is due on b once a's lease and heartbeat are stale", () => {
     f.anHourLater();

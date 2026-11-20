@@ -17,6 +17,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { platform, type OomKill } from "./os.ts";
 import { epoch, host, tryLock, ymdHm, ymdHms, asksHelp } from "./sys.ts";
 import { lastCallFile, SAME_STOP_S, writtenLastCall } from "./loop-clock.ts";
+import { projectFile } from "./tracker-dir.ts";
 
 export const HELP = `
 daemon — the machine's factory daemon: brings lanes back after the machine
@@ -445,7 +446,7 @@ const hmAt = (t: number) => { const d = new Date(t * 1000); return `${String(d.g
 // The machine's lock folder for the lane's factory, as the loop works it out (loop-start.ts).
 function locksOf(r: LaneRecord) {
   let pname = "";
-  try { const p = JSON.parse(fs.readFileSync(path.join(r.dir, "tracker", "project.json"), "utf8")); if (typeof p?.name === "string") pname = p.name; } catch {}
+  try { const p = JSON.parse(fs.readFileSync(projectFile(r.dir, r.env), "utf8")); if (typeof p?.name === "string") pname = p.name; } catch {}
   return r.env.FACTORY_LOCKS || `${r.env.XDG_RUNTIME_DIR || "/tmp"}/factory-${pname || path.basename(r.dir)}`;
 }
 // When the lane's last call begins: the time its factory's lanes here last wrote for this stop
@@ -472,7 +473,7 @@ function lastCallOf(r: LaneRecord) {
 }
 // The lane's tracker/project.json whole-number setting, else its default (as loop-start.ts reads it).
 function settingOf(r: LaneRecord, k: string, dflt: number) {
-  try { const v = JSON.parse(fs.readFileSync(path.join(r.dir, "tracker", "project.json"), "utf8"))?.[k]; if (/^[0-9]+$/.test(String(v))) return Number(v); } catch {}
+  try { const v = JSON.parse(fs.readFileSync(projectFile(r.dir, r.env), "utf8"))?.[k]; if (/^[0-9]+$/.test(String(v))) return Number(v); } catch {}
   return dflt;
 }
 function withHours(args: string[], hours: number) {

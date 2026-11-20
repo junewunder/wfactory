@@ -15,12 +15,13 @@ import { CI_STEP_KEYS } from "../ci.ts";
 import { EFFECTS, hasEffects, optionWordSlip, unaccounted } from "../cards.ts";
 import { memoryIndex } from "./memory.ts";
 import { C } from "./registry.ts";
-import type { Unit } from "../types.ts";
+import type { State, Unit } from "../types.ts";
 
 const CHECKS = ["computed", "independent", "recorded"];
 
-C.lint = (a = []) => {
-  const T = load();
+// What's wrong with the state as T has it: broken data, slips and warnings (above). A write
+// that would add broken data asks this first (the settings: commands/setup.ts).
+export function findings(T: State) {
   const errs: string[] = [], slips: string[] = [], warns: string[] = [];
   const ids = new Set<string>();
   const bareRef = (where: string, s: string | undefined) => {
@@ -143,9 +144,15 @@ C.lint = (a = []) => {
     for (const op of q.options || []) bareRef(`${at} option ${op.key}`, op.changes);
   }
   for (const d of T.decisions) { bareRef(`${d.id} title`, d.title); missingRef(`${d.id} why`, d.why); if (d.replaces && !T.decisions.some((x) => x.id === d.replaces)) errs.push(`${d.id}: replaces unknown ${d.replaces}`); if (d.retired?.other && !T.decisions.some((x) => x.id === d.retired!.other)) errs.push(`${d.id}: retired for unknown ${d.retired.other}`); if (d.until && Number.isNaN(Date.parse(d.until))) errs.push(`${d.id}: until isn't a time (${d.until})`); }
+  return { errs, slips, warns, ids };
+}
+
+C.lint = (a = []) => {
+  const T = load();
+  const { errs, slips, warns, ids } = findings(T);
   // The files a branch can change (AGENTS.md, the spec, memory/), apart from the tracker's records.
   const repo: string[] = [];
-  lintRepo(repo);
+  lintRepo(repo, T.project.loops || {});
   for (const w of warns) console.error(`warning: ${w}`);
   // Inside the loop's check before a branch lands ($FACTORY_LANDING): the tracker's records are
   // main's, and no branch carries them (the loop drops a branch's tracker/ edits), so a slip in one
@@ -170,14 +177,12 @@ C.lint = (a = []) => {
   return 0;
 };
 const SPEC_WORDS = 4000, SPEC_LINE = 1000;
-function lintRepo(errs: string[]) {
+function lintRepo(errs: string[], loops: Record<string, { spec?: string }>) {
   const ROOT = ctx.ROOT;
   const lc = (f: string) => fs.readFileSync(f, "utf8").split("\n").length;
   const A = path.join(ROOT, "AGENTS.md");
   if (fs.existsSync(A) && lc(A) > 120) errs.push(`AGENTS.md is ${lc(A)} lines (max 120): move detail to docs/ or memory/`);
   // The spec holds rules; a tool's workings go in docs/tools/. Words, not lines: a spec of page-long lines passed a line count.
-  let loops: Record<string, { spec?: string }> = {};
-  try { loops = JSON.parse(fs.readFileSync(path.join(ROOT, "tracker", "project.json"), "utf8")).loops || {}; } catch { /* no project.json: just the default spec */ }
   for (const s of new Set(["docs/factory.md", ...Object.values(loops).map((l) => l?.spec).filter((x): x is string => !!x)])) {
     const p = path.join(ROOT, s);
     if (!fs.existsSync(p)) continue;

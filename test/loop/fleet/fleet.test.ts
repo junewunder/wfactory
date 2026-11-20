@@ -196,8 +196,7 @@ describe("fleet wait: what wakes it", () => {
     has(o.stdout, "Group CI: no time to look from (not a time)");
   });
   // A project can move a kind to wake now (tracker/project.json "events").
-  const pj = path.join(F, "tracker/project.json"), was = readOr(pj);
-  const events = (e: unknown) => fs.writeFileSync(pj, JSON.stringify({ ...JSON.parse(was), events: e }, null, 2) + "\n");
+  const events = (e: unknown) => setup(e ? ["project", "set", "events", JSON.stringify(e)] : ["project", "unset", "events"]);
   test("  a project's own wake list wakes it", async () => {
     events({ wake: ["store-aside"] });
     const b = await waitFor(["--minutes", "0.2"]);
@@ -209,7 +208,7 @@ describe("fleet wait: what wakes it", () => {
     const b = await waitFor(["--minutes", "0.1"]);
     ev("stuck", "Some unit (g/x): stuck: a test");
     const o = (await b.end()).stdout;
-    fs.writeFileSync(pj, was);
+    events(null);
     has(o, "woke: time");
   });
   test("a stuck unit wakes fleet wait", async () => {

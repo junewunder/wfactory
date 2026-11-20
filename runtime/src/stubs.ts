@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { pwd } from "./sys.ts";
 import { platform } from "./os.ts";
+import { STATE_CLONE } from "../../tracker/src/store.ts";
 
 export const DIFF_HELP = `factory-diff.sh — whether a factory runs the deployed skill through the
 current stubs, or still carries copies of the loop's scripts. Read-only: it
@@ -126,7 +127,7 @@ export function factoryDiff(r: string): string[] {
   if (extra.length) say.push(`other files in factory/ (not stubs): ${extra.join(" ")}`);
   say.push(`deployed on this machine: ${cmd([path.join(SKILL, "scripts", "deploy.sh"), "--status"]) ?? ""}`);
 
-  say.push(isFile(path.join(r, "tracker", "project.json")) ? "tracker: tracker/" : "tracker: none found");
+  say.push(isFile(path.join(r, "tracker", "project.json")) ? "tracker: tracker/" : isFile(path.join(r, STATE_CLONE, "tracker", "project.json")) ? "tracker: origin's state branch (.tracker/state)" : "tracker: none found");
   const o = git(r, "remote", "get-url", "origin");
   say.push(o ? `origin: ${o}` : "origin: none (the state is tracker/ in the checkout; no branches)");
   const dirty = (git(r, "status", "--porcelain", "--", "factory", "justfile") ?? "").split("\n").filter(Boolean).length;

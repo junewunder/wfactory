@@ -16,6 +16,8 @@ import "./tools.ts";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const TRACKER = path.join(ROOT, "tracker", "tracker.mjs");
+// The branch of origin a factory's tracker state is on.
+export const STATE_BRANCH = "tracker-state";
 
 type Env = NodeJS.ProcessEnv;
 export interface Result { code: number; stdout: string; stderr: string }
@@ -411,12 +413,12 @@ if [[ "$id" == merge/*-main-check ]]; then
 elif [[ "$id" == merge/* ]]; then
   git fetch -q origin && git merge -q -X ours --no-edit origin/main >/dev/null 2>&1
 elif [ -n "\${FACTORY_FAKE_TRACKERONLY:-}" ]; then
-  echo x >> tracker/log.jsonl; git add tracker; git commit -qm "$id: tracker only" >/dev/null 2>&1
+  mkdir -p tracker; echo x >> tracker/log.jsonl; git add tracker; git commit -qm "$id: tracker only" >/dev/null 2>&1
 elif [ -z "\${FACTORY_FAKE_NOWORK:-}" ]; then
   [ -z "\${FACTORY_FAKE_WIP:-}" ] || echo half > "work/wip-\${id%%/*}"
   mkdir -p out; f="out/$u.txt"; echo "work on $id from $FACTORY_HOST" >> "$f"; git add "$f"
   [ -z "\${FACTORY_FAKE_SHARED:-}" ] || { echo "$id" > shared.txt; git add shared.txt; }
-  [ -z "\${FACTORY_FAKE_TRACKER:-}" ] || { echo '{}' > tracker/groups/sneaky.json; echo x >> tracker/log.jsonl; git add tracker; }
+  [ -z "\${FACTORY_FAKE_TRACKER:-}" ] || { mkdir -p tracker/groups; echo '{}' > tracker/groups/sneaky.json; echo x >> tracker/log.jsonl; git add tracker; }
   [ -z "\${FACTORY_FAKE_LOOP:-}" ] || { echo "# $id was here" >> factory/loop.sh; echo "# $id" > factory/extra.sh; git add factory/loop.sh factory/extra.sh; }
   [ -z "\${FACTORY_FAKE_BREAK:-}" ] || { touch fail-check; git add fail-check; }
   [ -z "\${FACTORY_FAKE_FIX:-}" ] || git rm -q fail-check
@@ -467,8 +469,9 @@ case $v in exit\\ *) exit "\${v#exit }" ;; sleep\\ *) exec sleep "\${v#sleep }" 
 //       git(...args):          git there, which must succeed; events(): runs/events.log
 //       hold(unit):            holds the unit's session there (hold.<unit>); held() waits until it
 //                              is, go() lets it go
-//   main(file): the file on origin's main ("" if it isn't there)
-//   editMain(files, fn): changes JSON files on origin's main by hand (fn changes each in place), as
+//   main(file): the file on origin ("" if it isn't there): the tracker's on its state branch, any other on main
+//   onMain(file): the file on origin's main, whatever it is ("" if it isn't there)
+//   editMain(files, fn): changes JSON files on origin by hand, there too (fn changes each in place), as
 //     time passing would (records backdated) or the owner does; one commit, pushed from a clone of its own
 export function originFactory(name: string, { check = "true", files = {} as Record<string, string>, claude = FAKE_CLAUDE, prepare = (_F: string) => {} } = {}) {
   const w = workspace();
@@ -498,10 +501,16 @@ export function originFactory(name: string, { check = "true", files = {} as Reco
   prepare(F);
   w.git(F, "add", "-A"); w.git(F, "commit", "-qm", "init"); w.git(F, "branch", "-q", "-M", "main");
   w.git(F, "remote", "add", "origin", origin); w.git(F, "push", "-q", "origin", "main");
+  // With an origin the state is a branch of it, and main has no tracker/.
+  w.setup(["state-branch"], F);
   // Loops still running when the file's tests end are killed, with all they started.
   const bg: number[] = [];
   stopFirst(() => { for (const p of bg) killGroup(p); });
-  const main = (file: string) => { const r = cmd("git", ["--git-dir", origin, "show", `main:${file}`], { cwd: w.top, env: w.env }); return r.code === 0 ? chomp(r.stdout) : ""; };
+  // (A file of the tracker's is on origin's state branch, where the state is; any other, on main.)
+  const branchOf = (file: string) => file.startsWith("tracker/") ? STATE_BRANCH : "main";
+  const on = (branch: string, file: string) => { const r = cmd("git", ["--git-dir", origin, "show", `${branch}:${file}`], { cwd: w.top, env: w.env }); return r.code === 0 ? chomp(r.stdout) : ""; };
+  const main = (file: string) => on(branchOf(file), file);
+  const onMain = (file: string) => on("main", file);
   const lane = (n: string, { k = 1, locks = n, host = n } = {}) => {
     const dir = w.at(`${n}-lane${k}`);
     w.git(w.top, "clone", "-q", origin, dir);
@@ -539,16 +548,17 @@ export function originFactory(name: string, { check = "true", files = {} as Reco
     };
     return { n, dir, locks: lk, at, envWith, run, tracker, ok, setup, loop, loopBg, git, events, hold };
   };
-  const scratch = w.at("main-edit");
   const editMain = (files: string | string[], fn: (j: any, file: string) => void) => {
-    if (!fs.existsSync(scratch)) w.git(w.top, "clone", "-q", origin, scratch);
-    w.git(scratch, "fetch", "-q", "origin"); w.git(scratch, "reset", "-q", "--hard", "origin/main");
-    for (const file of ([] as string[]).concat(files)) {
+    const all = ([] as string[]).concat(files), br = branchOf(all[0]), scratch = w.at(`${br}-edit`);
+    assert.ok(all.every((f) => branchOf(f) === br), `editMain: ${all.join(", ")} are on two branches of origin; change them in two calls`);
+    if (!fs.existsSync(scratch)) w.git(w.top, "clone", "-q", "--branch", br, origin, scratch);
+    w.git(scratch, "fetch", "-q", "origin"); w.git(scratch, "reset", "-q", "--hard", `origin/${br}`);
+    for (const file of all) {
       const p = path.join(scratch, file), j = JSON.parse(fs.readFileSync(p, "utf8"));
       fn(j, file);
       fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
     }
-    w.git(scratch, "commit", "-qam", "test: changed by hand"); w.git(scratch, "push", "-q", "origin", "HEAD:main");
+    w.git(scratch, "commit", "-qam", "test: changed by hand"); w.git(scratch, "push", "-q", "origin", `HEAD:${br}`);
   };
-  return { w, F, origin, main, editMain, lane };
+  return { w, F, origin, main, onMain, editMain, lane };
 }

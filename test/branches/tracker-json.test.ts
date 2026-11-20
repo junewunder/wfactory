@@ -11,13 +11,18 @@ import { branchFactory } from "./factory.ts";
 const f = branchFactory(["a"]);
 const { w } = f;
 
-// Two plain clones whose tracker is local (FACTORY_STATE=local): their tracker/ changes are
-// commits of their own, merged by git (through the tracker's merge driver).
-const j1 = w.at("j1"), j2 = w.at("j2");
-w.git(w.top, "clone", "-q", f.origin, j1); w.git(w.top, "clone", "-q", f.origin, j2);
+// Two plain clones whose tracker is local (FACTORY_STATE=local): tracker/ is a folder on their
+// main, and its changes are commits of their own, merged by git (through the tracker's merge
+// driver). Their origin is one of their own, whose main has that tracker/.
+const j0 = w.at("j0"), jorigin = w.at("j-origin.git"), j1 = w.at("j1"), j2 = w.at("j2");
 const jenv = (d: string) => w.envWith({ FACTORY_STATE: "local", FACTORY_HOST: path.basename(d) });
 const j = (d: string, args: string[]) => cmd(path.join(d, "factory/tracker"), args, { cwd: d, env: jenv(d), merged: true }).stdout;
 const jset = (d: string, args: string[]) => w.setup(args, d, { FACTORY_STATE: "local", FACTORY_HOST: path.basename(d) });
+w.git(w.top, "clone", "-q", f.origin, j0); w.git(j0, "remote", "remove", "origin");
+jset(j0, ["init", "--title", "Local"]); jset(j0, ["add-group", "g", "--title", "Group"]);
+w.git(j0, "add", "-A"); w.git(j0, "commit", "-qm", "a tracker of its own");
+w.git(w.top, "init", "-q", "--bare", jorigin); w.git(j0, "remote", "add", "origin", jorigin); w.git(j0, "push", "-q", "origin", "main");
+w.git(w.top, "clone", "-q", jorigin, j1); w.git(w.top, "clone", "-q", jorigin, j2);
 const gitIn = (d: string, args: string[]) => cmd("git", args, { cwd: d, env: w.env, merged: true });
 
 describe("tracker JSON merges itself (two branches that both changed tracker/)", () => {

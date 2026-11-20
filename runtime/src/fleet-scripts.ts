@@ -41,6 +41,9 @@ export const DEPLOY = `"\${FACTORY_SKILL_CHECKOUT:-$HOME/.claude/skills/wfactory
 export const PULL_CHECKOUT = `${NETGIT}[ "$(git rev-parse --abbrev-ref HEAD)" = main ] && [ -z "$(git status --porcelain -uno)" ] && netgit pull -q --ff-only origin main`;
 // The lane's clone runs the loop as it is on origin's main.
 export const PULL_LANE = `${NETGIT}netgit fetch -q origin main && { [ "$(git rev-parse --abbrev-ref HEAD)" != main ] || git merge -q --ff-only FETCH_HEAD; } 2>/dev/null`;
+// And its copy of the tracker's state (origin's state branch, in .tracker/state) is brought up
+// to date with it, made if it has none: a lane's start reads the project's loops from there.
+export const SYNC_STATE = `{ [ ! -x factory/tracker ] || factory/tracker dir --sync >/dev/null 2>&1 || true; }`;
 // The overseer's journal on the machine it runs on: date, machine, overseer, what it noted.
 export const JOURNAL = "runs/oversee.log";
 // A lane's last loop line, and whether a restart waits for its unit to end. (A start's header

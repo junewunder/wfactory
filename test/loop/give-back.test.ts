@@ -6,7 +6,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { ago, has, hasnt } from "../lib/index.ts";
+import { ago, has, hasnt, STATE_BRANCH } from "../lib/index.ts";
 import { loopFactory } from "./factory.ts";
 
 const f = loopFactory("giveback");
@@ -46,16 +46,16 @@ describe("a unit whose usual session won't fit in the time left isn't started", 
     setup("add-unit", "g/past", "--title", "Past desk unit", "--uses", "desk");
     setup("add-unit", "g/long", "--title", "Long desk unit", "--uses", "desk");
     setup("drop", "g/past", "--why", "test");
-    // Its kind's past session: two hours, on the desk (in the log on origin's main, where the
-    // tracker's state is).
-    const st = a.at(".tracker/main");
-    a.run("git", ["-C", st, "pull", "-q", "--ff-only", "origin", "main"]);
+    // Its kind's past session: two hours, on the desk (in the log on origin's state branch,
+    // where the tracker's state is).
+    const st = a.at(".tracker/state");
+    a.run("git", ["-C", st, "pull", "-q", "--ff-only", "origin", STATE_BRANCH]);
     fs.appendFileSync(`${st}/tracker/log.jsonl`, [
       { at: ago(3), actor: "loop", tag: "z1", host: "a", cmd: "claim", id: "g/past", text: "Past desk unit: claimed" },
       { at: ago(1), actor: "loop", tag: "z1", host: "a", cmd: "note", id: "g/past", text: "Past desk unit: note: took two hours" },
     ].map((x) => JSON.stringify(x) + "\n").join(""));
     a.run("git", ["-C", st, "commit", "-qam", "a two-hour desk session"]);
-    const p = a.run("git", ["-C", st, "push", "-q", "origin", "HEAD:main"]);
+    const p = a.run("git", ["-C", st, "push", "-q", "origin", `HEAD:${STATE_BRANCH}`]);
     assert.equal(p.code, 0, p.stdout + p.stderr);
     out = (await loop(["--max", "2", "--hours", "1"]).end()).out;
     assert.equal(iterations(out, "Long desk unit"), 0, out);

@@ -9,7 +9,7 @@ import { epoch, ymdHm, ymdHms } from "./sys.ts";
 import { platform, remote } from "./os.ts";
 import { lanesOff, openingOpen, trWait } from "./tr.ts";
 import { project } from "./oversee.ts";
-import { CLONES, DROP_CLONE, PULL_CHECKOUT, PULL_LANE, TIDY_LANE, TIDY_MACHINE } from "./fleet-scripts.ts";
+import { CLONES, DROP_CLONE, PULL_CHECKOUT, PULL_LANE, SYNC_STATE, TIDY_LANE, TIDY_MACHINE } from "./fleet-scripts.ts";
 import { cat, chomp, chomp1, lines, say, timeAt } from "./fleet-util.ts";
 import { cellLanes, laneCount, setCell, showLanes, type LaneCount } from "./machines.ts";
 import type { Fleet, Lane } from "./fleet-ctx.ts";
@@ -126,7 +126,7 @@ export function start(f: Fleet, args: string[]): number {
     dropOrphans(f, m, shown);
     if (!(count > 0)) { say(`=== ${m}: ${want === null ? "docs/machines.md gives it" : "asked for"} 0 lanes`); continue; }
     for (const l of updateSkill(m)) say(l);
-    sh(m, checkout(m), PULL_CHECKOUT, { out: "ignore", err: "ignore" });
+    sh(m, checkout(m), `${PULL_CHECKOUT}; ${SYNC_STATE}`, { out: "ignore", err: "ignore" });
     for (let n = 1; n <= count; n++) {
       const r = on(m, checkout(m), ["factory/lane.sh", "dir", String(n)], { out: "capture" });
       if (r.status !== 0) { say(`=== ${m} lane ${n}: couldn't make its checkout (unreachable?)`); continue; }
@@ -135,7 +135,7 @@ export function start(f: Fleet, args: string[]): number {
       if (st === "running") { say(`=== ${m} lane ${n}: already running`); continue; }
       if (st === "unreachable") { say(`=== ${m} lane ${n}: unreachable over ssh; not started`); continue; }
       say(`=== ${m} lane ${n}`);
-      sh(m, d, PULL_LANE);
+      sh(m, d, `${PULL_LANE}; ${SYNC_STATE}`);
       if (u.until !== null && u.until <= epoch()) { say(`=== ${m} lane ${n}: not started: its stop time has passed`); continue; }
       const s = on(m, d, ["factory/oversee.sh", "start", ...loopArg, ...(u.until === null ? [] : hoursTo(u.until, epoch())), ...night, ...rest], { out: "capture", unset: deployed });
       // Its output's last two lines, blank ones too (as `| tail -2`).

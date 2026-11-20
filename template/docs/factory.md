@@ -272,7 +272,8 @@ them, following the overseer's guide (`just oversee-guide`).
    message `<id> <status>: <what>`; never push" or "leave the diff for the
    owner">.
    Stage only this unit's files (`git add <paths>`, never `git add -A`), and
-   never `tracker/`: the tracker CLI pushes its own writes to main. On a
+   never `tracker/`: the tracker CLI pushes its own writes, to a branch of
+   origin of their own. On a
    unit branch (the loop's), the last step is to merge the latest main into
    it, settle any conflict, rerun the checks and commit; the loop then merges
    the branch into main (the worker prompt: `just prompt`), running `just check` once more

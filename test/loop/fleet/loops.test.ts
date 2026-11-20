@@ -23,11 +23,8 @@ describe("--loop <name>: a project with several loops runs each lane's as its ow
     await fr.held();
     L(["stop"]);
     setup(["drop", "g/fr", "--why", "test"]);
-    // The project gets a loop, on origin's main.
-    w.git(F, "fetch", "-q", "origin"); w.git(F, "checkout", "-q", "-B", "main", "origin/main");
-    const pj = path.join(F, "tracker/project.json");
-    fs.writeFileSync(pj, JSON.stringify({ ...JSON.parse(readOr(pj)), loops: { lp: { title: "Loop lp", spec: "docs/factory.md", groups: ["g"] } } }, null, 2) + "\n");
-    w.git(F, "commit", "-qam", "a loop"); w.git(F, "push", "-q", "origin", "HEAD:main");
+    // The project gets a loop.
+    setup(["project", "set", "loops.lp", JSON.stringify({ title: "Loop lp", spec: "docs/factory.md", groups: ["g"] })]);
     assert.equal(w.git(L1, "rev-parse", "--abbrev-ref", "HEAD"), "unit/g/fr");
   });
   const fs_ = hold("g/fs");

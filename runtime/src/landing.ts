@@ -3,8 +3,8 @@
 // unfinished one is pushed for whoever takes the unit next. A finished one that couldn't land
 // is pushed too, and any lane on this machine (where its outputs in work/ are) may land it once
 // the lane that worked it is gone: one at a time, by the tracker's landing claim. The claim and
-// every tracker write go straight to origin's main (the tracker pushes them), so a branch never
-// carries tracker/ changes. Kept apart from the loop, where
+// every tracker write go straight to origin's state branch (the tracker pushes them), so a
+// branch never carries tracker/ changes. Kept apart from the loop, where
 // leases, pauses and CI meet: the bugs clustered where all of them were interleaved.
 // A check that fails on main too isn't taken for a broken main (fixMain, unjudged): over two weeks
 // in one factory, none of fourteen such failures came from main's code.
@@ -20,7 +20,7 @@ export interface LaneCtx {
   MAIN: string;
   HOST: string;
   LANE: string;
-  TDIR: string;   // the tracker's state (origin's main, .tracker/main/tracker)
+  TDIR: string;   // the tracker's state (origin's state branch, .tracker/state/tracker)
   log(s: string): void;
   event(kind: string, msg: string): void;
   // `just check` with these busy groups (FACTORY_BUSY_GROUPS), its output to <log>, stopped by
@@ -418,12 +418,14 @@ export class Landing {
     if (rn !== null && Date.now() - rn.at < reviewRetry()) {
       this.why = `the loop's review gave no verdict on it at ${hhmm(rn.at)}; it's reviewed again after ${hhmm(rn.at + reviewRetry())}`; return 2;
     }
-    // The tracker lives on main: tracker/ edits on a branch are dropped, never merged.
+    // The tracker's state is on a branch of its own: a tracker/ a unit's branch makes or changes
+    // is dropped, never merged. (Main has none; a branch cut before the state moved still does.)
     const base = git("merge-base", this.om, "HEAD") ?? "";
     if (git("diff", "--name-only", base, "HEAD", "--", "tracker")) {
-      if (g("checkout", "--no-overlay", base, "--", "tracker")) g("commit", "-q", "--no-verify", "-m", `${t}: drop its tracker/ edits (the tracker writes to main itself)`);
+      const had = git("rev-parse", "-q", "--verify", `${base}:tracker`) !== null;
+      if (had ? g("checkout", "--no-overlay", base, "--", "tracker") : g("rm", "-rq", "--", "tracker")) g("commit", "-q", "--no-verify", "-m", `${t}: drop its tracker/ edits (the tracker writes its state itself)`);
       log(`git: ${b} changed tracker/; those edits were dropped`);
-      event("tracker-edits", `${t} changed tracker/ on its branch; the edits were dropped (the tracker writes to main itself)`);
+      event("tracker-edits", `${t} changed tracker/ on its branch; the edits were dropped (the tracker writes its state itself)`);
     }
     // The loop's scripts come from the wfactory skill: a session's edits to them are
     // dropped too, unless the unit is tagged `factory`. A copy that drifts misses the skill's

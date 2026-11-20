@@ -11,7 +11,7 @@
 //   loopBg(args, add):  the same in the background, in a process group of its own (killed with all
 //                       it started when the file's tests end): background()'s out, until, end, stop
 //   oversee(args, add): factory/oversee.sh in the lane (merged output and exit code)
-//   proj(fn):           changes tracker/project.json on origin's main (fn changes it in place)
+//   proj(fn):           changes tracker/project.json on origin's state branch (fn changes it in place)
 //   steps(add):         adds CI steps to the project's (proj)
 //   until(fn, what, s): polls (real time) until fn() is true
 //   onMain(file, text): writes a file in the lane (executable; null: removes it) and lands that on

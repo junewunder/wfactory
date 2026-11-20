@@ -4,7 +4,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { trackerRepo, has, cmd, TRACKER } from "../../test/lib/index.ts";
+import { trackerRepo, has, cmd, TRACKER, STATE_BRANCH } from "../../test/lib/index.ts";
 
 const f = trackerRepo("repo");
 const { setup, ok } = f;
@@ -20,7 +20,8 @@ f.git("add", "-A"); f.git("commit", "-qm", "tracker");
 const bare = path.join(f.top, "origin.git");
 f.git("clone", "-q", "--bare", f.dir, bare);
 f.git("remote", "add", "origin", bare);
-const onOrigin = () => cmd("git", ["--git-dir", bare, "log", "--format=%s", "main"], { cwd: f.top, env: f.env }).stdout;
+setup(["state-branch"]);
+const onOrigin = () => cmd("git", ["--git-dir", bare, "log", "--format=%s", STATE_BRANCH], { cwd: f.top, env: f.env }).stdout;
 const run = (a: string[]) => cmd(process.execPath, [TRACKER, ...a], { cwd: f.dir, env: f.env });
 
 describe("private_words", () => {

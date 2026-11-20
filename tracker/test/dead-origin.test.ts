@@ -7,7 +7,7 @@ import { after, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { trackerRepo, has, cmd, killPid, alive, until, TRACKER } from "../../test/lib/index.ts";
+import { trackerRepo, has, cmd, killPid, alive, until, TRACKER, STATE_BRANCH } from "../../test/lib/index.ts";
 
 const f = trackerRepo("repo");
 const { setup, ok } = f;
@@ -35,9 +35,10 @@ after(() => { for (const p of hung()) killPid(p, "SIGKILL"); });
 f.git("remote", "add", "origin", `ssh://fake${bare}`);
 const env = { PATH: `${bin}:${process.env.PATH}`, FACTORY_GIT_TIMEOUT: "3" };
 const hang = { ...env, HANG: "1" };
+setup(["state-branch"], env);
 // The real command, cut off at 30 s, well below the fake ssh's 120: without a bound it hangs.
 const run = (a: string[], e: Record<string, string>) => cmd(process.execPath, [TRACKER, ...a], { cwd: f.dir, env: { ...f.env, ...e }, timeout: 30 });
-const onOrigin = () => cmd("git", ["--git-dir", bare, "log", "--format=%s", "main"], { cwd: f.top, env: f.env }).stdout;
+const onOrigin = () => cmd("git", ["--git-dir", bare, "log", "--format=%s", STATE_BRANCH], { cwd: f.top, env: f.env }).stdout;
 
 describe("origin stops answering mid-push", () => {
   test("a write reaches origin while it answers", () => {

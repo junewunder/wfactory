@@ -19,6 +19,7 @@ import { adopt, seed } from "./store-seed.ts";
 import { take } from "./store-take.ts";
 import { alt, cat, fields, isFile, json, L, log, MB, mkdirp, rm, tmpdir, type Json } from "./store-util.ts";
 import { data, heldHere } from "./store-tracker.ts";
+import { projectFile } from "./tracker-dir.ts";
 
 export { HELP };
 
@@ -38,7 +39,7 @@ function status(): number {
 
 // Once, for a new store: its stamps/ folder.
 function init(): number {
-  const r = process.env.FACTORY_STORE || String(alt((json(cat("tracker/project.json"))?.store as Json | undefined)?.remote, ""));
+  const r = process.env.FACTORY_STORE || String(alt((json(cat(projectFile()))?.store as Json | undefined)?.remote, ""));
   if (!r) { console.error("store: no store.remote in tracker/project.json"); return 2; }
   const e = tmpdir();
   fs.chmodSync(e, 0o755);
@@ -60,7 +61,7 @@ export function storeCli(args: string[]): number {
   here.lid = path.basename(pwd());   // this lane's checkout: one "worked on" mark per lane
   // Branches, as the loop has them: with an origin, a unit's work reaches main only when its branch lands.
   here.branches = code(run("git", ["remote", "get-url", "origin"], { err: "ignore" })) === 0 && env.FACTORY_STATE !== "local";
-  const project = String(alt(json(cat("tracker/project.json"))?.name, ""));
+  const project = String(alt(json(cat(projectFile()))?.name, ""));
   here.locks = env.FACTORY_LOCKS || `${env.XDG_RUNTIME_DIR || "/tmp"}/factory-${project || here.lid}`;   // the loop's lane locks
   mkdirp(`${L}/groups`); mkdirp(`${L}/inputs`);
   try {

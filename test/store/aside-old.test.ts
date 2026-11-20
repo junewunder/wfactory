@@ -48,10 +48,7 @@ describe("a first copy down that only replaces older files says so, and deletes 
 // store.rebuilt: files a pipeline step rebuilds aren't kept, unless the copy was worked on here.
 describe("store.rebuilt", () => {
   const m = f.lane("m");
-  const pf = m.at("tracker/project.json"), pj = JSON.parse(fs.readFileSync(pf, "utf8"));
-  pj.store.rebuilt = ["out/*.gen"];
-  fs.writeFileSync(pf, JSON.stringify(pj, null, 2) + "\n");
-  m.git("commit", "-qam", "rebuilt"); m.git("push", "-q", "origin", "main");
+  m.setup(["project", "set", "store.rebuilt", JSON.stringify(["out/*.gen"])]);
   fs.mkdirSync(m.at("work/out/f2"), { recursive: true });
   oldBuild(m);
   write(m.at("work/out/f2/names.gen"), "regenerated\n");

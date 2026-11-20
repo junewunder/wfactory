@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { profileFile, profileGet, profileMachines, profileProblems } from "./profile.ts";
 import { pwd } from "./sys.ts";
 import { OPENING_GATE, tr } from "./tr.ts";
+import { sharedAlready } from "../../tracker/src/store.ts";
 
 export const HELP = `init.sh — lay down the factory layer in a new or existing project.
 
@@ -51,7 +52,8 @@ const AGENTS_SECTION = `
 - Until the owner passes the opening's gate (\`opening/ready\`), the work is the
   project's issues, run by the wfactory skill's docs/opening.md;
   "continue" and "oversee" mean that, not the loop.
-- \`tracker/\` is the state, changed only through the tracker CLI: \`just status\`,
+- The tracker is the state (a \`tracker/\` folder here; with an origin, a branch of
+  origin of its own, in no checkout), changed only through the tracker CLI: \`just status\`,
   \`just next --claim\`, \`just done\`, \`just ask\`, \`just lint\` (\`just tracker --help\`).
 - Talk to the owner in titles, never bare IDs: what a unit is first, the ID after in
   parentheses.
@@ -206,7 +208,7 @@ export function initCli(args: string[], env: NodeJS.ProcessEnv = process.env): n
   }
 
   let gated = false;
-  if (!isFile("tracker/project.json")) {
+  if (!isFile("tracker/project.json") && !sharedAlready(root)) {
     const r = tr(["init", "--title", project]);
     if (r.err) process.stderr.write(r.err);
     if (r.code === 0) {

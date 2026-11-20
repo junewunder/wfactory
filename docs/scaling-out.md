@@ -17,13 +17,21 @@ writing JSON, merged by a script. Shared hardware gets a lock: `flock
 
 **A second lane, or a second machine, needs an origin** (any git remote both
 can push to; on one machine, a bare repo on the same disk). Then:
-- **The state is origin's main.** The tracker CLI reads `tracker/` from a
-  small clone of origin's main (`.tracker/main`, fetched before each command)
+- **The state is a branch of origin of its own** (`tracker-state`), which
+  holds `tracker/` and nothing else. Main has no `tracker/` folder and no
+  tracker commit: its history is the work. Move the state there once, after
+  the first push of main: `just tracker state-branch` (every other tracker
+  command says so until then). The tracker CLI reads `tracker/` from a small
+  clone of that branch (`.tracker/state`, fetched before each command)
   and pushes every write there at once. If another lane pushed first, the
   write is done again on the new state, so of two lanes claiming one unit
   exactly one gets it and the other picks again. A unit's branch never
   carries `tracker/` changes, a question reaches the overseer within
-  seconds, and nobody commits `tracker/` by hand. A unit done on a branch
+  seconds, and nobody commits `tracker/` by hand. The settings and the
+  templates are in no checkout then: `just tracker project` prints
+  `project.json` and `just tracker project set <key> <value>` changes one
+  setting (`ci.steps.drill '{"cmd": "…"}'`); `just tracker template <name>
+  --from <file>` writes a template. A unit done on a branch
   shows as **merging** (not done for what needs it) until the loop has merged
   it. Tracker JSON has a merge driver that keeps both sides' entries
   (`.gitattributes`: `tracker/**/*.json merge=tracker-json`), for the rare

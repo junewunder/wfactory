@@ -6,7 +6,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { cmd, has, hasnt, HOST } from "../../lib/index.ts";
+import { cmd, has, hasnt, HOST, STATE_BRANCH } from "../../lib/index.ts";
 import { laneFactory } from "./helpers.ts";
 
 const f = laneFactory("lane-one");
@@ -49,11 +49,18 @@ describe("one unit, then nothing left: the lane stops", () => {
   test("  and never pushed", () => { assert.equal(a.git("ls-remote", "origin", "refs/heads/unit/*"), ""); });
   test("  the lane is back on main", () => { assert.equal(a.git("rev-parse", "--abbrev-ref", "HEAD"), "main"); });
   test("  the tracker says done, not merging", () => { has(t("show", "g/one"), "done (recorded)"); });
-  test("  claims and done went to main as tracker commits", () => { has(log(), "tracker: Unit one: claimed"); });
-  test("  and nothing else touched tracker/", () => {
-    const other = a.git("log", "--format=%s", "origin/main", "--", "tracker").split("\n").filter((s) => !/^(tracker: |init$)/.test(s));
-    assert.deepEqual(other, []);
+  // The tracker's writes are commits on origin's state branch, which holds tracker/ and nothing
+  // else; main's history is the work, with no tracker commit in it (but the one that moved the state).
+  const stateLog = () => { a.git("fetch", "-q", "origin"); return a.git("log", "--format=%s", `origin/${STATE_BRANCH}`); };
+  test("  claims and done are commits on origin's state branch", () => { has(stateLog(), "tracker: Unit one: claimed"); has(stateLog(), "tracker: Unit one: done"); });
+  test("  and none is on main", () => {
+    assert.deepEqual(log().split("\n").filter((s) => s.startsWith("tracker: ")), ["tracker: the state moved to the tracker-state branch"]);
   });
+  test("  main has no tracker/, and the state branch nothing else", () => {
+    assert.equal(a.git("ls-tree", "--name-only", "origin/main", "tracker"), "");
+    assert.equal(a.git("ls-tree", "--name-only", `origin/${STATE_BRANCH}`), "tracker");
+  });
+  test("  nor has the lane's checkout", () => { assert.ok(!fs.existsSync(a.at("tracker"))); });
   // Its start-up reading comes in the system prompt: the spec's loop section and this machine's own.
   test("  the system prompt has the spec's loop section", () => { has(seen("card.seen"), "From docs/factory.md, its loop and the sections every session follows:"); });
   test("    from its heading", () => { has(seen("card.seen"), "## The loop"); });

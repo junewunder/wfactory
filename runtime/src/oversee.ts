@@ -7,6 +7,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { NoInbox, put } from "./inbox.ts";
 import { dayHm, enterRoot, epoch, pwd, tail, tryLock, unlock, ymdHms, asksHelp } from "./sys.ts";
 import { platform } from "./os.ts";
+import { projectFile } from "./tracker-dir.ts";
 import { ask, dropRecord, ensureDaemon, look, lookMachine, recordLane, records, watch, writeRecord, type LaneAsk, type LaneSeen, type MachineAsk, type MachineSeen } from "./daemon.ts";
 
 export const HELP = `
@@ -92,22 +93,17 @@ const LOG = "runs/loop.log";
 const PASSED = ["PATH", "HOME", "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"];
 const WAIT_EVERY = 5;   // seconds between looks in `wait`
 
-// tracker/project.json, as far as it can be read.
-export function project(): Record<string, unknown> {
-  try { const p = JSON.parse(fs.readFileSync("tracker/project.json", "utf8")); return p && typeof p === "object" ? p : {}; } catch { return {}; }
+// The tracker's project.json, as far as it can be read: the state's (origin's state branch as
+// this checkout's tracker commands last fetched it; without an origin, the checkout's own).
+export function project(env: NodeJS.ProcessEnv = process.env): Record<string, unknown> {
+  try { const p = JSON.parse(fs.readFileSync(projectFile(".", env), "utf8")); return p && typeof p === "object" ? p : {}; } catch { return {}; }
 }
 
-// The project's loops as the tracker has them: tracker/project.json on origin's main as last
-// fetched (`fleet start` fetches it just before), not on whatever branch the checkout is on. A lane
-// stopped mid-unit is left on that unit's branch, which may be from before a loop was added.
-// With no origin's main (one machine, or a project not pushed yet), the checkout's.
+// The project's loops as the tracker has them: the state's, which is on no branch of the
+// checkout's, so a lane stopped mid-unit and left on that unit's branch still sees a loop
+// added since.
 function loops(env: NodeJS.ProcessEnv): Record<string, unknown> {
-  let p = project();
-  if (env.FACTORY_STATE !== "local") {
-    const r = spawnSync("git", ["show", `refs/remotes/origin/${env.FACTORY_MAIN || "main"}:tracker/project.json`], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    if (r.status === 0) { try { const o = JSON.parse(r.stdout); if (o && typeof o === "object") p = o; } catch {} }
-  }
-  const l = p.loops;
+  const l = project(env).loops;
   return l && typeof l === "object" ? l as Record<string, unknown> : {};
 }
 

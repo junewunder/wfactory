@@ -28,8 +28,9 @@ for another unit, `just log`). Don't guess IDs.
    staged out; if git says `index.lock` exists, wait a few seconds and retry.
    Before you commit, grep for the comments and docs that name what you
    changed, and bring them in line with it.
-   Never commit `tracker/`: the tracker CLI writes to main itself and pushes
-   at once, whatever branch you're on. A `just check` failure in files you didn't touch may be another
+   Never commit a `tracker/` folder: the tracker CLI keeps its state on a
+   branch of origin of its own and pushes each write at once, whatever branch
+   you're on. A `just check` failure in files you didn't touch may be another
    session mid-edit: rerun it in a minute before treating it as broken.
    `just tracker busy` names the groups another lane on this laptop is
    mid-way through; their outputs in `work/` are that lane's, never yours to fix.

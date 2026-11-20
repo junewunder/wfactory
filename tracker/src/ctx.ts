@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { list } from "./text.ts";
-import { hasStateAt } from "./store.ts";
+import { hasStateAt, hasStateCloneAt, STATE_CLONE } from "./store.ts";
 import { netGit, reachesRemote } from "./net.ts";
 
 export interface Ctx {
@@ -16,13 +16,17 @@ export interface Ctx {
   TAG: string;
   HOST: string;
   ACTOR: string;
-  // The repo: the nearest folder up with a tracker, else the working directory.
+  // The repo: the nearest folder up with a tracker (its own tracker/, or its clone of the
+  // state), else the git checkout the working directory is in, else the working directory.
   ROOT: string;
   CDIR: string;
   MAIN: string;
-  // Shared state: origin's URL when the state is origin's main (store.ts), else null.
+  // The branch of origin that holds the state (store.ts).
+  STATE: string;
+  // Shared state: origin's URL when the repo has one (the state is origin's STATE branch,
+  // store.ts), else null.
   ORIGIN: string | null;
-  // The checkout whose tracker/ is the state (.tracker/main with an origin, else ROOT), and
+  // The checkout whose tracker/ is the state (.tracker/state with an origin, else ROOT), and
   // that tracker/. store.ts alone knows what's in it.
   SDIR: string;
   TDIR: string;
@@ -47,10 +51,17 @@ export const git = (args: string[], opts: Partial<SpawnSyncOptionsWithStringEnco
   return netGit(args, { encoding: "utf8", ...opts, env }, 180);
 };
 
-function findRoot(cwd: string) {
+// A checkout of a factory with an origin has no tracker/ of its own (the state is a branch of
+// origin), and a new clone of one has no clone of the state yet: its root is the checkout's.
+// The search stops there, so a worktree kept inside another checkout is its own root, never
+// the checkout around it.
+function findRoot(cwd: string, env: NodeJS.ProcessEnv) {
+  const g = spawnSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"], { encoding: "utf8", env, stdio: ["ignore", "pipe", "ignore"] });
+  const top = g.status === 0 ? g.stdout.trim() : "";
+  const real = (p: string) => { try { return fs.realpathSync(p); } catch { return p; } };
   let d = cwd;
   for (;;) {
-    if (hasStateAt(d)) return d;
+    if (hasStateAt(d) || hasStateCloneAt(d) || (top && real(d) === top)) return d;
     const up = path.dirname(d);
     if (up === d) return cwd;
     d = up;
@@ -84,17 +95,18 @@ export function makeContext(env: NodeJS.ProcessEnv = process.env, cmd: string | 
   const TAG = env.FACTORY_TAG || (env.CLAUDE_CODE_SESSION_ID || "").slice(0, 8) || "manual";
   const HOST = env.FACTORY_HOST || os.hostname().split(".")[0];
   const ACTOR = env.FACTORY_ACTOR || (env.FACTORY_TAG ? "loop" : "session");
-  const ROOT = findRoot(cwd);
+  const ROOT = findRoot(cwd, env);
   const CDIR = path.join(ROOT, ".tracker");
   const MAIN = env.FACTORY_MAIN || "main";
-  const ORIGIN = env.FACTORY_STATE === "local" || ["init", "merge-json", "memory"].includes(cmd ?? "") || !hasStateAt(ROOT)
+  const STATE = env.FACTORY_STATE_BRANCH || "tracker-state";
+  const ORIGIN = env.FACTORY_STATE === "local" || ["init", "merge-json", "memory"].includes(cmd ?? "")
     ? null : (git(["-C", ROOT, "remote", "get-url", "origin"], { env }).stdout || "").trim() || null;
-  const SDIR = ORIGIN ? path.join(CDIR, "main") : ROOT;
+  const SDIR = ORIGIN ? path.join(ROOT, STATE_CLONE) : ROOT;
   const TDIR = path.join(SDIR, "tracker");
   const MHEAVY = new Map<string, number>();
   const MCAPS = machineCaps(ROOT, MHEAVY);
   return {
-    env, cwd, cmd, TAG, HOST, ACTOR, ROOT, CDIR, MAIN, ORIGIN, SDIR, TDIR,
+    env, cwd, cmd, TAG, HOST, ACTOR, ROOT, CDIR, MAIN, STATE, ORIGIN, SDIR, TDIR,
     MCAPS, MHEAVY,
     CAPS: env.FACTORY_CAPS !== undefined ? new Set(list(env.FACTORY_CAPS)) : MCAPS.get(HOST) || (MCAPS.size ? new Set() : null),
     STALE_MS: Number(env.FACTORY_LEASE_STALE ?? 1800) * 1000,

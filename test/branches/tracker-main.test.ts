@@ -1,4 +1,4 @@
-// The tracker writes to origin's main, whatever branch a lane is on: a write on a branch reaches
+// The tracker writes to origin's state branch, whatever branch a lane is on: a write on a branch reaches
 // other clones and leaves the branch alone, and a write made while origin was away goes up with
 // the next one, even one that changes nothing. Run: node --test test/branches/
 import { describe, test, after } from "node:test";
@@ -11,7 +11,7 @@ const f = branchFactory(["a", "b"]);
 const [a, b] = f.lanes;
 const { add, drop } = f;
 
-describe("a tracker write while on a branch lands on main for everyone, and not on the branch", () => {
+describe("a tracker write while on a branch lands on origin's state for everyone, and not on the branch", () => {
   test("a note written on a branch shows up in another clone at its next fetch", () => {
     add("note");
     a.git("checkout", "-q", "-b", "unit/g/note");

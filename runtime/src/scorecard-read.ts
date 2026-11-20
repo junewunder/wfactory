@@ -41,8 +41,8 @@ export interface Records {
 // still in logs (ci-lost; expect and expect-settle, the predictions, gone since). A test keeps the list whole.
 export const LOG_CMDS = new Set(`add add-group add-unit answer aside-set ask block check check-ready checked-in ci-fail ci-fix-shared
   ci-known ci-norun ci-pass ci-retry ci-split ci-start ci-touch ci-unclaim claim decide done drop edit edit-group expect expect-settle focus
-  landing lanes lanes-stopped lease merged note overseer park pass prune priority publish rebuilt release rename reopen review settle sync
-  unclaim unpark withdraw ci-lost`.split(/\s+/));
+  landing lanes lanes-stopped lease merged note overseer park pass project prune priority publish rebuilt release rename reopen review settle sync
+  template unclaim unpark withdraw ci-lost`.split(/\s+/));
 // Every kind of event the lanes and daemons write (EVENTS_* in fleet-help.ts and the kinds no tier
 // names), and older ones (store-aside-unfiled: from when a unit was filed to sort a set-aside copy;
 // review-skipped: from when a branch whose review gave no verdict landed unreviewed).
@@ -66,8 +66,8 @@ const eventAt = (s: string) => { const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{1,2}):(
 // The records as the checkout in cwd sees them.
 export function readRecords(env: NodeJS.ProcessEnv, cwd: string): Records {
   const unknown: Unknown[] = [];
-  // The tracker's state where its commands read it (origin's main in .tracker/main), else the
-  // checkout's own tracker/ (no copy of main made yet).
+  // The tracker's state where its commands read it (origin's state branch in .tracker/state),
+  // else the checkout's own tracker/ (no copy of the state made yet).
   const c = makeContext(env, "scorecard", cwd);
   const own = path.join(c.ROOT, "tracker");
   const tdir = fs.existsSync(path.join(c.TDIR, "project.json")) ? c.TDIR : own;

@@ -1,5 +1,5 @@
 // The tracker's state on disk: the only module that knows it's JSON files in tracker/, and
-// where they are (a clone of origin's main, or this checkout).
+// where they are (a clone of origin's state branch, or this checkout).
 //
 //   tracker/project.json        name, resources, loops, schema version
 //   tracker/groups/<group>.json a group and its units
@@ -8,10 +8,10 @@
 //   tracker/decisions.json      the owner's answers and agents' judgement calls
 //   tracker/leases.json         which machine leases which group's data, and each machine's heartbeat
 //   tracker/log.jsonl           one line per write (merge=union)
-//   .tracker/                   gitignored: probe cache, view.html, lock, and main/
+//   .tracker/                   gitignored: probe cache, view.html, lock, and state/
 //
 // Commands read the state with load() and change it inside mutate(): read, change and
-// write under the lock, and with an origin, commit and push to origin's main at once.
+// write under the lock, and with an origin, commit and push to origin's state branch at once.
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -40,8 +40,16 @@ function files() {
     lock: path.join(CDIR, "lock"),
   };
 }
-// dir has a tracker (the repo's root, for ctx.ts; init, which makes one).
+// dir has a tracker/ of its own (the repo's root, for ctx.ts; init, which makes one).
 export const hasStateAt = (dir: string) => fs.existsSync(path.join(dir, "tracker", "project.json"));
+// A checkout's clone of origin's state branch, and whether dir has one (the repo's root, for
+// ctx.ts: with an origin the checkout has no tracker/ of its own).
+export const STATE_CLONE = path.join(".tracker", "state");
+export const hasStateCloneAt = (dir: string) => fs.existsSync(path.join(dir, STATE_CLONE, ".git"));
+// dir is a checkout of a factory whose state is on origin's branch: it has its clone of it, or
+// (a new clone of the repo) knows of the branch. For init, which must not make a second tracker.
+export const sharedAlready = (dir: string, branch = process.env.FACTORY_STATE_BRANCH || "tracker-state") => hasStateCloneAt(dir)
+  || spawnSync("git", ["-C", dir, "rev-parse", "-q", "--verify", `refs/remotes/origin/${branch}`], { stdio: "ignore" }).status === 0;
 // Where the owner's page goes (view.ts).
 export const viewFile = () => files().view;
 
@@ -241,8 +249,11 @@ export function groupFiles(): { file: string; id: string }[] {
 // A unit template, tracker/templates/<name>.json.
 export function loadTemplate<V>(nm: string): V {
   const f = path.join(files().templates, nm + ".json");
-  return readJSON<V>(f) || die(`no template ${path.relative(ctx.ROOT, f)}`);
+  return readJSON<V>(f) || die(`no template ${nm} (tracker/templates/${nm}.json; \`tracker template\` lists them)`);
 }
+// The templates' names, and one written as given (inside mutate: it's part of that write).
+export const templateNames = () => { const d = files().templates; return fs.existsSync(d) ? fs.readdirSync(d).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)).sort() : []; };
+export function saveTemplate(nm: string, t: unknown) { writeAtomic(path.join(files().templates, nm + ".json"), pretty(t) + "\n"); }
 
 // The probe cache (.tracker/cache.json): what each computed unit's check gave for its inputs.
 // secs: how long a command probe took that time.
@@ -263,31 +274,46 @@ export function createState(dir: string, project: Project) {
 
 // ---------------------------------------------------------------- shared state
 //
-// The state is main's, not this checkout's. When the repo has an `origin`,
-// every command reads tracker/ from a small clone of origin's main kept in
-// .tracker/main/ (fetched when it's over FACTORY_FETCH_EVERY seconds old,
-// default 20), and every write is committed there and pushed to origin's main
-// at once. If someone else pushed first, the write is dropped and done again
-// on the new state; for a claim that means picking again. So a unit's branch
-// never carries tracker/ changes, and a question reaches the overseer within
-// seconds. Without an origin (or with FACTORY_STATE=local) tracker/ in this
-// checkout is the state, as before.
+// The state is origin's, not this checkout's. When the repo has an `origin`, the state is
+// a branch of it that holds tracker/ and nothing else (ctx.STATE, "tracker-state"), with a
+// history of its own: main's history is the work, and no tracker write is in it. Every
+// command reads tracker/ from a small clone of that branch kept in .tracker/state/ (fetched
+// when it's over FACTORY_FETCH_EVERY seconds old, default 20), and every write is committed
+// there and pushed to origin's state branch at once. If someone else pushed first, the write
+// is dropped and done again on the new state; for a claim that means picking again. So a
+// unit's branch never carries tracker/ changes, and a question reaches the overseer within
+// seconds. Without an origin (or with FACTORY_STATE=local) tracker/ in this checkout is the
+// state, tracked on main like any other folder. A factory that gets an origin moves its
+// state to the branch once (moveState, `tracker state-branch`).
 
-// The clone of origin's main that holds the state: blobless, tracker/ only.
+// What the first command says in a repo whose origin has no state branch yet.
+const notMoved = () => `this factory's state is still tracker/ on ${ctx.MAIN}, and with an origin it's kept on a branch of its own (${ctx.STATE}), so tracker writes stay out of ${ctx.MAIN}'s history. Move it once: stop the lanes, put this version of the skill on every machine, push ${ctx.MAIN}, then run \`tracker state-branch\` (\`just tracker state-branch\`) in one checkout. To keep the state in this checkout alone, set FACTORY_STATE=local.`;
+
+// The clone of origin that holds the state: its state branch checked out (tracker/ is all
+// there is on it), blobless, and main's commits without their files, for the questions CI
+// asks about them (codeHead, which commit has which).
 function ensureState() {
-  const { SDIR, CDIR, MAIN, ORIGIN, ROOT } = ctx;
+  const { SDIR, CDIR, MAIN, STATE, ORIGIN, ROOT } = ctx;
   if (fs.existsSync(path.join(SDIR, ".git"))) return;
+  const ls = git(["ls-remote", "--exit-code", "--heads", ORIGIN!, STATE]);
+  if (ls.status === 2) die(hasStateAt(ROOT) ? notMoved() : `no tracker here: origin has no ${STATE} branch, and there's no tracker/ in ${ROOT}. Run from a factory repo, or \`tracker init\`.`);
+  if (ls.status) die(`couldn't reach origin for the tracker's state: ${(ls.stderr || "").trim().split("\n").pop()}`);
   fs.mkdirSync(CDIR, { recursive: true });
   const tmp = `${SDIR}.tmp-${process.pid}`;
   fs.rmSync(tmp, { recursive: true, force: true });
-  let r = git(["clone", "-q", "--no-checkout", "--filter=blob:none", "--branch", MAIN, ORIGIN!, tmp]);
-  if (r.status) die(`couldn't clone origin's ${MAIN} for the tracker's state: ${(r.stderr || "").trim()}`);
-  git(["-C", tmp, "sparse-checkout", "set", "tracker"]);
-  r = git(["-C", tmp, "checkout", "-q", MAIN]);
-  if (r.status) die(`couldn't check out the tracker's state: ${(r.stderr || "").trim()}`);
+  const r = git(["clone", "-q", "--filter=blob:none", "--single-branch", "--branch", STATE, ORIGIN!, tmp]);
+  if (r.status) die(`couldn't clone origin's ${STATE} for the tracker's state: ${(r.stderr || "").trim()}`);
+  git(["-C", tmp, "config", "--add", "remote.origin.fetch", `+refs/heads/${MAIN}:refs/remotes/origin/${MAIN}`]);
+  git(["-C", tmp, "fetch", "-q", "origin", MAIN]);
   for (const k of ["user.name", "user.email"]) { const v = git(["-C", ROOT, "config", k]).stdout.trim(); if (v) git(["-C", tmp, "config", k, v]); }
+  // The branch holds tracker/ only, so what git needs to know about its files is the clone's own.
+  fs.mkdirSync(path.join(tmp, ".git", "info"), { recursive: true });
+  fs.writeFileSync(path.join(tmp, ".git", "info", "attributes"), "tracker/log.jsonl merge=union\ntracker/**/*.json merge=tracker-json\n");
   mergeDriver(tmp);
   fs.renameSync(tmp, SDIR);
+  // The clone of main an earlier version kept the state in, unless it holds writes it never pushed.
+  const old = path.join(CDIR, "main");
+  if (fs.existsSync(path.join(old, ".git")) && git(["-C", old, "rev-list", "--count", `origin/${MAIN}..HEAD`]).stdout.trim() === "0") fs.rmSync(old, { recursive: true, force: true });
 }
 // git runs `tracker merge-json` for tracker JSON (see .gitattributes); the setting is per clone.
 // Through the factory's own stub when it has one: this file's path may be a deployed version
@@ -300,42 +326,45 @@ function mergeDriver(dir: string) {
     git(["-C", dir, "config", "merge.tracker-json.driver", want]);
   }
 }
-const ahead = () => Number(git(["-C", ctx.SDIR, "rev-list", "--count", `origin/${ctx.MAIN}..HEAD`]).stdout.trim() || 0);
+const ahead = () => Number(git(["-C", ctx.SDIR, "rev-list", "--count", `origin/${ctx.STATE}..HEAD`]).stdout.trim() || 0);
 let synced = false, offlineSaid = false, mutating = false;
 // A new command in this process starts unsynced (index.ts run).
 export function resetSession() { synced = false; offlineSaid = false; }
-// Bring the state up to origin's main. Writes this machine couldn't push (origin
-// was unreachable) are replayed on top. Returns false when origin can't be reached.
+// Bring the state up to origin's (and main's commits with it). Writes this machine couldn't
+// push (origin was unreachable) are replayed on top. Returns false when origin can't be reached.
 function syncState({ force = false } = {}) {
-  const { ORIGIN, SDIR, MAIN, ROOT } = ctx;
+  const { ORIGIN, SDIR, MAIN, STATE, ROOT } = ctx;
   if (!ORIGIN) return true;
   ensureState();
   mergeDriver(SDIR);
   let age = Infinity;
   try { age = (Date.now() - fs.statSync(path.join(SDIR, ".git", "FETCH_HEAD")).mtimeMs) / 1000; } catch {}
   if (!force && (synced || age < Number(ctx.env.FACTORY_FETCH_EVERY ?? 20))) return true;
-  const f = git(["-C", SDIR, "fetch", "-q", "origin", MAIN]);
+  const f = git(["-C", SDIR, "fetch", "-q", "origin", STATE, MAIN]);
   synced = true;
   if (f.status) {
-    if (!offlineSaid) process.stderr.write(`(couldn't reach origin: the tracker is working from this machine's last copy of main)\n`);
+    if (!offlineSaid) process.stderr.write(`(couldn't reach origin: the tracker is working from this machine's last copy of the state)\n`);
     offlineSaid = true;
     return false;
   }
   if (ahead()) {
-    const r = git(["-C", SDIR, "rebase", "-q", `origin/${MAIN}`]);
+    const r = git(["-C", SDIR, "rebase", "-q", `origin/${STATE}`]);
     if (r.status) {
       git(["-C", SDIR, "rebase", "--abort"]);
-      die(`this machine has tracker writes it couldn't push, and they clash with origin's main. They're in ${path.relative(ROOT, SDIR)} (git log origin/${MAIN}..HEAD); redo them by hand, then \`git -C ${path.relative(ROOT, SDIR)} reset --hard origin/${MAIN}\`.`);
+      die(`this machine has tracker writes it couldn't push, and they clash with origin's state. They're in ${path.relative(ROOT, SDIR)} (git log origin/${STATE}..HEAD); redo them by hand, then \`git -C ${path.relative(ROOT, SDIR)} reset --hard origin/${STATE}\`.`);
     }
-  } else git(["-C", SDIR, "reset", "-q", "--hard", `origin/${MAIN}`]);
+  } else git(["-C", SDIR, "reset", "-q", "--hard", `origin/${STATE}`]);
   return true;
 }
 // Before a command: git in this checkout merges tracker JSON with the driver, and the state
-// is origin's main as of a few seconds ago (writes fetch it themselves).
+// is origin's as of a few seconds ago (writes fetch it themselves).
 export function prepare(cmd: string) {
   if (cmd !== "merge-json" && fs.existsSync(path.join(ctx.ROOT, ".git"))) mergeDriver(ctx.ROOT);
-  if (ctx.ORIGIN && !["dir"].includes(cmd)) withLock(() => syncState());
+  if (ctx.ORIGIN && !["dir", "state-branch"].includes(cmd)) withLock(() => syncState());
 }
+// For `dir --sync`: what any other command does before it runs (prepare): this checkout's
+// clone of the state made, if it has none, and fetched if it's old.
+export function syncNow() { if (ctx.ORIGIN) withLock(() => syncState()); }
 // Console output from a write that may be done again: printed once it has landed.
 function buffered<R>(fn: () => R) {
   const out: [(...x: unknown[]) => void, unknown[]][] = [], ol = console.log, oe = console.error;
@@ -366,13 +395,13 @@ function privateWordAdded(files: string[] | undefined): string | null {
   return words.find((w) => added.includes(w)) ?? null;
 }
 
-const REFUSED = /rejected|fetch first|non-fast-forward|cannot lock ref|failed to update ref|stale info/;
+const REFUSED = /rejected|fetch first|non-fast-forward|cannot lock ref|failed to update ref|stale info|atomic push failed/;
 // Read, change, write: the whole thing under the lock. With shared state, the
-// write is committed and pushed to origin's main; if someone pushed first, it's
+// write is committed and pushed to origin's state branch; if someone pushed first, it's
 // thrown away and done again on the new state. strict (claims): a write that
 // can't reach origin fails instead of waiting on this machine.
 export const mutate = <R>(fn: (T: State) => R, { strict = false } = {}): R => withLock(() => {
-  const { ORIGIN, SDIR, MAIN } = ctx;
+  const { ORIGIN, SDIR, STATE } = ctx;
   if (!ORIGIN || lockDepth > 1 && mutating) { const T = load(); const r = fn(T); save(T); return r; }
   mutating = true;
   try {
@@ -386,7 +415,7 @@ export const mutate = <R>(fn: (T: State) => R, { strict = false } = {}): R => wi
       if (git(["-C", SDIR, "diff", "--cached", "--quiet"]).status === 0) {
         // Nothing new, but earlier writes this machine couldn't push go now.
         if (online && ahead()) {
-          const p = git(["-C", SDIR, "push", "-q", "origin", `HEAD:${MAIN}`]);
+          const p = git(["-C", SDIR, "push", "-q", "origin", `HEAD:${STATE}`]);
           if (p.status && REFUSED.test(p.stderr || "") && attempt < 8) continue;
         }
         b.flush(); return b.r;
@@ -402,7 +431,7 @@ export const mutate = <R>(fn: (T: State) => R, { strict = false } = {}): R => wi
       const c = git(["-C", SDIR, "commit", "-q", "--no-verify", "-m", msg]);
       if (c.status) die(`couldn't commit the tracker's state: ${(c.stderr || c.stdout).trim()}`);
       if (!online) { b.flush(); process.stderr.write("(not pushed yet: the next tracker write that reaches origin takes it)\n"); return b.r; }
-      const p = git(["-C", SDIR, "push", "-q", "origin", `HEAD:${MAIN}`]);
+      const p = git(["-C", SDIR, "push", "-q", "origin", `HEAD:${STATE}`]);
       if (p.status === 0) { b.flush(); return b.r; }
       const refused = REFUSED.test(p.stderr || "");
       if (!refused || attempt >= 8) {
@@ -415,22 +444,63 @@ export const mutate = <R>(fn: (T: State) => R, { strict = false } = {}): R => wi
   } finally { mutating = false; }
 });
 
-// The leases on origin's main as it is now, read without touching the state clone's files:
+// The leases on origin as they are now, read without touching the state clone's files:
 // they belong to whoever holds the tracker's lock (a write in progress, a refresh running its
 // probes). null without an origin.
 export function originLeases(): Lease[] | null {
-  const { ORIGIN, SDIR, MAIN } = ctx;
+  const { ORIGIN, SDIR, STATE } = ctx;
   if (!ORIGIN) return null;
-  if (git(["-C", SDIR, "fetch", "-q", "origin", MAIN]).status) die("couldn't reach origin to check the lease");
-  const r = git(["-C", SDIR, "show", `origin/${MAIN}:tracker/leases.json`]);
+  if (git(["-C", SDIR, "fetch", "-q", "origin", STATE]).status) die("couldn't reach origin to check the lease");
+  const r = git(["-C", SDIR, "show", `origin/${STATE}:tracker/leases.json`]);
   let ls: Lease[] = []; try { ls = r.status ? [] : JSON.parse(r.stdout).leases || []; } catch { die("couldn't read origin's tracker/leases.json"); }
   return ls;
 }
 
-// main's newest commit outside tracker/: the state's own writes land on main all the time, and
-// they aren't new work.
+// main's newest commit outside tracker/: without an origin the state's own writes are commits
+// on main (and were, in a factory whose state has since moved to its branch), and they aren't
+// new work. With an origin, origin's main as the state's clone last fetched it.
 export function codeHead({ fresh = false } = {}): string | null {
   if (ctx.codeHead !== undefined && !fresh) return ctx.codeHead;
-  const ref = ctx.ORIGIN || git(["-C", ctx.ROOT, "rev-parse", "--verify", "-q", ctx.MAIN]).status ? "HEAD" : ctx.MAIN;
+  const ref = ctx.ORIGIN ? `refs/remotes/origin/${ctx.MAIN}` : git(["-C", ctx.ROOT, "rev-parse", "--verify", "-q", ctx.MAIN]).status ? "HEAD" : ctx.MAIN;
   return (ctx.codeHead = git(["-C", ctx.SDIR, "log", "-1", "--format=%H", ref, "--", ".", ":(exclude)tracker"]).stdout.trim() || null);
+}
+
+// A factory that has an origin moves its state there, once: origin's main has tracker/ (as a
+// factory without an origin keeps it, and as every factory did before the state had a branch),
+// and after this the state branch holds it and main doesn't. Both in one push that origin
+// takes whole or not at all, so no write is ever in one and not the other. Says what it did.
+export function moveState(): string {
+  const { ORIGIN, ROOT, CDIR, MAIN, STATE } = ctx;
+  if (!ORIGIN) die("state-branch: this repo has no origin (or FACTORY_STATE=local), so the state stays in tracker/ here");
+  return withLock(() => {
+    const g = (args: string[], input?: string) => git(["-C", ROOT, ...args], input === undefined ? {} : { input });
+    const out = (args: string[], input?: string) => { const r = g(args, input); return r.status === 0 ? r.stdout.trim() : die(`state-branch: git ${args[0]} failed: ${(r.stderr || "").trim()}`); };
+    const old = path.join(CDIR, "main");
+    if (fs.existsSync(path.join(old, ".git")) && Number(git(["-C", old, "rev-list", "--count", `origin/${MAIN}..HEAD`]).stdout.trim() || 0) > 0)
+      die(`this machine has tracker writes it never pushed, in ${path.relative(ROOT, old)} (git log origin/${MAIN}..HEAD there). Push them first (\`git -C ${path.relative(ROOT, old)} push origin HEAD:${MAIN}\`), or delete that folder to drop them, then run this again.`);
+    for (let attempt = 1; ; attempt++) {
+      const ls = git(["ls-remote", "--exit-code", "--heads", ORIGIN!, STATE]);
+      if (ls.status === 0) return `the state is on origin's ${STATE} branch already; nothing to move`;
+      if (ls.status !== 2) die(`couldn't reach origin: ${(ls.stderr || "").trim().split("\n").pop()}`);
+      const f = g(["fetch", "-q", "origin", MAIN]);
+      if (f.status) die(`couldn't fetch origin's ${MAIN}: ${(f.stderr || "").trim().split("\n").pop()}. Push ${MAIN} first.`);
+      const base = out(["rev-parse", "FETCH_HEAD^{commit}"]);
+      const tt = g(["rev-parse", "-q", "--verify", `${base}:tracker`]).stdout.trim();
+      if (!tt) die(`origin's ${MAIN} has no tracker/ to move. Commit this checkout's tracker/ and push ${MAIN} first.`);
+      // Nothing here that origin lacks: a write made in this checkout and not pushed would be left behind.
+      if (hasStateAt(ROOT) && (g(["status", "--porcelain", "--", "tracker"]).stdout.trim() || g(["rev-parse", "-q", "--verify", "HEAD:tracker"]).stdout.trim() !== tt))
+        die(`this checkout's tracker/ isn't what origin's ${MAIN} has. Commit and push it, or pull ${MAIN}, so the two agree; then run this again.`);
+      const state = out(["commit-tree", out(["mktree", "-z"], `040000 tree ${tt}\ttracker\0`), "-m", `tracker: the state, moved here from ${MAIN} (${base.slice(0, 9)})`]);
+      const rest = out(["ls-tree", "-z", base]).split("\0").filter((l) => l && l.slice(l.indexOf("\t") + 1) !== "tracker");
+      const main = out(["commit-tree", out(["mktree", "-z"], rest.map((l) => l + "\0").join("")), "-p", base, "-m", `tracker: the state moved to the ${STATE} branch`]);
+      const p = g(["push", "-q", "--atomic", "origin", `${state}:refs/heads/${STATE}`, `${main}:refs/heads/${MAIN}`]);
+      if (p.status === 0) {
+        // This checkout comes along when that takes nothing from it: on main, at what was moved, nothing uncommitted.
+        const here = g(["symbolic-ref", "-q", "--short", "HEAD"]).stdout.trim() === MAIN && g(["rev-parse", "HEAD"]).stdout.trim() === base
+          && !g(["status", "--porcelain", "--untracked-files=no"]).stdout.trim() && g(["merge", "-q", "--ff-only", main]).status === 0;
+        return `moved: the state is origin's ${STATE} branch now, and ${MAIN} no longer has tracker/ (one commit takes it out). ${here ? "This checkout is on that commit." : `Pull ${MAIN} in this checkout.`} Every other checkout and lane picks the state up at its next tracker command, and loses its tracker/ folder at its next pull.`;
+      }
+      if (!REFUSED.test(p.stderr || "") || attempt >= 5) die(`couldn't push the move to origin (nothing was changed there): ${(p.stderr || "").trim().split("\n").pop()}`);
+    }
+  });
 }

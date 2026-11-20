@@ -4,7 +4,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { trackerRepo, has, hasnt, cmd, TRACKER } from "../../test/lib/index.ts";
+import { trackerRepo, has, hasnt, cmd, TRACKER, STATE_BRANCH } from "../../test/lib/index.ts";
 
 const f = trackerRepo("repo", { FACTORY_TAG: "worker1", FACTORY_EVIDENCE_MIN: "0" });
 const { setup, ok } = f;
@@ -19,7 +19,8 @@ f.git("add", "-A"); f.git("commit", "-qm", "tracker");
 const bare = path.join(f.top, "origin.git");
 f.git("clone", "-q", "--bare", f.dir, bare);
 f.git("remote", "add", "origin", bare);
-const commits = () => Number(cmd("git", ["--git-dir", bare, "rev-list", "--count", "main"], { cwd: f.top, env: f.env }).stdout.trim());
+setup(["state-branch"]);
+const commits = () => Number(cmd("git", ["--git-dir", bare, "rev-list", "--count", STATE_BRANCH], { cwd: f.top, env: f.env }).stdout.trim());
 const run = (a: string[]) => cmd(process.execPath, [TRACKER, ...a], { cwd: f.dir, env: f.env });
 const state = (id: string) => JSON.parse(ok(["show", id, "--json"])).status;
 

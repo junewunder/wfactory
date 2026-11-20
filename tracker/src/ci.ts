@@ -85,7 +85,7 @@ function touchedSince(t: CiTouch | undefined, run: { at: string; commit?: string
   if (!t || (sameSecond ? t.at < run.at : t.at <= run.at)) return null;
   return t.commit && run.commit && hasCommit(run.commit, t.commit) ? null : t;
 }
-// Is commit a in b's history (main's clone)? Asked once per pair per command.
+// Is commit a in b's history (main's commits, which the state's clone has too)? Asked once per pair per command.
 const ancestry = new Map<string, boolean>();
 function hasCommit(b: string, a: string) {
   const k = `${a} ${b}`;

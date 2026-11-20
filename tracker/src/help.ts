@@ -5,7 +5,7 @@ export const USAGE = `tracker — the factory tracker (v2). One shared copy, in 
 skill; each factory repo calls it through \`factory/tracker\` and its just
 recipes. Design: docs/design.md.
 
-State lives in the repo's tracker/ folder as JSON, written only by this CLI:
+State is a tracker/ folder of JSON, written only by this CLI:
   tracker/project.json        name, resources, loops, schema version
   tracker/groups/<group>.json a group and its units
   tracker/templates/<t>.json  unit templates ("add lexer" makes its units)
@@ -14,17 +14,21 @@ State lives in the repo's tracker/ folder as JSON, written only by this CLI:
   tracker/leases.json         which machine leases which group's data, and each machine's heartbeat
   tracker/log.jsonl           one line per write (merge=union)
   .tracker/                   gitignored: probe cache, view.html, lock, and
-                              main/ (below)
+                              state/ (below)
 
-The state is main's, not this checkout's. When the repo has an \`origin\`,
-every command reads tracker/ from a small clone of origin's main kept in
-.tracker/main/ (fetched when it's over FACTORY_FETCH_EVERY seconds old,
-default 20), and every write is committed there and pushed to origin's main
-at once. If someone else pushed first, the write is dropped and done again
-on the new state; for a claim that means picking again. So a unit's branch
-never carries tracker/ changes, and a question reaches the overseer within
-seconds. Without an origin (or with FACTORY_STATE=local) tracker/ in this
-checkout is the state, as before. A fetch or push that gets no answer
+The state is origin's, not this checkout's. When the repo has an \`origin\`,
+tracker/ is kept on a branch of it that holds nothing else (tracker-state;
+FACTORY_STATE_BRANCH names another), with a history of its own, so no
+tracker write is a commit on main. Every command reads tracker/ from a small
+clone of that branch kept in .tracker/state/ (fetched when it's over
+FACTORY_FETCH_EVERY seconds old, default 20), and every write is committed
+there and pushed to origin at once. If someone else pushed first, the write
+is dropped and done again on the new state; for a claim that means picking
+again. So neither main nor a unit's branch carries tracker/, and a question
+reaches the overseer within seconds. Without an origin (or with
+FACTORY_STATE=local) tracker/ in this checkout is the state, a folder on
+main. A factory that gets an origin moves its state to the branch once
+(\`state-branch\`), and until then every other command says so. A fetch or push that gets no answer
 gives up after FACTORY_GIT_TIMEOUT seconds (default 180; ssh itself gives up
 on a dead connection in about a minute) and counts as origin unreachable.
 On a public origin, "private_words" in project.json names files of words a
@@ -87,6 +91,9 @@ For agents:
   log [--since 8h|2026-10-09] [--group G] [-n N]
 Setting up:
   init [--title "…"]                    make tracker/ here
+  project [get <key> | set <key> <value> | unset <key>]   the settings (project.json): print them, or change one
+  template [<name> [--from <file>]]     the unit templates: list them, print one, or write one from a file
+  state-branch                          once, after the repo gets an origin: move tracker/ from main to origin's state branch
   add-group <group> --title "…" [--host H] [--priority N] [--needs id,…] [--ci step,…]
   edit-group <group> [--title "…"] [--host H|none] [--priority N] [--needs id,…] [--ci step,…|none]
   add <group> --template T [--title "…"] [--set k=v …]   a group from a template
@@ -114,7 +121,7 @@ Setting up:
   aside-set <id> <set> | --clear        store.sh: where its unfinished outputs were set aside
   aside-retire [<id>…]                  store.sh: drop the units an older version filed to sort a set-aside copy
   busy [--except <id>] [--live]         groups with outputs here not on main yet (checks skip them)
-  dir                                   where the state's tracker/ folder is
+  dir [--sync]                          where the state's tracker/ folder is
   memory [--check]                      rebuild memory/MEMORY.md from the memory files
   merge-json <base> <ours> <theirs> <path>   git's merge driver for tracker JSON
 
@@ -484,9 +491,45 @@ loop passes them to \`just check\` as FACTORY_BUSY_GROUPS.
 loop's pid and start time, and not ended) or whose CI runs here. A guard that refuses to write a
 group's outputs while another lane writes them uses this: a claim whose session ended (interrupted,
 or ended by last call) holds nothing.`,
-  dir: `dir
-Print where the state's tracker/ folder is: .tracker/main/tracker when the repo has an origin
-(the state is origin's main), else ./tracker.`,
+  project: `project | project get <key> | project set <key> <value> | project unset <key>
+The settings, tracker/project.json: resources, loops, the store, CI's steps, events and the
+numbers the loop reads (ci_every, last_call, min_unit_minutes, …). With an origin the file is
+on origin's state branch and in no checkout, so this is how it's read and changed; without
+one it can be edited in place too.
+project: the whole file. get: one value. A key is its parts joined by dots (ci.steps.drill,
+store.remote, loops.docs).
+set: the value as JSON ('{"cmd": "true"}', '["a", "b"]', 30, true), or plain text for a string.
+Objects on the way are made. unset takes the key out. Both are one write, pushed at once.
+A change that would leave broken data (what \`lint --broken\` fails on) is refused and nothing
+is written. schema and ranking are the tracker's own.`,
+  template: `template | template <name> | template <name> --from <file>
+The unit templates, tracker/templates/<name>.json (\`add <group> --template <name>\` makes a
+group's units from one). With an origin they're on origin's state branch and in no checkout.
+template: their names. template <name>: one, as JSON. --from <file>: write it from a JSON file
+(new, or replacing the one of that name), in one write, pushed at once. \`sync <group>\` then
+adds the units it now makes to a group made from it.`,
+  "state-branch": `state-branch
+Moves the state from tracker/ on main to a branch of origin that holds
+nothing else (tracker-state), once: when a factory gets an origin, or when
+it was made by a version of the skill that kept the state on origin's main.
+After it, tracker writes are commits on that branch and main's history is
+the work alone. One push changes both branches, and origin takes it whole
+or not at all: the state branch gets tracker/ as origin's main has it, and
+main gets one commit that takes tracker/ out.
+Before it: stop the lanes (\`just fleet off\`), put this version of the
+skill on every machine (an older one finds no tracker/ on main afterwards
+and stops), and have this checkout's tracker/ agree with origin's main
+(commit and push, or pull). It refuses if they differ, since a write that
+is only here would be left behind.
+After it: every checkout and lane uses the branch from its next tracker
+command, and its own tracker/ folder goes at its next pull of main. main's
+old tracker commits stay in its history; nothing rewrites it.`,
+  dir: `dir [--sync]
+Print where the state's tracker/ folder is: .tracker/state/tracker when the repo has an origin
+(the state is origin's state branch), else ./tracker.
+--sync: first bring that copy up to origin's, as any other command does before it runs (making
+it, in a checkout that has none yet). The loop does this before it reads a setting from
+project.json, and a lane's start before it reads the project's loops.`,
   memory: `memory [--check]
 Rebuild memory/MEMORY.md from the memory files' frontmatter: title (else the name), hook (else the
 description), open: true for the Open section. --check only says whether it's current (lint does too).`,

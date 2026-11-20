@@ -10,7 +10,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { test, after } from "node:test";
-import { originFactory, cmd, chomp, has, readOr } from "../lib/index.ts";
+import { originFactory, cmd, chomp, has, readOr, STATE_BRANCH } from "../lib/index.ts";
 
 // The store needs rsync 3 or later first on PATH (runtime/src/store-remote.ts). macOS's own is
 // openrsync, which it can't copy with: there, without Homebrew's rsync, each file here is one
@@ -114,9 +114,9 @@ export function storeFactory(lanes: string[]) {
     fs.writeFileSync(st(`stamps/${g}.json`), JSON.stringify({ unit: "seed", commit: "x", host: "c", at: "2026-01-01T00:00:00Z", bytes: 100000 }) + "\n");
   };
   // An hour passing, for the leases' and claims' heartbeats: every moment recorded in the tracker's
-  // leases and groups on origin's main is made an hour earlier, as if they had been an hour ago.
+  // leases and groups on origin's state branch is made an hour earlier, as if they had been an hour ago.
   const anHourLater = () => {
-    const r = cmd("git", ["--git-dir", f.origin, "ls-tree", "--name-only", "main", "tracker/groups/"], { cwd: f.w.top, env: f.w.env });
+    const r = cmd("git", ["--git-dir", f.origin, "ls-tree", "--name-only", STATE_BRANCH, "tracker/groups/"], { cwd: f.w.top, env: f.w.env });
     const files = ["tracker/leases.json", ...chomp(r.stdout).split("\n").filter((x) => x.endsWith(".json"))];
     const shift = (v: any): any => {
       if (typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/.test(v)) return new Date(Date.parse(v) - 3600e3).toISOString().replace(/\.\d+Z$/, "Z");
