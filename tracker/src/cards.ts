@@ -87,7 +87,7 @@ export function card(T: State, u: Unit, head = "", full: boolean | "all" = false
   if (full === true && every.length) { const n = everyShown(T, u, every).length; L.push(`  Decisions for every unit: ${every.length}${n < every.length ? `, ${n} of them on the card by title` : ", on the card by title"} (\`just show ${u.id}\`); \`just decisions <words>\` finds one and gives its why, \`just show ${u.id} --why-all\` all of them`); }
   else if (shown.length < every.length) L.push(`    - and ${every.length - shown.length} more for every unit (\`just decisions <words>\` finds one; \`just show ${u.id} --why-all\` lists them all, with why)`);
   const r = u.record || ({} as Partial<NonNullable<Unit["record"]>>);
-  if (r.evidence && (d.s === "done" || d.s === "review" || d.s === "broken")) L.push(`  Evidence: ${expand(T, r.evidence)}`);
+  if (r.evidence && (d.s === "done" || d.s === "review" || d.s === "merging" || d.s === "broken")) L.push(`  Evidence: ${expand(T, r.evidence)}`);
   if (r.state === "claimed" && r.reviewing) L.push(`  You're checking it: ${r.reviewing.by} worked it${r.reviewing.evidence ? `; their evidence: ${expand(T, r.reviewing.evidence)}` : ""}. If it holds, record it done with your own evidence; if not, reopen it with a note.`);
   // Handed back by its session with its work kept (unclaim): not interrupted, so no session to resume.
   const back = r.state === "claimed" && !!r.handedBack;

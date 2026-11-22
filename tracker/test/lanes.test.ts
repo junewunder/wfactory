@@ -162,6 +162,9 @@ describe("branches: done on a branch is \"merging\" until the loop says it's on 
     ok(["done", "br/one", "--evidence", "on the branch"], B);
     has(ok(["state", "br/one"]), "merging");
   });
+  // The landing review reads the card of a merging unit: without its Evidence it went hunting
+  // and sent good units back for "no evidence" (rivals-forge, Nov 2026).
+  test("and its card shows the evidence, for the landing review", () => { has(ok(["show", "br/one"]), "Evidence: on the branch"); });
   test("and what needs it waits", () => { has(ok(["show", "br/two"]), "can't start until Branch unit one (br/one)"); });
   test("merged: done", () => {
     ok(["merged", "--branch", "unit/br/one"]);
