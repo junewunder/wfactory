@@ -279,7 +279,21 @@ describe("log, view", () => {
   });
   test("the page has the units list's search, group and sort", () => {
     const html = f.read(".tracker/view.html");
-    has(html, 'id="units"'); has(html, "search units: title, id, tag"); has(html, "every group"); has(html, "sort: the order next takes them");
+    has(html, 'units(){'); has(html, "Search titles, ids, tags"); has(html, "Every group"); has(html, "In the order next takes them");
+  });
+  // A unit's panel on the page lists what it needs, and who has it while it's worked.
+  test("each unit carries its needs, and a claimed one who has it", () => {
+    const us = () => viewData().groups.flatMap((g: { units: { id: string }[] }) => g.units);
+    ok(["add-unit", "fenn/pose", "--title", "Pose Fenn", "--needs", "fenn/rig-import"]);
+    const pose = us().find((u: { id: string }) => u.id === "fenn/pose");
+    assert.deepEqual(pose.needs, ["fenn/rig-import"]);
+    assert.equal(pose.who, undefined);
+    ok(["claim", "pipe/convert"]);
+    const conv = us().find((u: { id: string }) => u.id === "pipe/convert");
+    assert.equal(conv.s, "doing");
+    assert.equal(conv.who.by, "worker1");
+    ok(["unclaim", "pipe/convert"]);
+    ok(["drop", "fenn/pose", "--why", "only for this check"]);
   });
 });
 
