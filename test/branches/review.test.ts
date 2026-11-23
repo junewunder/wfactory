@@ -55,6 +55,28 @@ describe("a review that passes: the branch lands", () => {
   });
 });
 
+// 22 Nov: a reviewer said a strip folder the Evidence cited under work/ didn't exist (its Glob lists
+// files, not folders) and sent the unit back. The loop looks the cited paths up and tells it.
+describe("the paths its Evidence cites are looked up for the reviewer, folders included", () => {
+  test("a unit whose evidence cites a folder under work/, a file and a path that isn't there", () => {
+    fs.mkdirSync(r.at("work/logs/look/123-strip"), { recursive: true });
+    fs.writeFileSync(r.at("work/logs/look/123-strip/frame-1.png"), "png");
+    add("ev");
+    const out = r.loop(ONE, { FACTORY_FAKE_EVIDENCE: "strips in work/logs/look/123-strip/ and `out/g-ev.txt:1`; also work/logs/look/gone.json; ran for g/ev" });
+    has(out, "unit/g/ev merged into main");
+  });
+  test("  the reviewer is told what's there", () => {
+    const p = readOr(lk(`review.${reviews()}.prompt`));
+    has(p, "- work/logs/look/123-strip: a folder, 1 entry, last changed");
+    has(p, "- out/g-ev.txt: a file,");
+    has(p, "- work/logs/look/gone.json: not there");
+    has(p, "Take these as found");
+  });
+  test("  and a unit id isn't taken for a missing path", () => { hasnt(readOr(lk(`review.${reviews()}.prompt`)), "- g/ev:"); });
+  // (A later test makes work/ a link.)
+  test("  (work/ cleared)", () => { fs.rmSync(r.at("work"), { recursive: true, force: true }); });
+});
+
 describe("a review that asks for fixes: not landed, back to ready on its branch; a second makes it stuck", () => {
   let out = "";
   test("a unit finished, and its review asks for a fix", () => {
@@ -94,6 +116,33 @@ describe("a review that asks for fixes: not landed, back to ready on its branch;
     out = r.loop(ONE);
     has(out, "unit/g/fx merged into main");
     assert.equal(r.ok(["state", "g/fx"]), "done");
+  });
+});
+
+// 22 Nov: the overseer reopened units the review sent back twice without weighing the findings,
+// and good units went round again. Overruled, the branch lands as it is, not reviewed again.
+describe("a unit the review sent back twice, overruled by the overseer: landed without another review", () => {
+  let out = "";
+  test("sent back twice: stuck", () => {
+    add("ov");
+    verdicts(FIX("work/x doesn't exist"));
+    r.loop(ONE);
+    verdicts(FIX("work/x still doesn't exist"));
+    r.loop(ONE);
+    assert.equal(r.ok(["state", "g/ov"]), "stuck");
+    assert.notEqual(remote("unit/g/ov"), "");
+  });
+  test("  overruled, the next look lands it, unreviewed", () => {
+    r.ok(["overrule", "g/ov", "--why", "work/x is a folder the reviewer's Glob didn't list; it's there"], { FACTORY_ACTOR: "oversee" });
+    const n = reviews();
+    verdicts(FIX("would send it back again"));
+    out = r.loop(ONE);
+    has(out, "review: the overseer overruled the review of g/ov");
+    has(out, "unit/g/ov merged into main");
+    assert.equal(reviews(), n);
+    assert.equal(r.ok(["state", "g/ov"]), "done");
+    assert.ok(f.main("out/g-ov.txt"));
+    verdicts();
   });
 });
 

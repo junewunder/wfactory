@@ -66,7 +66,8 @@ way it says.
   is the overseer's job; the owner should only ever need to set its
   direction ([lesson 33](../docs/lessons.md)).
 - **What you may change:** `just tracker edit … --priority`, `just tracker edit-group … --priority`,
-  `just block`, `just reopen`, `just note`, `just tracker add-unit`,
+  `just block`, `just reopen`, `just tracker overrule` (a twice-reviewed
+  unit, below), `just note`, `just tracker add-unit`,
   `just tracker park` (only when the owner says to set work aside), and
   `just decide` for each intervention, with its why. Run them as
   `FACTORY_ACTOR=oversee just …` so the log says who did it. Each one is
@@ -174,9 +175,21 @@ lands; say so, and that `just tracker merged --branch <branch>` clears it.
   review gave no verdict three times, mean the reviewer can't run at all
   (its model, `review_model` in `tracker/project.json`, or the CLI): fix
   that, or tell the owner, then `just reopen` the stuck units. A `stuck`
-  event for a unit whose review asked for fixes twice: read the findings
-  (`just show <id>`); `just reopen` it with a note if the next session can
-  settle them, which gives it two more rounds;
+  event for a unit whose review asked for fixes twice: judge the findings
+  before anything goes back. `just show <id>` has them and the Evidence the
+  review sent back; read that evidence and the files and folders it cites
+  (outputs are under `work/`, which no diff shows; `ls` a folder, since a
+  reviewer's Glob lists only files), and the branch's diff where a finding
+  names code. For each finding, decide whether it's real: does the cited
+  output exist and show what the Evidence says, did the check the card asks
+  for run? A finding that contradicts the files, asks again for evidence
+  that's on the card, or is one review's preference against another's
+  doesn't hold. If none of them holds, the work is done: `just tracker
+  overrule <id> --why "…"` (what each finding got wrong) puts it back to
+  merging, and the loop lands it without another review. Only if one is
+  real, `just reopen` it with a note naming that finding and what settles
+  it, which gives it two more rounds; never "the review's fixes stand"
+  without having checked them ([lesson 47](../docs/lessons.md));
 - a lane still down after 3 restarts for the same cause;
 - a machine, or all of them, idle 30 minutes or more (an `idle` event, or
   every lane on it waiting);

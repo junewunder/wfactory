@@ -400,6 +400,7 @@ export const prop = (unit: string, p: string) => {
 //   FACTORY_FAKE_TRACKERONLY  commit only a change to tracker/ (nothing else on the branch)
 //   FACTORY_FAKE_LOOP     also change factory/loop.sh and add factory/extra.sh
 //   FACTORY_FAKE_BREAK    add fail-check (the factory's check fails)   FACTORY_FAKE_FIX  remove it
+//   FACTORY_FAKE_EVIDENCE the evidence it records the unit done with (else "fake session")
 // A unit held ($FACTORY_LOCKS/hold.<group>-<slug>) works, once its commit is made, until the test
 // lets it go (go.<group>-<slug>), at most 5 minutes; while held, held.<group>-<slug> has its pid.
 export const FAKE_CLAUDE = `#!/usr/bin/env bash
@@ -429,7 +430,7 @@ elif [ -z "\${FACTORY_FAKE_NOWORK:-}" ]; then
   fi
   [ -z "\${FACTORY_FAKE_WIP:-}" ] || rm -f "work/wip-\${id%%/*}"
 fi
-[ -n "\${FACTORY_FAKE_NODONE:-}" ] || just done "$id" --evidence "fake session" >/dev/null 2>&1
+[ -n "\${FACTORY_FAKE_NODONE:-}" ] || just done "$id" --evidence "\${FACTORY_FAKE_EVIDENCE:-fake session}" >/dev/null 2>&1
 echo '{"type":"result","is_error":false,"result":"did '"$id"'","num_turns":1,"total_cost_usd":0.01}'
 `;
 
