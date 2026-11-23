@@ -9,7 +9,7 @@ import { NetError, die, list, now, parseArgs, plural, since, str, strs } from ".
 import { MAX_NOTE, addNote, checkText, fixIds, groupTitle, name, resolve } from "../names.ts";
 import { beatRecords, beatsHere, claimAlive, dataGroup, dropLease, groupData, newerIn, heldHere, landingMine, leaseAge, leaseOf, liveLease, lockHeld, takeLease } from "../machine.ts";
 import { busyGroups, ciKeepsLease } from "../ci.ts";
-import { SETTLED, derive, hostOk, sentence } from "../status.ts";
+import { SETTLED, derive, hostOk, overruled, sentence } from "../status.ts";
 import { gaveBackLine } from "../sessions.ts";
 import { C } from "./registry.ts";
 import type { CiRun, Group, LanesOff, Note, Overseer, State, Unit, UnitRecord } from "../types.ts";
@@ -126,8 +126,9 @@ C.landing = (a) => {
 // findings on their card and a note pointing there. The second time for a unit, it's blocked for the
 // overseer instead, so the loop doesn't go round. A merge unit among them is done with the branch (its
 // merge is on it): the unit whose work it is goes back, not the merge.
+// --change: what the reviewed branch changes (the loop's hash of its diff), kept for an overrule.
 C["review-fix"] = (a) => {
-  const o = parseArgs(a), b = o._[0];
+  const o = parseArgs(a), b = o._[0], change = str(o.change) || undefined;
   const findings = (str(o.findings) ?? "").trim().slice(0, 4000);
   if (!b || !findings) die('review-fix <branch> --findings "…"');
   return mutate((T) => {
@@ -140,7 +141,7 @@ C["review-fix"] = (a) => {
     const first = text.replace(/\s+/g, " ");
     for (const u of back) {
       const fixes = (u.review?.fixes ?? 0) + 1, r = u.record!;
-      u.review = { fixes, at: now(), findings: text, sent: { evidence: r.evidence, by: r.by, host: r.host, branch: b } };
+      u.review = { fixes, at: now(), findings: text, sent: { evidence: r.evidence, by: r.by, host: r.host, branch: b, change } };
       if (fixes >= 2) {
         u.record = { state: "blocked", why: `the loop's review asked for fixes a second time, so it waits for the overseer rather than going round again: ${first.length > 300 ? first.slice(0, 299) + "…" : first}`, by: ctx.TAG, at: now() };
         log(T, "block", u.id, `${u.title}: stuck: the loop's review asked for fixes a second time`);
@@ -168,8 +169,9 @@ C.overrule = (a) => {
   return mutate((T) => {
     const u = resolve(T, o._[0]), rv = u.review, s = rv?.sent;
     if (!rv || !s || rv.fixes < 2 || u.record?.state !== "blocked") return die(`${name(u)} isn't stuck after the loop's review sent it back twice; overrule is for those (\`reopen\` sends a unit round again)`);
-    u.record = { state: "done", by: s.by ?? ctx.TAG, at: now(), evidence: s.evidence, branch: s.branch, host: s.host, pushed: true };
-    rv.overruled = { why: fixIds(T, "the why", why), at: now(), by: ctx.TAG };
+    if (!s.change) return die(`${name(u)}'s review didn't say which change it sent back, so an overrule couldn't hold for that change alone; \`reopen\` it`);
+    u.record = { state: "done", by: s.by ?? ctx.TAG, at: now(), evidence: s.evidence, branch: s.branch, host: s.host, pushed: true, overruled: true };
+    rv.overruled = { why: fixIds(T, "the why", why), at: now(), by: ctx.TAG, change: s.change };
     touch(T, u); log(T, "overrule", u.id, `${u.title}: merging: the overseer overruled the loop's review: ${why}`);
     console.log(`${name(u)} → merging (the review overruled; the loop lands ${s.branch}${s.host ? ` from ${s.host}` : ""} without reviewing it again)`);
     return 0;
@@ -546,10 +548,11 @@ C.busy = (a) => {
 // One unit's status key (ready, doing, merging, done, …), for scripts.
 // --host: the machine it's pinned to, its own or its group's ("" for any). --landed: when the
 // branch it's done by landed on main ("" if it isn't done, or is done some other way: by hand).
-// --overruled: why the overseer overruled the loop's review of its branch ("" if it didn't).
+// --overruled: the change whose review the overseer overruled and why, by a tab ("" if it didn't,
+// or the unit's record isn't the one the overrule wrote: a check failed since, or it was done again).
 C.state = (a) => {
   const o = parseArgs(a); const T = load(); const u = resolve(T, o._[0]);
-  console.log(o.overruled ? (derive(T, u).s === "merging" && u.review?.overruled?.why) || "" : o.branch ? u.record?.branch || "" : o.by ? u.record?.by || "" : o.host ? u.host || T.groupOf.get(u.id)?.host || ""
+  console.log(o.overruled ? (overruled(T, u) ? `${u.review!.overruled!.change}\t${u.review!.overruled!.why}` : "") : o.branch ? u.record?.branch || "" : o.by ? u.record?.by || "" : o.host ? u.host || T.groupOf.get(u.id)?.host || ""
     : o.landed ? (derive(T, u).s === "done" && u.record?.state === "done" && u.record.landed) || "" : derive(T, u).s);
   return 0;
 };

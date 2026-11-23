@@ -333,3 +333,7 @@ export function rankWhy(T: State, u: Unit) {
   if (dg) { const l = liveLease(T, dg); parts.push(l ? "its data is here" : `its data is on the store and moves to ${ctx.HOST}`); }
   return parts.join("; ");
 }
+
+// The overseer overruled the loop's review of it (tracker overrule), and its record is still the
+// one the overrule wrote: merging on that branch, not done again or sent back since.
+export const overruled = (T: State, u: Unit) => !!u.review?.overruled && !!u.record?.overruled && derive(T, u).s === "merging";

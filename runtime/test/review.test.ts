@@ -82,6 +82,15 @@ test("the Evidence's paths, looked up: folders, files, and what isn't there", ()
   assert.match(out[3], /^- \.\/src: a folder, 1 entry/);
   assert.equal(out.length, 4, out.join("\n"));
 });
+test("  an Evidence over several lines (printed unindented after the first): every line read", () => {
+  const root = tempDir("review-paths-");
+  fs.mkdirSync(path.join(root, "work/a"), { recursive: true }); fs.mkdirSync(path.join(root, "docs")); fs.writeFileSync(path.join(root, "docs/x.md"), "x");
+  const card = "Unit a (g/a): merging\n  Evidence: built the strips:\n- work/a/\n- docs/x.md\n  Notes from earlier attempts:\n    - work/b\n";
+  const out = evidencePaths(card, root);
+  assert.match(out, /^- work\/a: a folder, 0 entries/m);
+  assert.match(out, /^- docs\/x\.md: a file/m);
+  assert.ok(!out.includes("work/b"), "the next field isn't the Evidence");
+});
 test("  none cited, or no Evidence: nothing", () => {
   assert.equal(evidencePaths("Unit a (g/a)\n  Evidence: ran the check, all green\n", d), "");
   assert.equal(evidencePaths("Unit a (g/a)\n  Next: work/x\n", d), "");

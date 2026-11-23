@@ -6,7 +6,7 @@ import { expand, matches, name, groupTitle, selected, stems } from "./names.ts";
 import { dataGroup, resTitle } from "./machine.ts";
 import { describeProbe, probeOf } from "./probes.ts";
 import { coveredFixes, siblingFixes } from "./checks.ts";
-import { derive, orderLine, priorityOf, SETTLED, sentence } from "./status.ts";
+import { derive, orderLine, overruled, priorityOf, SETTLED, sentence } from "./status.ts";
 import type { Decision, Option, Question, State, Unit } from "./types.ts";
 import { ended, endedText, inForce, when } from "./decisions.ts";
 
@@ -58,7 +58,7 @@ export function card(T: State, u: Unit, head = "", full: boolean | "all" = false
   // Stuck after the review's second round: the evidence it sent back, for the overseer to weigh
   // the findings against (the stuck record has none of its own).
   if (u.review?.sent?.evidence && u.record?.state === "blocked") L.push(`  The Evidence the review sent back (${u.review.sent.branch}${u.review.sent.host ? `, worked on ${u.review.sent.host}` : ""}): ${expand(T, u.review.sent.evidence)}`);
-  if (u.review?.overruled && d.s === "merging") L.push(`  The overseer overruled the loop's review: ${expand(T, u.review.overruled.why)}`);
+  if (overruled(T, u)) L.push(`  The overseer overruled the loop's review: ${expand(T, u.review!.overruled!.why)}`);
   const needs = [...(g.needs || []), ...(u.needs || [])].map((n) => T.byId.get(n)).filter((x): x is Unit => !!x);
   if (needs.length) L.push(`  Needs: ${needs.map((n) => `${name(n)}${SETTLED.has(derive(T, n).s) ? " ✓" : ""}`).join(", ")}`);
   // A check: the fixes it waits for by naming (checks.ts), and those its sibling checks found.

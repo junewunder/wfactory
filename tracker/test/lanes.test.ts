@@ -387,7 +387,7 @@ describe("overrule: a unit the review sent back twice, the findings not holding,
     for (const k of [1, 2]) {
       ok(["claim", "or/one"], B);
       ok(["done", "or/one", "--evidence", `strips in work/logs/look/381-strip, round ${k}`], B);
-      ok(["review-fix", "unit/or/one", "--findings", "- work/logs/look/381-strip doesn't exist"]);
+      ok(["review-fix", "unit/or/one", "--findings", "- work/logs/look/381-strip doesn't exist", "--change", `c${k}`]);
     }
     has(ok(["state", "or/one"]), "stuck");
     has(ok(["show", "or/one"]), "The Evidence the review sent back (unit/or/one");
@@ -402,15 +402,35 @@ describe("overrule: a unit the review sent back twice, the findings not holding,
     has(ok(["overrule", "or/one", "--why", why], OV), "Overruled unit one (or/one) → merging");
     assert.equal(ok(["state", "or/one"]), "merging\n");
     assert.equal(ok(["state", "or/one", "--branch"]), "unit/or/one\n");
-    assert.equal(ok(["state", "or/one", "--overruled"]), why + "\n");
+    assert.equal(ok(["state", "or/one", "--overruled"]), `c2\t${why}\n`, "the change the review sent back, and why");
     const card = ok(["show", "or/one"]);
     has(card, "Evidence: strips in work/logs/look/381-strip, round 2");
     has(card, "The overseer overruled the loop's review");
   });
   test("  a lane on its machine can land it", () => { has(ok(["landing"], B), "unit/or/one\tor/one"); });
-  test("  reopened: the overrule goes", () => {
+  test("  done again on the branch (a check failed, more work): the overrule goes with the old record", () => {
+    ok(["claim", "or/one"], B);
+    ok(["done", "or/one", "--evidence", "more work on the same branch, round 3"], B);
+    assert.equal(ok(["state", "or/one"]), "merging\n");
+    assert.equal(ok(["state", "or/one", "--overruled"]), "\n");
+    hasnt(ok(["show", "or/one"]), "The overseer overruled");
+  });
+  test("  reopened: the overrule and the evidence sent back go", () => {
+    for (const k of [3, 4]) {
+      if (k === 4) { ok(["claim", "or/one"], B); ok(["done", "or/one", "--evidence", "strips again, round 4 of the work"], B); }
+      ok(["review-fix", "unit/or/one", "--findings", "- still", "--change", `c${k}`]);
+    }
+    has(ok(["state", "or/one"]), "stuck");
+    ok(["overrule", "or/one", "--why", why], OV);
     ok(["reopen", "or/one"]);
     assert.equal(ok(["state", "or/one", "--overruled"]), "\n");
+    ok(["block", "or/one", "--why", "stuck on something else entirely"]);
+    hasnt(ok(["show", "or/one"]), "The Evidence the review sent back");
+  });
+  test("  a review that didn't say which change: refused", () => {
+    setup(["add-unit", "or/three", "--title", "Overruled unit three"]);
+    for (let k = 0; k < 2; k++) { ok(["claim", "or/three"], B); ok(["done", "or/three", "--evidence", "on the branch, as it was"], B); ok(["review-fix", "unit/or/three", "--findings", "- x"]); }
+    assert.notEqual(t(["overrule", "or/three", "--why", why], OV).code, 0);
   });
 });
 

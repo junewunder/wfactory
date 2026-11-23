@@ -575,9 +575,31 @@ test("a review asking for fixes: not landed; the branch is pushed and its unit g
   assert.equal(onOrigin(r, "fx.txt"), null, "not on main");
   assert.notEqual(r.origin("git rev-parse -q --verify refs/heads/unit/g/fx || true"), "", "its branch is on origin");
   assert.match(r.origin("git show unit/g/fx:fx.txt"), /x/);
-  assert.deepEqual(f.calls.filter((c) => c[0] === "review-fix"), [["review-fix", "unit/g/fx", "--findings", "- fx.txt:1: says nothing"]]);
+  const fx = f.calls.filter((c) => c[0] === "review-fix");
+  assert.equal(fx.length, 1);
+  assert.deepEqual(fx[0].slice(0, 5), ["review-fix", "unit/g/fx", "--findings", "- fx.txt:1: says nothing", "--change"]);
+  assert.match(fx[0][5], /^[0-9a-f]{40}$/, "the change the review saw, for an overrule");
   assert.equal(f.calls.filter((c) => c[0] === "merged").length, 0);
   assert.equal(r.here("git rev-parse --abbrev-ref HEAD"), "main");
+});
+
+// An overrule (tracker overrule) holds for the change the review sent back, and no other.
+test("overruled: the change the review sent back lands unreviewed; any other is reviewed", async () => {
+  const r = lane(); const [l, f] = landing({ review: () => ({ verdict: "fix", findings: "- ov.txt:1: wrong" }) });
+  f.states.set("g/ov", "done");
+  unitBranch("unit/g/ov", { "ov.txt": "x\n" });
+  await l.finishUnit("g/ov", "unit/g/ov", "Unit ov (g/ov)");
+  const change = f.calls.find((c) => c[0] === "review-fix")![5];
+  f.states.set("g/ov overruled", `${change}\tthe finding is wrong`);
+  r.here("git checkout -q unit/g/ov");
+  const n = f.reviews.length;
+  assert.equal(await l.land("unit/g/ov", "Unit ov (g/ov)"), 0);
+  assert.equal(f.reviews.length, n, "not reviewed again");
+  assert.match(onOrigin(r, "ov.txt") ?? "", /x/);
+  f.states.set("g/ow overruled", `${change}\tthe finding is wrong`);
+  unitBranch("unit/g/ow", { "ow.txt": "y\n" });
+  assert.equal(await l.land("unit/g/ow", "Unit ow (g/ow)"), 4, "another change: reviewed");
+  assert.equal(f.reviews.length, n + 1);
 });
 
 test("a branch that changes nothing outside tracker/ lands with no review", async () => {

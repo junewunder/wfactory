@@ -16,7 +16,8 @@ export function evidencePaths(card: string, root = "."): string {
   const lines = card.split("\n"), at = lines.findIndex((l) => /^\s*Evidence:/.test(l));
   if (at < 0) return "";
   let text = lines[at].replace(/^\s*Evidence:/, "");
-  for (const l of lines.slice(at + 1)) { if (/^\S/.test(l) || /^ {1,2}[A-Z][\w' -]{0,40}:/.test(l)) break; text += `\n${l}`; }
+  // (Its later lines, if it has any, are printed unindented: only the card's next field ends it.)
+  for (const l of lines.slice(at + 1)) { if (/^ {1,2}[A-Z][\w' -]{0,40}:/.test(l)) break; text += `\n${l}`; }
   const seen = new Set<string>(), out: string[] = [];
   for (let w of text.split(/[\s`'"(),;<>\[\]{}]+/)) {
     w = w.replace(/[.:;,!?]+$/, "").replace(/:\d+(?:[:-]\d+)?$/, "").replace(/(.)\/+$/, "$1");

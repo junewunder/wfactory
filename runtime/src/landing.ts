@@ -164,6 +164,7 @@ export class Landing {
   c: LaneCtx;
   why = "";     // why land() couldn't land a branch
   findings = ""; // what its review asked to fix, when land() returned 4
+  fixedChange = ""; // the change (ownChange) that review saw, so an overrule holds for it alone
   // (why, when land() returned 5: the check before landing's last line; when it returned 6, why
   // the last review gave no verdict)
   reviewKey = ""; // the branch change whose review gave no verdict REVIEW_TRIES times (land() returned 6)
@@ -378,7 +379,7 @@ export class Landing {
   // the branch waits, and is reviewed again after REVIEW_RETRY_MS.
   async land(b: string, t: string): Promise<0 | 1 | 2 | 3 | 4 | 5 | 6> {
     const { log, event, MAIN, HOST, LANE, TDIR } = this.c;
-    this.why = ""; this.findings = ""; this.reviewKey = "";
+    this.why = ""; this.findings = ""; this.fixedChange = ""; this.reviewKey = "";
     if (!g("checkout", "-q", b)) { this.why = `couldn't check out ${b}`; return 1; }
     this.commitLeft(`${t}: what the session left uncommitted`);
     if (!g("fetch", "-q", "origin", MAIN)) return 2;
@@ -705,7 +706,8 @@ export class Landing {
   // waits, pushed, and is reviewed again after REVIEW_RETRY_MS, as a check with no verdict is
   // checked again, and the overseer hears each time (review-unrun). A branch whose own change passed
   // here before (its landing failed after: a conflict, a push refused) isn't reviewed again, nor
-  // one whose review the overseer overruled (tracker overrule, after the review sent it back twice).
+  // the change whose review the overseer overruled (tracker overrule, after the review sent it back
+  // twice).
   async review(u: string, t: string): Promise<0 | 2 | 4 | 6> {
     const { log, event, HOST, LANE } = this.c;
     const base = git("merge-base", this.om, "HEAD") ?? "";
@@ -713,8 +715,10 @@ export class Landing {
     if (!diff.trim()) { log(`review: ${t} changes nothing outside tracker/; no review`); return 0; }
     const key = `${u} ${this.ownChange()}`, passed = (read("runs/.review-passed") ?? "").split("\n").filter(Boolean);
     if (passed.includes(key)) { log(`review: ${t} passed before, as it is; not reviewed again`); return 0; }
-    const over = this.out(["state", u, "--overruled"]);
-    if (over) { log(`review: the overseer overruled the review of ${t} (${over}); not reviewed again`); return 0; }
+    // An overrule holds for the change the review sent back alone: any other (more work, a merge
+    // unit's settling of a conflict) is reviewed as usual.
+    const [ch, ...why] = this.out(["state", u, "--overruled"]).split("\t");
+    if (ch && why.length && ch === this.ownChange()) { log(`review: the overseer overruled the review of ${t} (${why.join(" ")}); not reviewed again`); return 0; }
     const card = this.out(["show", u]);
     const standards = git("show", `${this.om}:CODING_STANDARDS.md`) ?? "";
     // The other groups whose build the branch changes (its own group's is its own work).
@@ -728,7 +732,7 @@ export class Landing {
       setReviewUnrun(key, null);
       return 0;
     }
-    if (v.verdict === "fix") { setReviewUnrun(key, null); this.findings = v.findings; log(`review: ${t} needs fixes before it lands`); return 4; }
+    if (v.verdict === "fix") { setReviewUnrun(key, null); this.findings = v.findings; this.fixedChange = this.ownChange(); log(`review: ${t} needs fixes before it lands`); return 4; }
     if (v.verdict === "wait") { this.why = v.why; log(`review: ${v.why}; ${t} waits`); return 2; }
     const now = Date.now(), tries = (reviewUnrun(key)?.tries ?? 0) + 1;
     setReviewUnrun(key, { at: now, tries });
@@ -797,7 +801,7 @@ export class Landing {
         // Its review asks for fixes: its branch goes up first, then its unit goes back to ready on it
         // (stuck the second time), so the next claim carries it on.
         this.saveBranch(u, b, t, "its review asks for fixes");
-        const r = this.c.tr(["review-fix", b, "--findings", this.findings], LOOP);
+        const r = this.c.tr(["review-fix", b, "--findings", this.findings, ...(this.fixedChange ? ["--change", this.fixedChange] : [])], LOOP);
         if (r.code !== 0) log(`tracker: couldn't record ${b}'s review (${r.out.trim() || r.err.trim()}); it's reviewed again at the next look`);
         else this.sentBack(u, b, r.out, "the loop's review asked for fixes a second time, so it waits for the overseer (`just show <unit>` has the findings)");
       }
