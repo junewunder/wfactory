@@ -15,6 +15,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { netGit, reachesRemote } from "../../tracker/src/net.ts";
 import type { TrOut } from "./tr.ts";
 import type { ReviewInput, Verdict } from "./review.ts";
+import { evidencePaths } from "./review-paths.ts";
 
 export interface LaneCtx {
   MAIN: string;
@@ -703,7 +704,8 @@ export class Landing {
   // tracker/ has nothing to review. One whose review gave no verdict doesn't land unreviewed: it
   // waits, pushed, and is reviewed again after REVIEW_RETRY_MS, as a check with no verdict is
   // checked again, and the overseer hears each time (review-unrun). A branch whose own change passed
-  // here before (its landing failed after: a conflict, a push refused) isn't reviewed again.
+  // here before (its landing failed after: a conflict, a push refused) isn't reviewed again, nor
+  // one whose review the overseer overruled (tracker overrule, after the review sent it back twice).
   async review(u: string, t: string): Promise<0 | 2 | 4 | 6> {
     const { log, event, HOST, LANE } = this.c;
     const base = git("merge-base", this.om, "HEAD") ?? "";
@@ -711,12 +713,15 @@ export class Landing {
     if (!diff.trim()) { log(`review: ${t} changes nothing outside tracker/; no review`); return 0; }
     const key = `${u} ${this.ownChange()}`, passed = (read("runs/.review-passed") ?? "").split("\n").filter(Boolean);
     if (passed.includes(key)) { log(`review: ${t} passed before, as it is; not reviewed again`); return 0; }
+    const over = this.out(["state", u, "--overruled"]);
+    if (over) { log(`review: the overseer overruled the review of ${t} (${over}); not reviewed again`); return 0; }
     const card = this.out(["show", u]);
     const standards = git("show", `${this.om}:CODING_STANDARDS.md`) ?? "";
     // The other groups whose build the branch changes (its own group's is its own work).
     const own = u.split("/")[0];
     const affected = (await this.c.affectedBy(base, "HEAD")).split("\n").filter((l) => l.trim() && l.split("\t")[0].trim() !== own).join("\n");
-    const v = await this.c.review({ unit: u, title: t, card, diff, standards, affected });
+    // What's there of each path its Evidence cites, which the reviewer can't list itself.
+    const v = await this.c.review({ unit: u, title: t, card, diff, standards, affected, paths: evidencePaths(card) });
     if (v.verdict === "pass") {
       log(`review: ${t} passed`);
       try { fs.writeFileSync("runs/.review-passed", [...passed.slice(-49), key].map((l) => l + "\n").join("")); } catch {}

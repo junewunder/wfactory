@@ -614,7 +614,16 @@ of context, which makes review the cheap place for a project's standards
 - **A fix goes back to the unit, on its branch.** Its findings go on the
   card, and the next claim carries the branch on. A second fix makes it
   stuck: two rounds the reviewer and the lanes can't settle are the
-  overseer's, not a loop.
+  overseer's, not a loop. The overseer weighs the findings against the
+  Evidence the review sent back (kept on the stuck unit's card) and the
+  files it cites; findings that don't hold are overruled (`tracker
+  overrule`), and the loop lands the branch unreviewed, since a third
+  review is one more chance to be wrong the same way (lesson 47).
+- **The reviewer is told what's there.** It has no shell, and Glob lists
+  files, not folders, so before the review the loop looks up each path the
+  Evidence cites (`review-paths.ts`) and gives it the results. A reviewer
+  once sent a unit back for a folder of outputs under `work/` that was
+  there.
 - **No verdict waits, and three go to the overseer.** A reviewer that can't
   give a verdict (the CLI failing, a review that runs too long, a verdict
   that won't parse) leaves the branch waiting, pushed, and the lane goes

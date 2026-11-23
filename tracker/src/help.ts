@@ -109,6 +109,7 @@ Setting up:
   review-fix <branch> --findings "…"    loop.sh: its review asked for fixes; back to ready (stuck the 2nd time)
   land-fail <branch> --evidence "…"    loop.sh: its check before landing failed; back to ready (stuck the 3rd time)
   review-none <branch> --why "…"       loop.sh: its review gave no verdict 3 times; stuck, for the overseer
+  overrule <id> --why "…"              the overseer: the review's findings don't hold; it lands unreviewed
   unclaim <id> [--unstarted]            give back this session's claim (its work kept, if it did any)
   lanes-stopped [--failed "…"]          loop.sh: this machine's last lane stopped and tidied up
   lanes [off --for "…" | on]            hold the lanes off while work is done by hand (just fleet off | on)
@@ -117,7 +118,7 @@ Setting up:
   leases | lease holder|mine|idle|beat|take|release   group data leases
   data <group> | --unit <id> | --all    where a group's data lives (factory/store.sh)
   rebuilt [add <glob> --why "…"]        files a pipeline step rebuilds: a copy down doesn't keep them
-  state <id> [--branch|--by|--host|--landed]   one unit's status key, for scripts
+  state <id> [--branch|--by|--host|--landed|--overruled]   one unit's status key, for scripts
   aside-set <id> <set> | --clear        store.sh: where its unfinished outputs were set aside
   aside-retire [<id>…]                  store.sh: drop the units an older version filed to sort a set-aside copy
   busy [--except <id>] [--live]         groups with outputs here not on main yet (checks skip them)
@@ -439,12 +440,13 @@ store.sh, when it puts the store's copy back over an unfinished unit's outputs: 
 work/.store/aside/ they went to on this machine, the commit its branch was on (they were built from
 it) and the session; the unit's card says so. --mixed: the set holds other work too, so it's never
 put back. --clear: they're back in work/, or the set is gone.`,
-  state: `state <id> [--branch | --by | --host | --landed]
+  state: `state <id> [--branch | --by | --host | --landed | --overruled]
 Print one unit's status key (ready, doing, interrupted, merging, done, …), for scripts.
 --branch: the branch its record names instead (empty if none). --by: the session its record names.
 --host: the machine it's pinned to, its own or its group's (empty if any). --landed: when the
 branch it's done by landed on main (empty if it isn't done, or is done some other way: by hand,
-or reopened and done again without a landing).`,
+or reopened and done again without a landing). --overruled: why the overseer overruled the loop's
+review of its branch (empty if it didn't, or it isn't merging): the loop lands it unreviewed.`,
   merged: `merged <id>… | --branch <branch>
 loop.sh, after merging a unit's branch into main and pushing: the unit stops showing as merging,
 what needs it can start, and its record says when it landed (\`state --landed\`). Also
@@ -467,6 +469,12 @@ loop.sh, when its review of a finished branch asks for fixes before it lands: th
 merge on it go back to ready with the findings on their card (and a note saying so), and the next
 claim carries the branch on. The second time for a unit, it's stuck for the overseer instead;
 \`reopen\` gives it two more rounds. A merge unit on the branch is done with it.`,
+  overrule: `overrule <id> --why "…"
+The overseer, on a unit the loop's review left stuck (it asked for fixes twice), having read the
+findings, the Evidence the review sent back (on its card) and the files it cites, and found the
+findings don't hold: the unit goes back to merging on its branch, as it was recorded done, and the
+loop lands it without reviewing it again. Why says what the findings got wrong, in 30 characters or
+more. A reopen undoes it; landing clears it.`,
   "review-none": `review-none <branch> --why "…"
 loop.sh, when its review of a finished branch has given no verdict three times for the same change
 (the loop waits half an hour between tries, and a usage limit isn't a try): the units waiting to

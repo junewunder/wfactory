@@ -111,8 +111,11 @@ export interface Unit {
   // back (store.sh): the set in work/.store/aside/ on host, built from commit in session by.
   aside?: SetAside;
   // The loop's review of its finished branch asked for fixes (review-fix): how many times, and the
-  // last findings, which its card shows. A second time blocks it for the overseer.
-  review?: { fixes: number; at: string; findings: string };
+  // last findings, which its card shows. A second time blocks it for the overseer. sent: the done
+  // record the review sent back (its evidence, who worked it, where, its branch), kept so the
+  // overseer can weigh the findings against the evidence, and overrule them (overrule): overruled
+  // says why, and the loop lands the branch without reviewing it again.
+  review?: { fixes: number; at: string; findings: string; sent?: { evidence?: string; by?: string; host?: string; branch: string }; overruled?: { why: string; at: string; by: string } };
   // The project's check before it lands (project.json ci.land) failed: how many times in a row,
   // and the last failure's line. A third time blocks it for the overseer; landing clears it.
   landCheck?: { fails: number; at: string; evidence: string };

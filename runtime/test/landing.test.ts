@@ -64,6 +64,7 @@ function landing(o: { fails?: () => boolean; rc?: (log: string) => number; revie
       if (a[0] === "ci-land") return o.ciLand === null ? { code: 1, out: "", err: "tracker: origin unreachable\n" } : ok(JSON.stringify(o.ciLand ?? { since: "", checks: [], skipped: [], why: "no ci.land in tracker/project.json" }));
       if (a[0] === "land-fail") return ok(f.states.get("land-fail") ?? `${a[1]} → ready, on its branch (the check before landing failed)\n`);
       if (a[0] === "review-none") return ok(`${a[1]} → stuck (the loop's review gave no verdict 3 times)\n`);
+      if (a[0] === "state" && a[2] === "--overruled") return ok(`${f.states.get(`${a[1]} overruled`) ?? ""}\n`);
       if (a[0] === "state" && a[2] === "--branch" && f.states.has(`${a[1]} branch`)) return ok(`${f.states.get(`${a[1]} branch`)}\n`);
       if (a[0] === "state") { const s = f.states.get(a[1]); return s === undefined ? { code: 1, out: "", err: `no unit "${a[1]}"\n` } : ok(`${s}\n`); }
       if (a[0] === "add-unit" || a[0] === "reopen") f.states.set(a[1], "ready");

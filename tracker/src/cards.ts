@@ -55,6 +55,10 @@ export function card(T: State, u: Unit, head = "", full: boolean | "all" = false
   if (u.notes?.length) { L.push("  Notes from earlier attempts:"); for (const n of u.notes) L.push(`    - ${n.at.slice(0, 10)} ${n.by}: ${expand(T, n.text)}`); }
   // What the loop's review asked to fix before the branch lands (review-fix), right after them.
   if (u.review?.findings && !SETTLED.has(d.s)) L.push(`  The loop's review asked for these fixes before it lands (fix them on its branch):\n${u.review.findings.split("\n").map((x) => `    ${expand(T, x)}`).join("\n")}`);
+  // Stuck after the review's second round: the evidence it sent back, for the overseer to weigh
+  // the findings against (the stuck record has none of its own).
+  if (u.review?.sent?.evidence && u.record?.state === "blocked") L.push(`  The Evidence the review sent back (${u.review.sent.branch}${u.review.sent.host ? `, worked on ${u.review.sent.host}` : ""}): ${expand(T, u.review.sent.evidence)}`);
+  if (u.review?.overruled && d.s === "merging") L.push(`  The overseer overruled the loop's review: ${expand(T, u.review.overruled.why)}`);
   const needs = [...(g.needs || []), ...(u.needs || [])].map((n) => T.byId.get(n)).filter((x): x is Unit => !!x);
   if (needs.length) L.push(`  Needs: ${needs.map((n) => `${name(n)}${SETTLED.has(derive(T, n).s) ? " ✓" : ""}`).join(", ")}`);
   // A check: the fixes it waits for by naming (checks.ts), and those its sibling checks found.

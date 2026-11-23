@@ -524,6 +524,34 @@ because in the two factories' records a landing took 3 to 11 minutes at
 the median and nine in ten were over inside 30, and a wait for memory was
 under 10 minutes or over 45.
 
+### 47. Reviews the overseer took on trust, and a folder the reviewer couldn't see (the mod factory, November)
+
+**What happened.** The loop's review sends a finished branch back when its
+findings say so, and the second time leaves the unit stuck for the
+overseer. In one day on the mod factory six units were stuck that way, and
+the overseer sent five of them round again with notes like "the review's
+fixes stand", having read the findings and not the evidence. One was a
+fighter's in-game checks: its evidence cited a folder of film strips under
+`work/`, and the reviewer, which has only Read, Grep and Glob, said the
+folder didn't exist. Glob lists files, not folders; the folder was there,
+made the evening before. The overseer's note said "four reviews found no
+evidence" and asked the next session to record it again. Another unit went
+back on one review's preference that the review before it hadn't asked for.
+The stuck record kept no evidence either, so the overseer had nothing on
+the card to weigh the findings against.
+
+**What it cost.** Sessions that redid finished work, some more than once,
+and units that sat stuck or in a loop of reviews for most of a day.
+
+**The rule.** Before the review, the loop looks up every path the
+Evidence cites in the lane's clone and hands the reviewer what it found,
+folders included, and the reviewer is told a path is missing only when
+it's confirmed. A unit the review leaves stuck keeps the Evidence it was
+sent back with, on its card. The overseer weighs each finding against that
+evidence and the files it cites before anything goes back: a finding that
+doesn't hold is overruled (`just tracker overrule`), and the loop lands the
+branch without reviewing it again; only a real one goes back, named.
+
 ## The code
 
 ### 20. One copy of the loop, deployed

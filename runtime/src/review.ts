@@ -14,7 +14,10 @@
 // again half an hour later, the overseer hearing why each time; the third with no verdict for the
 // same change leaves its unit stuck for the overseer (landing.ts, REVIEW_TRIES), as a check before
 // landing that keeps failing does. One stopped by a pause, the stop time or a usage limit waits for
-// the next look instead, and isn't a try.
+// the next look instead, and isn't a try. 22 Nov: a reviewer said a strip folder the Evidence cited
+// under work/ didn't exist, because Glob lists files, not folders, and the unit was sent back for
+// it. The loop now looks up every path the Evidence cites before the review (review-paths.ts) and
+// hands the reviewer what it found, folders included.
 import fs from "node:fs";
 import path from "node:path";
 import { limitHit, linkedDirs, log, runSession } from "./session.ts";
@@ -28,7 +31,8 @@ import type { Loop } from "./loop.ts";
 
 // affected: the ci.affected hook's lines for the branch ("<group>\t<why>"), the unit's own group
 // left out; "" when there are none or the project has no hook.
-export interface ReviewInput { unit: string; title: string; card: string; diff: string; standards: string; affected?: string }
+// paths: what the loop found of each path the card's Evidence cites (review-paths.ts), "" for none.
+export interface ReviewInput { unit: string; title: string; card: string; diff: string; standards: string; affected?: string; paths?: string }
 // none: no verdict (why says why), a try: the branch waits, and is reviewed again after a while;
 // wait: stopped (a pause, the stop time, a usage limit), not a try: it's reviewed again at the next look.
 export type Verdict = { verdict: "pass" } | { verdict: "fix"; findings: string } | { verdict: "none" | "wait"; why: string };
@@ -57,7 +61,8 @@ export function reviewPrompt(r: ReviewInput, diffFile: string): string {
     r.standards.trim() ? `The project's coding standards (CODING_STANDARDS.md on main), which the branch must follow:\n\n${r.standards.trim()}` : "",
     diff,
     r.affected?.trim() ? `Besides its own group's, this branch changes the build of these groups (the project's ci.affected hook over the branch, one per line: group, then why). Their CI rebuilds them after it lands, overnight, and a fault found then holds each one until a fix lands:\n\n${r.affected.trim()}\n\nIf the branch changes what those builds make (not only a test or a doc) and neither the card nor its Evidence shows the change was built or checked for at least one of them, that's a finding: name the group and the cheapest check of its affected step that would show the change doesn't break it.` : "",
-    `The card's Evidence is what the session says it did. Hold it to the card's check (what the card says to check or show, and its Done when): if the Evidence says that check wasn't run, was run on less than the card asks, or was split off into another unit the card didn't ask for, that's a finding, whatever the diff looks like. Say which check is missing; if only the owner can run it (their hands, hardware, a permission the session was refused), say so, and the next session asks them.`,
+    `The card's Evidence is what the session says it did. Hold it to the card's check (what the card says to check or show, and its Done when): if the Evidence says that check wasn't run, was run on less than the card asks, or was split off into another unit the card didn't ask for, that's a finding, whatever the diff looks like. Say which check is missing; if only the owner can run it (their hands, hardware, a permission the session was refused), say so, and the next session asks them. Its outputs are often under work/, which isn't in the diff: read them there. Glob matches files, not folders, so a folder it doesn't list may well be there (Glob \`<folder>/**\` lists what's in one); never make a finding that a cited path is missing unless you've confirmed it isn't there.`,
+    r.paths?.trim() ? `The paths the Evidence cites, as the loop found them in this lane's clone just before your review, folders included:\n\n${r.paths.trim()}\n\nTake these as found: a path listed as there is there. One listed as not there is a finding only if the card's check needs it.` : "",
     `Answer "pass" unless something should be fixed before this lands: a bug, a broken rule of the coding standards above (if there are any), something the card asks for that's missing or wrong, a check the card asks for that wasn't done, a stray file (build output, a secret, a scratch file), or a test weakened to pass. (An exception a check takes for one of the owner's departures from the reference, citing their decision and listed in docs/departures.md, isn't a weakened test.) Not matters of taste, and not what the check already proves.
 For "fix", list each finding on its own: the file and line, what's wrong, and what to do about it, so the next session can fix it from your words alone (it gets them on the unit's card). For "pass", findings is empty.`,
   ].filter(Boolean).join("\n\n") + "\n";

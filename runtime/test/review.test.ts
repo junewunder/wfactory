@@ -6,6 +6,7 @@ import fs from "node:fs";
 import { tempDir } from "../../test/lib/index.ts";
 import path from "node:path";
 import { reviewModel, reviewPrompt, verdictOf } from "../src/review.ts";
+import { evidencePaths } from "../src/review-paths.ts";
 
 const d = tempDir("review-");
 const transcript = (...lines: unknown[]) => { const f = path.join(d, `t${Math.random()}.jsonl`); fs.writeFileSync(f, lines.map((l) => typeof l === "string" ? l : JSON.stringify(l)).join("\n") + "\n"); return f; };
@@ -60,4 +61,36 @@ test("  other groups' builds the branch changes, when there are any", () => {
   assert.match(p, /built or checked for at least one of them/);
   assert.ok(!reviewPrompt(r, "/x/diff.patch").includes("changes the build of these groups"));
   assert.ok(!reviewPrompt({ ...r, affected: " \n" }, "/x/diff.patch").includes("changes the build of these groups"));
+});
+
+// 22 Nov: a reviewer's Glob didn't list a strip folder under work/ (Glob lists files), so it said
+// the folder didn't exist and sent the unit back. The loop looks the Evidence's paths up for it.
+test("the Evidence's paths, looked up: folders, files, and what isn't there", () => {
+  const root = tempDir("review-paths-");
+  fs.mkdirSync(path.join(root, "work/logs/look/381-strip"), { recursive: true });
+  for (const x of ["a.png", "b.png"]) fs.writeFileSync(path.join(root, "work/logs/look/381-strip", x), "x");
+  fs.mkdirSync(path.join(root, "src")); fs.writeFileSync(path.join(root, "src/a.ts"), "12345");
+  const card = [
+    "Unit a (g/a): ready",
+    "  Evidence: strip at `work/logs/look/381-strip` (frames 1-9); src/a.ts:12, src/a.ts:40; work/logs/look/missing.json, unit/g/a, g/a, https://x.org/a/b, work/*.png, ./src/",
+    "  Next: something else entirely/with a slash",
+  ].join("\n");
+  const out = evidencePaths(card, root).split("\n");
+  assert.match(out[0], /^- work\/logs\/look\/381-strip: a folder, 2 entries, last changed \d{4}-\d\d-\d\d \d\d:\d\d$/);
+  assert.match(out[1], /^- src\/a\.ts: a file, 5 bytes, last changed /);
+  assert.equal(out[2], "- work/logs/look/missing.json: not there");
+  assert.match(out[3], /^- \.\/src: a folder, 1 entry/);
+  assert.equal(out.length, 4, out.join("\n"));
+});
+test("  none cited, or no Evidence: nothing", () => {
+  assert.equal(evidencePaths("Unit a (g/a)\n  Evidence: ran the check, all green\n", d), "");
+  assert.equal(evidencePaths("Unit a (g/a)\n  Next: work/x\n", d), "");
+});
+test("  the prompt hands them over, and warns that Glob lists no folders", () => {
+  const r = { unit: "g/a", title: "Unit a (g/a)", card: "c\n", diff: "+x\n", standards: "" };
+  const p = reviewPrompt({ ...r, paths: "- work/x: a folder, 2 entries, last changed 2026-11-21 18:01" }, "/x/diff.patch");
+  assert.ok(p.includes("- work/x: a folder, 2 entries"));
+  assert.match(p, /Take these as found/);
+  assert.match(p, /Glob matches files, not folders/);
+  assert.ok(!reviewPrompt(r, "/x/diff.patch").includes("Take these as found"));
 });

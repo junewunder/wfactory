@@ -375,6 +375,45 @@ describe("review-fix: the loop's review asks for fixes; back to ready on the bra
   });
 });
 
+// 22 Nov: the overseer reopened units the review sent back twice without weighing the findings
+// against the evidence (which the stuck record no longer had), so good units went round again.
+describe("overrule: a unit the review sent back twice, the findings not holding, lands unreviewed", () => {
+  const B = { FACTORY_BRANCHES: "1", FACTORY_TAG: "ortag" };
+  const OV = { FACTORY_ACTOR: "oversee" };
+  const why = "the strip folder the review said was missing is in work/logs/look, 9 frames";
+  test("sent back twice: stuck, and its card keeps the evidence it was sent back with", () => {
+    setup(["add-group", "or", "--title", "Overrules"]);
+    setup(["add-unit", "or/one", "--title", "Overruled unit one"]);
+    for (const k of [1, 2]) {
+      ok(["claim", "or/one"], B);
+      ok(["done", "or/one", "--evidence", `strips in work/logs/look/381-strip, round ${k}`], B);
+      ok(["review-fix", "unit/or/one", "--findings", "- work/logs/look/381-strip doesn't exist"]);
+    }
+    has(ok(["state", "or/one"]), "stuck");
+    has(ok(["show", "or/one"]), "The Evidence the review sent back (unit/or/one");
+    has(ok(["show", "or/one"]), "strips in work/logs/look/381-strip, round 2");
+  });
+  test("  a why too short, or a unit the review didn't leave stuck: refused", () => {
+    assert.notEqual(t(["overrule", "or/one", "--why", "wrong"], OV).code, 0);
+    setup(["add-unit", "or/two", "--title", "Overruled unit two"]);
+    assert.notEqual(t(["overrule", "or/two", "--why", why], OV).code, 0);
+  });
+  test("  overruled: merging on its branch, as recorded, and the loop hears why", () => {
+    has(ok(["overrule", "or/one", "--why", why], OV), "Overruled unit one (or/one) → merging");
+    assert.equal(ok(["state", "or/one"]), "merging\n");
+    assert.equal(ok(["state", "or/one", "--branch"]), "unit/or/one\n");
+    assert.equal(ok(["state", "or/one", "--overruled"]), why + "\n");
+    const card = ok(["show", "or/one"]);
+    has(card, "Evidence: strips in work/logs/look/381-strip, round 2");
+    has(card, "The overseer overruled the loop's review");
+  });
+  test("  a lane on its machine can land it", () => { has(ok(["landing"], B), "unit/or/one\tor/one"); });
+  test("  reopened: the overrule goes", () => {
+    ok(["reopen", "or/one"]);
+    assert.equal(ok(["state", "or/one", "--overruled"]), "\n");
+  });
+});
+
 describe("review-none: the loop's review gave no verdict three times; stuck, for the overseer", () => {
   const B = { FACTORY_BRANCHES: "1", FACTORY_TAG: "rntag" };
   test("a unit done on a branch whose review gave no verdict three times: stuck", () => {

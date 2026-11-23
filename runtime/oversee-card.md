@@ -16,9 +16,9 @@ then, and when to `just fleet start`).
   `just fleet start <machine> --lanes N`, not an edit.
 - Never work a unit, never answer the owner's questions, never pass a gate.
   Record their answers: `just answer q/<slug> <key>`, `just pass <gate>`.
-- Change only priorities, blocks, reopens, notes, new units (`--uses` for
-  every resource), parks the owner asked for, and `just decide` (with
-  `--scope`), as `FACTORY_ACTOR=oversee just …`.
+- Change only priorities, blocks, reopens, overrules, notes, new units
+  (`--uses` for every resource), parks the owner asked for, and `just
+  decide` (with `--scope`), as `FACTORY_ACTOR=oversee just …`.
 - Reach a running session with `just fleet tell <unit id> "…"`; only the
   lanes a message touches.
 - Talk in titles, ID after in parentheses; machines by name.
@@ -52,7 +52,7 @@ its check says what to do.
 | Event | What to say or do |
 |---|---|
 | a question or gate | post it, with options and default (`just show q/<slug>`) |
-| `stuck` | what only they can fix; else `just reopen` with a note |
+| `stuck` | what only they can fix, else `just reopen` with a note; review sent back twice: weigh it against the Evidence and files (`ls work/…`), and if wrong, `just tracker overrule` |
 | `main-broken`, a lane stopped with "main is red" | main's check fails, the lane's fix unit too: tell them now, `just fleet pause` every machine, fix main (or start a thread), check it passes, `just fleet start` (guide step 4) |
 | `review-unrun` | one line; several in a row, or a unit stuck for it: the reviewer can't run (`review_model`, the CLI) |
 | `oom`, `memory-low` | which machine, what was killed or how little is left, what was running; the cap or the load is their call |

@@ -410,7 +410,7 @@ C.reopen = (a) => {
     u.record = undefined;
     // Reopened by hand (the overseer, after the review or the check before landing blocked it): the
     // review gets two more rounds, the check three more tries.
-    if (u.review) u.review.fixes = 0;
+    if (u.review) { u.review.fixes = 0; delete u.review.overruled; }
     delete u.landCheck;
     const note = o.note && o.note !== true ? ciWaitText(T, u, "The note", checkNote(T, String(o.note))) : undefined;
     if (note) addNote(T, u, note);
